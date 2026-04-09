@@ -105,8 +105,6 @@ CREATE TRIGGER trg_firms_updated_at
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  stripe_session_id TEXT,
-  stripe_payment_intent TEXT,
   amount INTEGER NOT NULL DEFAULT 150000, -- in paise (₹1500)
   currency TEXT NOT NULL DEFAULT 'inr',
   status payment_status NOT NULL DEFAULT 'pending',
@@ -114,7 +112,6 @@ CREATE TABLE payments (
 );
 
 CREATE INDEX idx_payments_member_id ON payments(member_id);
-CREATE INDEX idx_payments_stripe_session_id ON payments(stripe_session_id);
 
 -- ============================================================
 -- Certificates Table

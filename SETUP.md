@@ -36,7 +36,8 @@ Run the SQL migration files in order in Supabase SQL Editor:
 2. `supabase/migrations/002_rls_policies.sql` — enables Row Level Security
 3. `supabase/migrations/003_fraud_and_storage.sql` — fraud triggers + storage buckets/policies
 4. `supabase/migrations/024_manual_payment_proofs_and_cert_upload.sql` — payment proof uploads + admin certificate uploads
-5. `supabase/migrations/025_drop_stripe_payment_fields.sql` — removes old Stripe columns from payments
+
+Note: this project uses manual QR payments + screenshot proof uploads (no Stripe integration).
 
 ## 4. Create Admin User
 
