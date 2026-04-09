@@ -32,6 +32,18 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+
+# local caches / temp
+.gradle-home/
+.tmp/
+
+# editor settings
+.vscode/
+
+# crash logs
+hs_err_pid*.log
+*.log
 
 # typescript
 *.tsbuildinfo
