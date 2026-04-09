@@ -9,6 +9,9 @@ export function useAdmin() {
 
     const { data, error } = await supabase.functions.invoke('admin-actions', {
       body: { action, ...params },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
 
     if (error) {

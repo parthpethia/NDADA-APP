@@ -19,6 +19,18 @@ export default function AdminPaymentsScreen() {
   const [payments, setPayments] = useState<PaymentWithMember[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const showMessage = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      const webAlert = (globalThis as any)?.alert as ((text?: string) => void) | undefined;
+      if (typeof webAlert === 'function') {
+        webAlert(`${title}: ${message}`);
+        return;
+      }
+    }
+    Alert.alert(title, message);
+  };
 
   const fetchPayments = async () => {
     const { data } = await supabase
@@ -52,11 +64,15 @@ export default function AdminPaymentsScreen() {
     if (!ok) return;
 
     setActionLoading(paymentId);
+    setActionError(null);
     try {
       await callAdminAction('verify-payment', { payment_id: paymentId });
       await fetchPayments();
+      showMessage('Success', 'Payment verified');
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      const message = err?.message || 'Failed to verify payment';
+      setActionError(message);
+      showMessage('Error', message);
     }
     setActionLoading(null);
   };
@@ -85,6 +101,12 @@ export default function AdminPaymentsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Text className="mb-4 text-xl font-bold text-gray-900">Payment Logs</Text>
+
+      {actionError ? (
+        <View className="mb-3 rounded-lg bg-red-50 p-3">
+          <Text className="text-sm text-red-700">{actionError}</Text>
+        </View>
+      ) : null}
 
       {payments.map((p) => (
         <Card key={p.id} className="mb-3">
