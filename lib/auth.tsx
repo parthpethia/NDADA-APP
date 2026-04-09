@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from './supabase';
+import { isSupabaseConfigured, supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { Member, AdminUser } from '@/types';
 
@@ -141,8 +141,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error?.message ?? null };
+    } catch (e) {
+      if (!isSupabaseConfigured) {
+        return {
+          error:
+            'Supabase is not configured for this deployment. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables, then redeploy.',
+        };
+      }
+      return {
+        error:
+          'Network error while contacting Supabase (unable to fetch). Check your internet connection and that your Supabase project URL is reachable.',
+      };
+    }
   };
 
   const signUp = async (
