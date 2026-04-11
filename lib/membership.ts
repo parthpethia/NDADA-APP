@@ -26,8 +26,8 @@ export function getMembershipStageMeta(stage: MembershipStage) {
       message: 'Create your member profile and submit your firm details to begin the approval process.',
     },
     payment: {
-      title: 'Complete your membership payment',
-      message: 'Your application is saved. Pay the membership fee to move your profile into review.',
+      title: 'Complete your registration payment',
+      message: 'Your application is saved. Pay the registration fee to move your profile into review.',
     },
     review: {
       title: 'Application under review',

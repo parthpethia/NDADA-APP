@@ -22,7 +22,9 @@ export function useAdmin() {
       if (typeof contextBody === 'string' && contextBody.trim()) {
         try {
           const parsed = JSON.parse(contextBody);
-          if (parsed?.error) throw new Error(String(parsed.error));
+          if (parsed?.error) {
+            throw new Error(String(parsed.error));
+          }
         } catch {
           // Not JSON, fall through to generic message
         }
@@ -31,7 +33,6 @@ export function useAdmin() {
       if (anyError?.context?.status) {
         throw new Error(`${error.message} (status ${anyError.context.status})`);
       }
-
       throw new Error(error.message);
     }
     return data;

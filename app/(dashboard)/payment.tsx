@@ -1,109 +1,77 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge } from '@/components/ui';
 import { formatCurrency } from '@/lib/utils';
-import { confirm } from '@/lib/confirm';
 import {
   MEMBERSHIP_AMOUNT,
   MEMBERSHIP_PLAN_NAME,
   MEMBERSHIP_VALIDITY_LABEL,
   MEMBERSHIP_SUPPORT_EMAIL,
-  STORAGE_BUCKETS,
 } from '@/constants';
 import { CheckCircle, Clock, XCircle } from 'lucide-react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function PaymentScreen() {
   const { member, refreshMember } = useAuth();
-  const [proofUploading, setProofUploading] = useState(false);
-  const [hasSubmittedProof, setHasSubmittedProof] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProofState = async () => {
+    const fetchLatestPaymentLink = async () => {
       if (!member) return;
       const { data } = await supabase
         .from('payments')
-        .select('id, proof_url, status')
+        .select('razorpay_payment_link_url, status')
         .eq('member_id', member.id)
         .order('created_at', { ascending: false })
         .limit(1);
-      const latest = data?.[0];
-      setHasSubmittedProof(Boolean(latest?.status === 'pending' && latest?.proof_url));
+      const latest = data?.[0] as any | undefined;
+      if (latest?.status === 'pending' && typeof latest?.razorpay_payment_link_url === 'string') {
+        setPaymentLinkUrl(latest.razorpay_payment_link_url);
+      }
     };
 
-    fetchProofState();
+    fetchLatestPaymentLink();
   }, [member?.id, member?.payment_status]);
 
   if (!member) return null;
 
-  const handleUploadProof = async () => {
+  const handlePayWithRazorpay = async () => {
     if (!member) return;
-    const ok = await confirm(
-      'Payment Confirmation',
-      'Are you sure the transaction is done? Only upload after successful payment.',
-      { confirmText: 'Yes, Upload', destructive: true }
-    );
-    if (!ok) return;
-
-    setProofUploading(true);
+    setPaymentLoading(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*'],
-        multiple: false,
+      const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
+        body: {},
       });
+      if (error) throw new Error(error.message);
 
-      if (result.canceled || !result.assets?.[0]) {
-        setProofUploading(false);
-        return;
+      const url = String((data as any)?.payment_link_url || '');
+      if (!url) throw new Error('Could not create payment link');
+
+      setPaymentLinkUrl(url);
+
+      if (Platform.OS === 'web') {
+        const open = (globalThis as any)?.open as ((url?: string, target?: string) => void) | undefined;
+        if (typeof open === 'function') open(url, '_blank');
+      } else {
+        await WebBrowser.openBrowserAsync(url);
       }
-
-      const asset = result.assets[0];
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-
-      const safeName = (asset.name || 'payment-proof.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = `${member.id}/${Date.now()}_${safeName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(STORAGE_BUCKETS.paymentProofs)
-        .upload(filePath, blob, { contentType: blob.type || 'image/jpeg' });
-
-      if (uploadError) throw new Error(uploadError.message);
-
-      const { error: insertError } = await supabase.from('payments').insert({
-        member_id: member.id,
-        amount: MEMBERSHIP_AMOUNT * 100,
-        currency: 'inr',
-        status: 'pending',
-        proof_url: uploadData?.path,
-      });
-      if (insertError) throw new Error(insertError.message);
-
-      // Move the most recent firm back to pending review (if needed)
-      const { data: latestFirm } = await supabase
-        .from('firms')
-        .select('id, approval_status')
-        .eq('member_id', member.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const firmRow = latestFirm?.[0];
-      if (firmRow?.id) {
-        await supabase
-          .from('firms')
-          .update({ approval_status: 'pending', rejection_reason: null, reviewed_by: null, reviewed_at: null })
-          .eq('id', firmRow.id);
-      }
-
-      await refreshMember();
-      setHasSubmittedProof(true);
-      Alert.alert('Submitted', 'Payment proof submitted. Admin will review and confirm payment.');
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to upload payment proof.');
+      Alert.alert('Error', err?.message || 'Failed to start payment');
     }
-    setProofUploading(false);
+    setPaymentLoading(false);
+  };
+
+  const handleRefreshStatus = async () => {
+    setRefreshing(true);
+    try {
+      await refreshMember();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -119,7 +87,7 @@ export default function PaymentScreen() {
                 </View>
                 <Text className="text-xl font-bold text-green-700">Payment Complete</Text>
                 <Text className="mt-1 text-gray-500">
-                  Your membership is active
+                  Your registration is complete
                 </Text>
               </>
             ) : member.payment_status === 'failed' ? (
@@ -132,16 +100,6 @@ export default function PaymentScreen() {
                   Please try again
                 </Text>
               </>
-            ) : hasSubmittedProof ? (
-              <>
-                <View className="mb-3 rounded-full bg-yellow-100 p-4">
-                  <Clock size={48} color="#ca8a04" />
-                </View>
-                <Text className="text-xl font-bold text-gray-900">Payment Under Review</Text>
-                <Text className="mt-1 text-gray-500">
-                  Your proof is submitted. Admin will verify and approve.
-                </Text>
-              </>
             ) : (
               <>
                 <View className="mb-3 rounded-full bg-yellow-100 p-4">
@@ -149,7 +107,7 @@ export default function PaymentScreen() {
                 </View>
                 <Text className="text-xl font-bold text-gray-900">Payment Pending</Text>
                 <Text className="mt-1 text-gray-500">
-                  Scan the QR and pay, then upload screenshot
+                  Pay securely via Razorpay
                 </Text>
               </>
             )}
@@ -158,7 +116,7 @@ export default function PaymentScreen() {
 
         {/* Membership Details */}
         <Card className="mb-4">
-          <CardHeader title="Membership Details" />
+          <CardHeader title="Registration Fee Details" />
           <View className="gap-2">
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Plan</Text>
@@ -169,7 +127,7 @@ export default function PaymentScreen() {
               <Text className="font-medium text-gray-900">{member.membership_id}</Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-gray-500">Amount</Text>
+              <Text className="text-gray-500">Fee</Text>
               <Text className="font-medium text-gray-900">{formatCurrency(MEMBERSHIP_AMOUNT)}</Text>
             </View>
             <View className="flex-row justify-between">
@@ -195,27 +153,27 @@ export default function PaymentScreen() {
           </View>
         </Card>
 
-        {/* QR + Proof upload */}
-        {member.payment_status !== 'paid' && !hasSubmittedProof && (
+        {/* Razorpay */}
+        {member.payment_status !== 'paid' && (
           <Card className="mb-4">
-            <CardHeader title="Pay via QR" subtitle="Scan and pay, then upload proof" />
-            <View className="items-center gap-3">
-              <View className="w-full items-center rounded-xl bg-gray-50 p-4">
-                   <Image
-                     source={require('../../assets/payment-qr.jpeg')}
-                  style={{ width: 220, height: 220 }}
-                  resizeMode="contain"
-                />
-              </View>
+            <CardHeader title="Pay with Razorpay" subtitle="Fast, secure online payment" />
+            <View className="gap-3">
               <Button
-                title="I have paid — Upload Screenshot"
-                onPress={handleUploadProof}
-                loading={proofUploading}
+                title={paymentLinkUrl ? 'Continue Payment' : 'Pay Now'}
+                onPress={handlePayWithRazorpay}
+                loading={paymentLoading}
                 size="lg"
                 className="w-full"
               />
+              <Button
+                title="Refresh Status"
+                variant="outline"
+                onPress={handleRefreshStatus}
+                loading={refreshing}
+                className="w-full"
+              />
               <Text className="text-center text-xs text-gray-500">
-                Only upload after successful payment. Admin will verify before approval.
+                After completing payment in Razorpay, come back and tap Refresh Status.
               </Text>
             </View>
           </Card>

@@ -24,9 +24,7 @@ Fill in your values:
 - `EXPO_PUBLIC_SUPABASE_URL` — from Supabase Dashboard > Settings > API
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY` — from Supabase Dashboard > Settings > API
 
-Add your payment QR image to the app:
-
-- Place your QR image at `assets/payment-qr.jpeg`
+This project uses Razorpay for online payments (no QR/screenshot uploads).
 
 ## 3. Setup Database
 
@@ -35,9 +33,8 @@ Run the SQL migration files in order in Supabase SQL Editor:
 1. `supabase/migrations/001_initial_schema.sql` — creates all tables, triggers, indexes
 2. `supabase/migrations/002_rls_policies.sql` — enables Row Level Security
 3. `supabase/migrations/003_fraud_and_storage.sql` — fraud triggers + storage buckets/policies
-4. `supabase/migrations/024_manual_payment_proofs_and_cert_upload.sql` — payment proof uploads + admin certificate uploads
-
-Note: this project uses manual QR payments + screenshot proof uploads (no Stripe integration).
+4. `supabase/migrations/024_manual_payment_proofs_and_cert_upload.sql` — admin certificate uploads (legacy payment-proof pieces are no longer used)
+5. `supabase/migrations/027_razorpay_payment_links.sql` — Razorpay payment link fields
 
 ## 4. Create Admin User
 
@@ -56,10 +53,20 @@ Set secrets in Supabase Dashboard > Edge Functions > Secrets:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `APP_URL`
 
+Razorpay:
+
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+- `REGISTRATION_FEE_AMOUNT_INR` (e.g. `1500`)
+- `REGISTRATION_FEE_CURRENCY` (e.g. `INR`)
+
 Deploy functions:
 
 ```bash
 supabase functions deploy admin-actions
+supabase functions deploy razorpay-create-payment-link
+supabase functions deploy razorpay-webhook
 ```
 
 ## 7. Run the App
@@ -95,7 +102,7 @@ supabase/
 
 1. **User registers** → auth.users + members table row created
 2. **User adds firm** → firm row created, documents uploaded to Storage
-3. **User pays ₹1500 (manual QR)** → upload payment screenshot → admin verifies → payment_status = paid
+3. **User pays registration fee (Razorpay)** → webhook updates → payment_status = paid
 4. **Admin approves firm** → after payment verified
 5. **Admin uploads certificate (JPEG)** → stored in Storage + linked in certificates table
 6. **User downloads certificate** → JPEG from Storage

@@ -76,9 +76,6 @@ serve(async (req) => {
         break;
       case 'regenerate-certificate':
         throw new Error('Certificates are uploaded manually. Use Upload Certificate from the Firms tab.');
-      case 'verify-payment':
-        result = await verifyPayment(params.payment_id, user.id);
-        break;
       case 'resolve-fraud-flag':
         result = await resolveFraudFlag(params.flag_id, user.id);
         break;
@@ -198,20 +195,6 @@ async function regenerateCertificate(memberId: string, adminId: string) {
   });
   await logAudit(adminId, 'certificate_regenerated', memberId);
   return { message: 'Certificate regenerated' };
-}
-
-async function verifyPayment(paymentId: string, adminId: string) {
-  const { data: payment } = await supabase
-    .from('payments')
-    .update({ status: 'paid' })
-    .eq('id', paymentId)
-    .select('member_id')
-    .single();
-
-  if (!payment) throw new Error('Payment not found');
-  await supabase.from('members').update({ payment_status: 'paid' }).eq('id', payment.member_id);
-  await logAudit(adminId, 'payment_verified', payment.member_id, `Payment ${paymentId} manually verified`);
-  return { message: 'Payment verified' };
 }
 
 async function resolveFraudFlag(flagId: string, adminId: string) {

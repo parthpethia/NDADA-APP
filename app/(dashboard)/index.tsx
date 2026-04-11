@@ -78,7 +78,7 @@ export default function DashboardHome() {
 
   const steps = [
     { label: 'Submit Application', icon: FileText, done: hasFirms },
-    { label: 'Pay Membership Fee', icon: ShoppingCart, done: isPaid },
+    { label: 'Pay Registration Fee', icon: ShoppingCart, done: isPaid },
     { label: 'Approval Review', icon: CheckCircle, done: approvedFirms.length > 0 },
     { label: 'Get Certificate', icon: Award, done: hasCertificate },
   ];
@@ -126,7 +126,7 @@ export default function DashboardHome() {
               Apply for {APP_NAME} membership
             </Text>
             <Text className="mb-5 max-w-[280px] text-center text-sm text-primary-700">
-              Submit your firm profile, pay the membership fee, and unlock certificate issuance after approval.
+              Submit your firm profile, pay the registration fee, and unlock certificate issuance after approval.
             </Text>
             <Button title="Start Application" size="lg" onPress={() => router.push('/(dashboard)/firms/new')} />
           </View>

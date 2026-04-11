@@ -30,7 +30,7 @@ export default function AdminLayout() {
         tabBarStyle: { paddingBottom: 4, height: 56 },
         headerRight: () => (
           <TouchableOpacity
-            className="mr-3 px-2 py-1"
+            className="mr-3 rounded-md bg-red-600 px-3 py-1.5 active:bg-red-700"
             disabled={signingOut}
             onPress={async () => {
               const ok = await confirm('Logout', 'Are you sure you want to log out?', {

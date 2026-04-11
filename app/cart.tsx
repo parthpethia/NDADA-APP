@@ -36,6 +36,12 @@ export default function CartScreen() {
     }
   }, [member]);
 
+  useEffect(() => {
+    if (params.success === 'true') {
+      refreshMember();
+    }
+  }, [params.success, refreshMember]);
+
   if (!member) return null;
 
   // Payment complete — show success
@@ -48,7 +54,7 @@ export default function CartScreen() {
           </View>
           <Text className="mb-2 text-2xl font-bold text-green-800">Payment Complete!</Text>
           <Text className="mb-6 text-center text-gray-500">
-            Your {APP_NAME} membership is now active. Your certificate will be generated automatically.
+            Your registration fee payment is confirmed. Your certificate will be generated automatically.
           </Text>
           <Button
             title="View Certificate"
@@ -81,6 +87,15 @@ export default function CartScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-50" contentContainerClassName="p-4 pb-8">
       <View className="mx-auto w-full max-w-lg">
+        {/* Success Notice */}
+        {params.success === 'true' && (
+          <View className="mb-4 rounded-lg bg-blue-50 p-3">
+            <Text className="text-sm text-blue-700">
+              Payment completed. Updating your payment status…
+            </Text>
+          </View>
+        )}
+
         {/* Cancelled Notice */}
         {params.cancelled === 'true' && (
           <View className="mb-4 rounded-lg bg-yellow-50 p-3">
@@ -97,14 +112,14 @@ export default function CartScreen() {
           </View>
           <View>
             <Text className="text-xl font-bold text-gray-900">Your Cart</Text>
-            <Text className="text-sm text-gray-500">Review your membership order and complete payment</Text>
+            <Text className="text-sm text-gray-500">Review your registration fee and complete payment</Text>
           </View>
         </View>
 
         <Card className="mb-4 border-primary-100 bg-primary-50">
           <CardHeader title={MEMBERSHIP_PLAN_NAME} subtitle={`Valid for ${MEMBERSHIP_VALIDITY_LABEL}`} />
           <Text className="text-sm text-primary-700">
-            This payment activates the member profile linked to {member.membership_id} and enables certificate issuance after approval.
+            This registration fee activates the member profile linked to {member.membership_id} and enables certificate issuance after approval.
           </Text>
         </Card>
 
@@ -191,7 +206,7 @@ export default function CartScreen() {
         />
 
         <Text className="mt-3 text-center text-xs text-gray-400">
-          Pay via QR and upload proof for verification
+          Pay securely via Razorpay
         </Text>
       </View>
     </ScrollView>

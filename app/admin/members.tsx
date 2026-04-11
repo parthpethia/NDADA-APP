@@ -78,8 +78,9 @@ export default function AdminMembersScreen() {
     try {
       await callAdminAction('set-member-payment-status', { member_id: memberId, status });
       await fetchMembers();
+      Alert.alert('Success', `Payment status updated to ${label}`);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      Alert.alert('Error', err?.message || 'Failed to update payment status');
     }
     setActionLoading(null);
   };

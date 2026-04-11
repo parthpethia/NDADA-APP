@@ -30,14 +30,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const recoverFromInvalidRefreshToken = async (message?: string | null) => {
     const errorMessage = String(message || '').toLowerCase();
-    if (!errorMessage.includes('invalid refresh token')) return false;
+    if (!errorMessage.includes('invalid refresh token') && !errorMessage.includes('refresh token not found')) {
+      return false;
+    }
 
-    // Clear only the local session cache so web can recover from stale tokens.
+    // Clear the invalid session from storage
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch (signOutError) {
-      console.warn('Failed to clear stale local session:', signOutError);
+      // Silently fail - we're in recovery mode
     }
+
+    // Also manually clear storage to ensure token is gone
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('sb-auth-token');
+        localStorage.removeItem('sb-refresh-token');
+        // Clear any Supabase session keys
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes('supabase') || key.includes('auth')) {
+            localStorage.removeItem(key);
+          }
+        });
+      } catch (e) {
+        // Silently fail
+      }
+    }
+
     setSession(null);
     setUser(null);
     setMember(null);
@@ -104,24 +123,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      if (error) {
-        const recovered = await recoverFromInvalidRefreshToken(error.message);
-        if (!recovered) {
-          console.warn('Failed to restore auth session:', error.message);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          const recovered = await recoverFromInvalidRefreshToken(error.message);
+          if (!recovered) {
+            console.warn('Failed to restore auth session:', error.message);
+          }
+          setLoading(false);
+          return;
+        }
+
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchMember(session.user.id, session.user);
+          await fetchAdminUser(session.user.id);
         }
         setLoading(false);
-        return;
+      } catch (err) {
+        // Silently handle initialization errors
+        console.warn('Auth initialization error:', err);
+        setLoading(false);
       }
+    };
 
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchMember(session.user.id, session.user);
-        await fetchAdminUser(session.user.id);
-      }
-      setLoading(false);
-    });
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {

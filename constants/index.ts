@@ -15,7 +15,7 @@ export const MEMBERSHIP_BENEFITS = [
 export const MEMBERSHIP_STEPS = [
   'Create your member account',
   'Submit your firm application',
-  'Pay the membership fee securely',
+  'Pay the registration fee securely',
   'Download your approved certificate',
 ] as const;
 

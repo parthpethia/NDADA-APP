@@ -18,11 +18,18 @@ export async function confirm(
   if (Platform.OS === 'web') {
     const webConfirm = (globalThis as any)?.confirm as ((text?: string) => boolean) | undefined;
     if (typeof webConfirm === 'function') {
-      return Boolean(webConfirm(`${title}\n\n${message}`));
+      try {
+        const result = webConfirm(`${title}\n\n${message}`);
+        return Boolean(result);
+      } catch (e) {
+        console.warn('Web confirm dialog error:', e);
+        // Fallback to alert-based confirmation
+        return confirmWithAlert(title, message, confirmText);
+      }
     }
 
-    // Worst-case fallback: no confirmation mechanism; treat as cancelled.
-    return false;
+    // Fallback: use alert-based confirmation
+    return confirmWithAlert(title, message, confirmText);
   }
 
   return new Promise<boolean>((resolve) => {
@@ -43,4 +50,15 @@ export async function confirm(
       }
     );
   });
+}
+
+function confirmWithAlert(title: string, message: string, confirmText: string): boolean {
+  // Worst-case fallback when neither window.confirm nor Alert work on web
+  // Use the native browser confirm as final attempt
+  try {
+    return Boolean(window.confirm(`${title}\n\n${message}`));
+  } catch {
+    // If all else fails, don't proceed with the action
+    return false;
+  }
 }

@@ -1,24 +1,18 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, Alert, Linking, Platform } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Alert, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { Card, Button, StatusBadge } from '@/components/ui';
-import { useAdmin } from '@/hooks/useAdmin';
-import { confirm } from '@/lib/confirm';
+import { Card, StatusBadge } from '@/components/ui';
 import { Payment } from '@/types';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { STORAGE_BUCKETS } from '@/constants';
 
 interface PaymentWithMember extends Payment {
   member_name: string;
   member_email: string;
-  proof_url?: string | null;
 }
 
 export default function AdminPaymentsScreen() {
-  const { callAdminAction } = useAdmin();
   const [payments, setPayments] = useState<PaymentWithMember[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const showMessage = (title: string, message: string) => {
@@ -57,43 +51,6 @@ export default function AdminPaymentsScreen() {
     setRefreshing(false);
   };
 
-  const handleVerify = async (paymentId: string) => {
-    const ok = await confirm('Confirm', 'Manually verify this payment as paid?', {
-      confirmText: 'Verify',
-    });
-    if (!ok) return;
-
-    setActionLoading(paymentId);
-    setActionError(null);
-    try {
-      await callAdminAction('verify-payment', { payment_id: paymentId });
-      await fetchPayments();
-      showMessage('Success', 'Payment verified');
-    } catch (err: any) {
-      const message = err?.message || 'Failed to verify payment';
-      setActionError(message);
-      showMessage('Error', message);
-    }
-    setActionLoading(null);
-  };
-
-  const handleOpenProof = async (proofPath: string) => {
-    try {
-      const { data } = await supabase.storage
-        .from(STORAGE_BUCKETS.paymentProofs)
-        .createSignedUrl(proofPath, 60);
-      if (!data?.signedUrl) throw new Error('Could not create signed URL');
-
-      if (Platform.OS === 'web') {
-        window.open(data.signedUrl, '_blank');
-      } else {
-        await Linking.openURL(data.signedUrl);
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to open proof');
-    }
-  };
-
   return (
     <ScrollView
       className="flex-1 bg-gray-50"
@@ -126,36 +83,25 @@ export default function AdminPaymentsScreen() {
               </Text>
             </View>
 
+            {p.provider ? (
+              <View className="flex-row justify-between">
+                <Text className="text-xs text-gray-500">Provider</Text>
+                <Text className="text-xs text-gray-700">{String(p.provider)}</Text>
+              </View>
+            ) : null}
+
+            {p.razorpay_payment_id ? (
+              <View className="flex-row justify-between">
+                <Text className="text-xs text-gray-500">Razorpay Payment ID</Text>
+                <Text className="text-xs text-gray-700">{String(p.razorpay_payment_id)}</Text>
+              </View>
+            ) : null}
+
             <View className="flex-row justify-between">
               <Text className="text-xs text-gray-500">Date</Text>
               <Text className="text-xs text-gray-700">{formatDate(p.created_at)}</Text>
             </View>
-
-
-            {p.proof_url && (
-              <View className="flex-row justify-between">
-                <Text className="text-xs text-gray-500">Proof</Text>
-                <Text
-                  className="text-xs text-primary-700"
-                  onPress={() => handleOpenProof(p.proof_url as string)}
-                >
-                  View screenshot
-                </Text>
-              </View>
-            )}
           </View>
-
-          {p.status === 'pending' && (
-            <View className="mt-3 border-t border-gray-100 pt-3">
-              <Button
-                title="Manually Verify"
-                variant="primary"
-                size="sm"
-                onPress={() => handleVerify(p.id)}
-                loading={actionLoading === p.id}
-              />
-            </View>
-          )}
         </Card>
       ))}
 

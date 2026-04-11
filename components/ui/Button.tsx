@@ -2,7 +2,7 @@ import { TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { cn } from '@/lib/utils';
 
 interface ButtonProps {
-  onPress?: () => void;
+  onPress?: (() => void) | (() => Promise<void>);
   title: string;
   variant?: 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
@@ -48,9 +48,19 @@ export function Button({
   loading = false,
   className,
 }: ButtonProps) {
+  const handlePress = async () => {
+    if (onPress) {
+      try {
+        await Promise.resolve(onPress());
+      } catch (err) {
+        console.error('Button press error:', err);
+      }
+    }
+  };
+
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       className={cn(
         'flex-row items-center justify-center rounded-lg',

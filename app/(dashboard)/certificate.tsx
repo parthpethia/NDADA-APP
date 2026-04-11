@@ -80,7 +80,7 @@ export default function CertificateScreen() {
         title="No Certificate Yet"
         message={
           member?.payment_status !== 'paid'
-            ? 'Complete your membership payment first.'
+            ? 'Complete your registration fee payment first.'
             : 'Your firm must be approved before a certificate is issued.'
         }
       />

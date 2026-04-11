@@ -65,6 +65,12 @@ export interface Payment {
   amount: number;
   currency: string;
   status: PaymentStatus;
+  provider?: string | null;
+  razorpay_payment_link_id?: string | null;
+  razorpay_payment_link_url?: string | null;
+  razorpay_payment_id?: string | null;
+  provider_event?: string | null;
+  provider_payload?: unknown;
   created_at: string;
 }
 
