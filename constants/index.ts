@@ -1,8 +1,8 @@
 export const APP_NAME = 'NDADA';
-export const MEMBERSHIP_AMOUNT = 1500;
+export const MEMBERSHIP_AMOUNT = 300;
 export const MEMBERSHIP_CURRENCY = 'INR';
-export const MEMBERSHIP_PLAN_NAME = 'Annual Membership';
-export const MEMBERSHIP_VALIDITY_LABEL = '12 months';
+export const MEMBERSHIP_PLAN_NAME = 'Registration Fee';
+export const MEMBERSHIP_VALIDITY_LABEL = 'One-time';
 export const MEMBERSHIP_SUPPORT_EMAIL = 'support@ndada.org';
 
 export const MEMBERSHIP_BENEFITS = [

@@ -105,7 +105,7 @@ CREATE TRIGGER trg_firms_updated_at
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  amount INTEGER NOT NULL DEFAULT 150000, -- in paise (₹1500)
+  amount INTEGER NOT NULL DEFAULT 30000, -- in paise (₹300)
   currency TEXT NOT NULL DEFAULT 'inr',
   status payment_status NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

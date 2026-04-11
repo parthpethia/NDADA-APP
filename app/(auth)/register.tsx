@@ -78,7 +78,7 @@ export default function RegisterScreen() {
           <View className="mb-4 rounded-2xl border border-primary-100 bg-primary-50 p-5">
             <Text className="text-lg font-semibold text-primary-900">{MEMBERSHIP_PLAN_NAME}</Text>
             <Text className="mt-1 text-sm text-primary-700">
-              {formatCurrency(MEMBERSHIP_AMOUNT)} for {MEMBERSHIP_VALIDITY_LABEL}
+              {formatCurrency(MEMBERSHIP_AMOUNT)} • {MEMBERSHIP_VALIDITY_LABEL}
             </Text>
             <View className="mt-4 gap-2">
               {MEMBERSHIP_STEPS.map((step, index) => (
@@ -148,7 +148,7 @@ export default function RegisterScreen() {
             />
 
             <Button
-              title="Create Membership Account"
+              title="Create Account"
               onPress={handleRegister}
               loading={loading}
               className="mt-2"

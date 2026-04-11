@@ -117,7 +117,7 @@ export default function CartScreen() {
         </View>
 
         <Card className="mb-4 border-primary-100 bg-primary-50">
-          <CardHeader title={MEMBERSHIP_PLAN_NAME} subtitle={`Valid for ${MEMBERSHIP_VALIDITY_LABEL}`} />
+          <CardHeader title={MEMBERSHIP_PLAN_NAME} subtitle="One-time payment" />
           <Text className="text-sm text-primary-700">
             This registration fee activates the member profile linked to {member.membership_id} and enables certificate issuance after approval.
           </Text>

@@ -181,7 +181,7 @@ export default function DashboardHome() {
               Complete Your Payment
             </Text>
             <Text className="mb-4 max-w-[260px] text-center text-sm text-yellow-700">
-              Your application is saved. Pay {formatCurrency(MEMBERSHIP_AMOUNT)} to move your membership into review.
+              Your application is saved. Pay {formatCurrency(MEMBERSHIP_AMOUNT)} to move your application into review.
             </Text>
             <Button title="Go to Cart" size="lg" onPress={() => router.push('/cart')} />
           </View>

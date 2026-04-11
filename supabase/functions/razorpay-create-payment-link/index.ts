@@ -11,7 +11,7 @@ const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET')!;
 
 const appUrl = (Deno.env.get('APP_URL') || '').replace(/\/$/, '');
 
-const feeAmountRupees = Number(Deno.env.get('REGISTRATION_FEE_AMOUNT_INR') || '1500');
+const feeAmountRupees = Number(Deno.env.get('REGISTRATION_FEE_AMOUNT_INR') || '300');
 const feeCurrency = String(Deno.env.get('REGISTRATION_FEE_CURRENCY') || 'INR').toUpperCase();
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -52,10 +52,12 @@ serve(async (req) => {
       throw new Error('Already paid');
     }
 
+    const amountPaise = Math.round(feeAmountRupees * 100);
+
     // Reuse a recent pending link if available (prevents multiple links per user).
     const { data: existingPayments } = await supabase
       .from('payments')
-      .select('id, status, created_at, razorpay_payment_link_id, razorpay_payment_link_url')
+      .select('id, status, created_at, amount, currency, razorpay_payment_link_id, razorpay_payment_link_url')
       .eq('member_id', member.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -65,20 +67,22 @@ serve(async (req) => {
     if (existing?.razorpay_payment_link_id && existing?.razorpay_payment_link_url) {
       const createdAtMs = Date.parse(String(existing.created_at || ''));
       const isRecent = Number.isFinite(createdAtMs) && (Date.now() - createdAtMs) < 30 * 60 * 1000;
+      const sameAmount = Number(existing.amount) === amountPaise;
+      const sameCurrency = String(existing.currency || '').toUpperCase() === feeCurrency;
       if (isRecent) {
-        const reuseResponse: CreateLinkResponse = {
-          payment_link_id: existing.razorpay_payment_link_id,
-          payment_link_url: existing.razorpay_payment_link_url,
-          amount: feeAmountRupees * 100,
-          currency: feeCurrency,
-        };
-        return new Response(JSON.stringify(reuseResponse), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        if (sameAmount && sameCurrency) {
+          const reuseResponse: CreateLinkResponse = {
+            payment_link_id: existing.razorpay_payment_link_id,
+            payment_link_url: existing.razorpay_payment_link_url,
+            amount: amountPaise,
+            currency: feeCurrency,
+          };
+          return new Response(JSON.stringify(reuseResponse), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
     }
-
-    const amountPaise = Math.round(feeAmountRupees * 100);
 
     const callbackUrl = appUrl ? `${appUrl}/cart?success=true` : undefined;
 
