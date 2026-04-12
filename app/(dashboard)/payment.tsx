@@ -80,10 +80,12 @@ export default function PaymentScreen() {
 
       console.log('\n5️⃣ Response received:');
       console.log('   Data:', JSON.stringify(data));
-      console.log('   Error:', error ? `${error.message}` : 'None');
+      console.log('   Error:', error ? JSON.stringify(error) : 'None');
 
       if (error) {
         console.error('❌ RAZORPAY FUNCTION ERROR:', error);
+        console.error('   Message:', (error as any).message);
+        console.error('   Details:', (error as any).context?.json?.error);
         throw new Error(`Function error: ${error.message}`);
       }
 

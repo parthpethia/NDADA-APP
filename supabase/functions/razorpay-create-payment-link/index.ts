@@ -258,10 +258,18 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : '';
     const status = message === 'Unauthorized' ? 403 : 500;
+
     console.error('❌ Function error:', message);
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('Stack:', stack);
+
+    return new Response(JSON.stringify({
+      error: message,
+      details: stack?.split('\n').slice(0, 3).join(' | '),
+      timestamp: new Date().toISOString(),
+    }), {
       status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
