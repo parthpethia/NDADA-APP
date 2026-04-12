@@ -67,18 +67,25 @@ serve(async (req) => {
     // Create Supabase client INSIDE handler
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      console.error('❌ No authorization header');
+    // Get token from request body
+    let token = '';
+    try {
+      const body = await req.json();
+      token = String(body?.token || '').trim();
+    } catch (e) {
+      console.error('❌ Failed to parse request body:', e);
+    }
+
+    if (!token) {
+      console.error('❌ No token in request body');
       throw new Error('Unauthorized');
     }
 
-    console.log('✅ Authorization header present');
-
-    const token = authHeader.replace('Bearer ', '');
+    console.log('✅ Token extracted from body, length:', token.length);
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
     if (authErr || !user) {
       console.error('❌ Auth error:', authErr?.message);
+      console.error('❌ Token validation failed for token:', token.substring(0, 20) + '...');
       throw new Error('Unauthorized');
     }
 
