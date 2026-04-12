@@ -104,7 +104,10 @@ serve(async (req) => {
     const memberId = String(requestBody?.member_id || '').trim();
     if (!memberId) {
       console.error('❌ member_id is required in request body');
-      throw new Error('member_id required');
+      return new Response(JSON.stringify({ error: 'member_id required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('📝 member_id from request:', memberId);
@@ -116,12 +119,25 @@ serve(async (req) => {
       .eq('id', memberId)
       .single();
 
-    if (memberErr || !member) {
-      console.error('❌ Member fetch error:', memberErr?.message);
-      throw new Error('Member not found');
+    if (memberErr) {
+      console.error('❌ Member fetch error:', memberErr.message);
+      console.error('   Code:', memberErr.code);
+      return new Response(JSON.stringify({
+        error: 'Failed to fetch member',
+        details: memberErr.message,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    console.log('✅ Member found:', (member as any).membership_id);
+    if (!member) {
+      console.error('❌ Member not found');
+      return new Response(JSON.stringify({ error: 'Member not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Only verify ownership if user is authenticated
     if (user) {
@@ -138,7 +154,13 @@ serve(async (req) => {
 
     if ((member as any).payment_status === 'paid') {
       console.warn('⚠️ Member already paid');
-      throw new Error('Already paid');
+      return new Response(JSON.stringify({
+        error: 'Payment already completed',
+        payment_status: (member as any).payment_status,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const amountPaise = Math.round(feeAmountRupees * 100);
@@ -215,15 +237,28 @@ serve(async (req) => {
       console.error('❌ Razorpay error:', razorpayJson);
       const msg = typeof razorpayJson?.error?.description === 'string'
         ? razorpayJson.error.description
-        : `Razorpay error (${razorpayResp.status})`;
-      throw new Error(msg);
+        : `Razorpay API failed (${razorpayResp.status})`;
+      return new Response(JSON.stringify({
+        error: msg,
+        razorpay_status: razorpayResp.status,
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const paymentLinkId = String(razorpayJson?.id || '');
     const paymentLinkUrl = String(razorpayJson?.short_url || razorpayJson?.url || '');
     if (!paymentLinkId || !paymentLinkUrl) {
       console.error('❌ Invalid Razorpay response - missing link ID or URL');
-      throw new Error('Razorpay did not return a valid payment link');
+      console.error('   Response:', razorpayJson);
+      return new Response(JSON.stringify({
+        error: 'Invalid Razorpay response',
+        details: 'Missing payment link',
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('✅ Got payment link from Razorpay:', paymentLinkId);
@@ -240,8 +275,15 @@ serve(async (req) => {
     });
 
     if (insertErr) {
-      console.error('❌ Database insert error:', insertErr);
-      throw new Error(insertErr.message);
+      console.error('❌ Database insert error:', insertErr.message);
+      console.error('   Code:', insertErr.code);
+      return new Response(JSON.stringify({
+        error: 'Failed to save payment',
+        details: insertErr.message,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('✅ Payment record created in database');
