@@ -43,32 +43,49 @@ export default function PaymentScreen() {
     if (!member) return;
     setPaymentLoading(true);
     try {
+      console.log('💳 Starting Razorpay payment flow for member:', member.id);
+
       const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
         body: {},
       });
-      if (error) throw new Error(error.message);
+
+      console.log('📢 Razorpay response:', { data, error });
+
+      if (error) {
+        console.error('❌ Razorpay function error:', error);
+        throw new Error(error.message);
+      }
 
       const url = String((data as any)?.payment_link_url || '');
-      if (!url) throw new Error('Could not create payment link');
+      if (!url) {
+        console.error('❌ No payment link URL in response:', data);
+        throw new Error('Could not create payment link');
+      }
 
+      console.log('✅ Got payment link:', url);
       setPaymentLinkUrl(url);
 
       if (Platform.OS === 'web') {
         // Popups can be blocked if opened after an async call; use same-tab navigation.
         const location = (globalThis as any)?.location as { assign?: (u: string) => void; href?: string } | undefined;
         if (typeof location?.assign === 'function') {
+          console.log('🌐 Navigating to Razorpay (web - assign)');
           location.assign(url);
         } else if (location && typeof location.href === 'string') {
+          console.log('🌐 Navigating to Razorpay (web - href)');
           location.href = url;
         }
       } else {
         try {
+          console.log('📱 Opening Razorpay in browser');
           await WebBrowser.openBrowserAsync(url);
         } catch {
+          console.log('📱 WebBrowser failed, trying Linking');
           await Linking.openURL(url);
         }
       }
     } catch (err: any) {
+      console.error('❌ Payment error:', err);
       Alert.alert('Error', err?.message || 'Failed to start payment');
     }
     setPaymentLoading(false);

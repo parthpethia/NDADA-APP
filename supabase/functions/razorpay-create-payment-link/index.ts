@@ -35,12 +35,29 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔐 Razorpay function started');
+    console.log('📋 Environment check:');
+    console.log('  - RAZORPAY_KEY_ID:', razorpayKeyId ? '✅ SET' : '❌ MISSING');
+    console.log('  - RAZORPAY_KEY_SECRET:', razorpayKeySecret ? '✅ SET' : '❌ MISSING');
+    console.log('  - APP_URL:', appUrl || '(default)');
+    console.log('  - FEE_AMOUNT:', feeAmountRupees);
+
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) throw new Error('Unauthorized');
+    if (!authHeader) {
+      console.error('❌ No authorization header');
+      throw new Error('Unauthorized');
+    }
+
+    console.log('✅ Authorization header present');
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-    if (authErr || !user) throw new Error('Unauthorized');
+    if (authErr || !user) {
+      console.error('❌ Auth error:', authErr?.message);
+      throw new Error('Unauthorized');
+    }
+
+    console.log('✅ User authenticated:', user.id);
 
     const { data: member, error: memberErr } = await supabase
       .from('members')
@@ -48,18 +65,26 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    if (memberErr || !member) throw new Error('Member not found');
-    if (member.payment_status === 'paid') {
+    if (memberErr || !member) {
+      console.error('❌ Member fetch error:', memberErr?.message);
+      throw new Error('Member not found');
+    }
+
+    console.log('✅ Member found:', (member as any).membership_id);
+
+    if ((member as any).payment_status === 'paid') {
+      console.warn('⚠️ Member already paid');
       throw new Error('Already paid');
     }
 
     const amountPaise = Math.round(feeAmountRupees * 100);
+    console.log('💰 Amount in paise:', amountPaise);
 
     // Reuse a recent pending link if available (prevents multiple links per user).
     const { data: existingPayments } = await supabase
       .from('payments')
       .select('id, status, created_at, amount, currency, razorpay_payment_link_id, razorpay_payment_link_url')
-      .eq('member_id', member.id)
+      .eq('member_id', (member as any).id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1);
@@ -70,35 +95,35 @@ serve(async (req) => {
       const isRecent = Number.isFinite(createdAtMs) && (Date.now() - createdAtMs) < 30 * 60 * 1000;
       const sameAmount = Number(existing.amount) === amountPaise;
       const sameCurrency = String(existing.currency || '').toUpperCase() === feeCurrency;
-      if (isRecent) {
-        if (sameAmount && sameCurrency) {
-          const reuseResponse: CreateLinkResponse = {
-            payment_link_id: existing.razorpay_payment_link_id,
-            payment_link_url: existing.razorpay_payment_link_url,
-            amount: amountPaise,
-            currency: feeCurrency,
-          };
-          return new Response(JSON.stringify(reuseResponse), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
+      if (isRecent && sameAmount && sameCurrency) {
+        console.log('♻️ Reusing recent payment link');
+        const reuseResponse: CreateLinkResponse = {
+          payment_link_id: existing.razorpay_payment_link_id,
+          payment_link_url: existing.razorpay_payment_link_url,
+          amount: amountPaise,
+          currency: feeCurrency,
+        };
+        return new Response(JSON.stringify(reuseResponse), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
 
     const callbackUrl = appUrl ? `${appUrl}/cart?success=true` : undefined;
+    console.log('🔗 Callback URL:', callbackUrl);
 
     const payload: Record<string, unknown> = {
       amount: amountPaise,
       currency: feeCurrency,
       accept_partial: false,
-      description: `NDADA registration fee (${member.membership_id})`,
+      description: `NDADA registration fee (${(member as any).membership_id})`,
       customer: {
-        name: member.full_name,
-        email: member.email,
+        name: (member as any).full_name,
+        email: (member as any).email,
       },
       notes: {
-        member_id: member.id,
-        membership_id: member.membership_id,
+        member_id: (member as any).id,
+        membership_id: (member as any).membership_id,
       },
     };
 
@@ -107,6 +132,7 @@ serve(async (req) => {
       payload.callback_method = 'get';
     }
 
+    console.log('📤 Calling Razorpay API...');
     const basicAuth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
     const razorpayResp = await fetch('https://api.razorpay.com/v1/payment_links', {
       method: 'POST',
@@ -117,8 +143,11 @@ serve(async (req) => {
       body: JSON.stringify(payload),
     });
 
+    console.log('📥 Razorpay response status:', razorpayResp.status);
+
     const razorpayJson = await razorpayResp.json().catch(() => null);
     if (!razorpayResp.ok) {
+      console.error('❌ Razorpay error:', razorpayJson);
       const msg = typeof razorpayJson?.error?.description === 'string'
         ? razorpayJson.error.description
         : `Razorpay error (${razorpayResp.status})`;
@@ -128,11 +157,14 @@ serve(async (req) => {
     const paymentLinkId = String(razorpayJson?.id || '');
     const paymentLinkUrl = String(razorpayJson?.short_url || razorpayJson?.url || '');
     if (!paymentLinkId || !paymentLinkUrl) {
+      console.error('❌ Invalid Razorpay response - missing link ID or URL');
       throw new Error('Razorpay did not return a valid payment link');
     }
 
+    console.log('✅ Got payment link from Razorpay:', paymentLinkId);
+
     const { error: insertErr } = await supabase.from('payments').insert({
-      member_id: member.id,
+      member_id: (member as any).id,
       amount: amountPaise,
       currency: feeCurrency,
       status: 'pending',
@@ -142,7 +174,12 @@ serve(async (req) => {
       provider_payload: razorpayJson,
     });
 
-    if (insertErr) throw new Error(insertErr.message);
+    if (insertErr) {
+      console.error('❌ Database insert error:', insertErr);
+      throw new Error(insertErr.message);
+    }
+
+    console.log('✅ Payment record created in database');
 
     const response: CreateLinkResponse = {
       payment_link_id: paymentLinkId,
@@ -157,6 +194,7 @@ serve(async (req) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     const status = message === 'Unauthorized' ? 403 : 500;
+    console.error('❌ Function error:', message);
     return new Response(JSON.stringify({ error: message }), {
       status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
