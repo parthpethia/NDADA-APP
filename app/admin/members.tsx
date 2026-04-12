@@ -67,22 +67,46 @@ export default function AdminMembersScreen() {
   };
 
   const handleSetPaymentStatus = async (memberId: string, status: 'pending' | 'paid' | 'failed') => {
-    const label = status === 'paid' ? 'mark as PAID' : status === 'pending' ? 'mark as NOT PAID' : 'mark as FAILED';
-    const ok = await confirm('Confirm', `Are you sure you want to ${label}?`, {
-      confirmText: 'Confirm',
-      destructive: status !== 'paid',
-    });
-    if (!ok) return;
-
-    setActionLoading(memberId);
     try {
-      await callAdminAction('set-member-payment-status', { member_id: memberId, status });
-      await fetchMembers();
-      Alert.alert('Success', `Payment status updated to ${label}`);
+      const label = status === 'paid' ? 'mark as PAID' : status === 'pending' ? 'mark as NOT PAID' : 'mark as FAILED';
+      console.log('💬 Requesting confirmation for:', label);
+
+      const ok = await confirm('Confirm', `Are you sure you want to ${label}?`, {
+        confirmText: 'Confirm',
+        destructive: status !== 'paid',
+      });
+
+      console.log('✏️ Confirmation result:', ok);
+      if (!ok) {
+        console.log('User cancelled the action');
+        return;
+      }
+
+      console.log('📍 Setting action loading for member:', memberId);
+      setActionLoading(memberId);
+
+      try {
+        console.log('🔄 Calling admin action with:', { member_id: memberId, status });
+        const result = await callAdminAction('set-member-payment-status', { member_id: memberId, status });
+        console.log('✅ Admin action result:', result);
+
+        console.log('🔄 Fetching updated members list...');
+        await fetchMembers();
+        console.log('✅ Members list updated');
+
+        Alert.alert('Success', `Payment status updated to ${label}`);
+      } catch (err: any) {
+        console.error('❌ Action failed:', err);
+        const errorMsg = err.message || 'Failed to update payment status';
+        Alert.alert('Error', errorMsg);
+      } finally {
+        console.log('🏁 Clearing action loading');
+        setActionLoading(null);
+      }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to update payment status');
+      console.error('❌ Outer catch error:', err);
+      Alert.alert('Error', String(err.message || 'An error occurred'));
     }
-    setActionLoading(null);
   };
 
   const handleCreateMember = async () => {
