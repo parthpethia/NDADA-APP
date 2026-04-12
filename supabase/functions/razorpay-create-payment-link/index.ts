@@ -75,42 +75,63 @@ serve(async (req) => {
     // Create Supabase client INSIDE handler
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request body once
-    let requestBody: any = {};
-    try {
-      requestBody = await req.json();
-    } catch (e) {
-      console.warn('⚠️ Could not parse request body:', e);
-    }
-
-    // Get token from request body (optional - for user validation)
-    const token = String(requestBody?.token || '').trim();
+    // Get Authorization header (sent automatically by Supabase client)
+    const authHeader = req.headers.get('authorization');
     let user = null;
 
-    if (token) {
-      console.log('🔍 Token extracted from body, length:', token.length);
-      const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser(token);
-      if (authErr) {
-        console.warn('⚠️ Token validation failed:', authErr.message);
-      } else if (authUser) {
-        user = authUser;
-        console.log('✅ User authenticated:', user.id);
+    if (authHeader) {
+      console.log('✅ Authorization header present');
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (token) {
+        console.log('🔍 Token extracted from Authorization header, length:', token.length);
+        const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser(token);
+        if (authErr) {
+          console.warn('⚠️ Token validation failed:', authErr.message);
+        } else if (authUser) {
+          user = authUser;
+          console.log('✅ User authenticated:', user.id);
+        }
       }
     } else {
-      console.warn('⚠️ No token provided in request body');
+      console.warn('⚠️ No Authorization header');
     }
 
-    // member_id must be provided
-    const memberId = String(requestBody?.member_id || '').trim();
+    // Try to get member_id from request body
+    let memberId = '';
+    try {
+      const body = await req.json();
+      memberId = String(body?.member_id || '').trim();
+      if (memberId) {
+        console.log('📝 member_id from request body:', memberId);
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not parse request body');
+    }
+
+    // If no member_id in body but user is authenticated, fetch from database
+    if (!memberId && user) {
+      const { data: memberData } = await supabase
+        .from('members')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (memberData?.id) {
+        memberId = memberData.id;
+        console.log('📝 member_id from user record:', memberId);
+      }
+    }
+
+    // member_id must be determined somehow
     if (!memberId) {
-      console.error('❌ member_id is required in request body');
-      return new Response(JSON.stringify({ error: 'member_id required' }), {
+      console.error('❌ Could not determine member_id');
+      return new Response(JSON.stringify({
+        error: 'member_id required or user not authenticated',
+      }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    console.log('📝 member_id from request:', memberId);
 
     // Fetch full member record
     const { data: member, error: memberErr } = await supabase
