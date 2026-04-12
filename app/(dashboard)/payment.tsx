@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Linking } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge } from '@/components/ui';
@@ -54,10 +54,19 @@ export default function PaymentScreen() {
       setPaymentLinkUrl(url);
 
       if (Platform.OS === 'web') {
-        const open = (globalThis as any)?.open as ((url?: string, target?: string) => void) | undefined;
-        if (typeof open === 'function') open(url, '_blank');
+        // Popups can be blocked if opened after an async call; use same-tab navigation.
+        const location = (globalThis as any)?.location as { assign?: (u: string) => void; href?: string } | undefined;
+        if (typeof location?.assign === 'function') {
+          location.assign(url);
+        } else if (location && typeof location.href === 'string') {
+          location.href = url;
+        }
       } else {
-        await WebBrowser.openBrowserAsync(url);
+        try {
+          await WebBrowser.openBrowserAsync(url);
+        } catch {
+          await Linking.openURL(url);
+        }
       }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to start payment');

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Linking } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +19,7 @@ import {
   Building2,
   Award,
 } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function CartScreen() {
   const { member, refreshMember } = useAuth();
@@ -75,8 +76,30 @@ export default function CartScreen() {
   const handlePayment = async () => {
     setPaymentLoading(true);
     try {
-      await refreshMember();
-      router.push('/(dashboard)/payment');
+      const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
+        body: {},
+      });
+      if (error) throw new Error(error.message);
+
+      const url = String((data as any)?.payment_link_url || '');
+      if (!url) throw new Error('Could not create payment link');
+
+      if (Platform.OS === 'web') {
+        const location = (globalThis as any)?.location as { assign?: (u: string) => void; href?: string } | undefined;
+        if (typeof location?.assign === 'function') {
+          location.assign(url);
+        } else if (location && typeof location.href === 'string') {
+          location.href = url;
+        }
+      } else {
+        try {
+          await WebBrowser.openBrowserAsync(url);
+        } catch {
+          await Linking.openURL(url);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to start payment');
     } finally {
       setPaymentLoading(false);
     }
