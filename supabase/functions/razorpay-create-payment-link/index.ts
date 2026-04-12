@@ -3,11 +3,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-const razorpayKeyId = Deno.env.get('RAZORPAY_KEY_ID')!;
-const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET')!;
+const razorpayKeyId = Deno.env.get('RAZORPAY_KEY_ID') || '';
+const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET') || '';
 
 const appUrl = (Deno.env.get('APP_URL') || '').replace(/\/$/, '');
 
@@ -39,8 +39,29 @@ serve(async (req) => {
     console.log('📋 Environment check:');
     console.log('  - RAZORPAY_KEY_ID:', razorpayKeyId ? '✅ SET' : '❌ MISSING');
     console.log('  - RAZORPAY_KEY_SECRET:', razorpayKeySecret ? '✅ SET' : '❌ MISSING');
+    console.log('  - SUPABASE_URL:', supabaseUrl ? '✅ SET' : '❌ MISSING');
+    console.log('  - SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? '✅ SET' : '❌ MISSING');
     console.log('  - APP_URL:', appUrl || '(default)');
     console.log('  - FEE_AMOUNT:', feeAmountRupees);
+
+    // Validate required environment variables
+    if (!razorpayKeyId || !razorpayKeySecret) {
+      console.error('❌ Missing Razorpay credentials');
+      const msg = 'Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Supabase environment variables.';
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ Missing Supabase credentials');
+      const msg = 'Supabase credentials not configured.';
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
