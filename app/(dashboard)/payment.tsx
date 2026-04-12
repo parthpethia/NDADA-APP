@@ -14,7 +14,7 @@ import { CheckCircle, Clock, XCircle } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 export default function PaymentScreen() {
-  const { member, refreshMember } = useAuth();
+  const { member, refreshMember, session } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
@@ -40,13 +40,22 @@ export default function PaymentScreen() {
   if (!member) return null;
 
   const handlePayWithRazorpay = async () => {
-    if (!member) return;
+    if (!member || !session) {
+      console.error('❌ Missing member or session');
+      Alert.alert('Error', 'Not authenticated');
+      return;
+    }
+
     setPaymentLoading(true);
     try {
       console.log('💳 Starting Razorpay payment flow for member:', member.id);
+      console.log('🔐 Using session token:', session.access_token ? '✅ Present' : '❌ Missing');
 
       const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
         body: {},
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
       console.log('📢 Razorpay response:', { data, error });
