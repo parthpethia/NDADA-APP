@@ -3,19 +3,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
-const razorpayKeyId = Deno.env.get('RAZORPAY_KEY_ID') || '';
-const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET') || '';
-
-const appUrl = (Deno.env.get('APP_URL') || '').replace(/\/$/, '');
-
-const feeAmountRupees = Number(Deno.env.get('REGISTRATION_FEE_AMOUNT_INR') || '300');
-const feeCurrency = String(Deno.env.get('REGISTRATION_FEE_CURRENCY') || 'INR').toUpperCase();
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -31,8 +18,9 @@ type CreateLinkResponse = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight requests FIRST
   if (req.method === 'OPTIONS') {
+    console.log('📋 OPTIONS request - CORS preflight');
     return new Response('OK', {
       status: 200,
       headers: corsHeaders,
@@ -41,13 +29,21 @@ serve(async (req) => {
 
   try {
     console.log('🔐 Razorpay function started');
+
+    // Load environment variables INSIDE handler
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const razorpayKeyId = Deno.env.get('RAZORPAY_KEY_ID') || '';
+    const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET') || '';
+    const appUrl = (Deno.env.get('APP_URL') || '').replace(/\/$/, '');
+    const feeAmountRupees = Number(Deno.env.get('REGISTRATION_FEE_AMOUNT_INR') || '300');
+    const feeCurrency = String(Deno.env.get('REGISTRATION_FEE_CURRENCY') || 'INR').toUpperCase();
+
     console.log('📋 Environment check:');
     console.log('  - RAZORPAY_KEY_ID:', razorpayKeyId ? '✅ SET' : '❌ MISSING');
     console.log('  - RAZORPAY_KEY_SECRET:', razorpayKeySecret ? '✅ SET' : '❌ MISSING');
     console.log('  - SUPABASE_URL:', supabaseUrl ? '✅ SET' : '❌ MISSING');
     console.log('  - SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? '✅ SET' : '❌ MISSING');
-    console.log('  - APP_URL:', appUrl || '(default)');
-    console.log('  - FEE_AMOUNT:', feeAmountRupees);
 
     // Validate required environment variables
     if (!razorpayKeyId || !razorpayKeySecret) {
@@ -67,6 +63,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Create Supabase client INSIDE handler
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
@@ -130,6 +129,7 @@ serve(async (req) => {
           currency: feeCurrency,
         };
         return new Response(JSON.stringify(reuseResponse), {
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -215,6 +215,7 @@ serve(async (req) => {
     };
 
     return new Response(JSON.stringify(response), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
