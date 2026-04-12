@@ -100,32 +100,14 @@ serve(async (req) => {
       console.warn('⚠️ No token provided in request body');
     }
 
-    if (!user && !requestBody.member_id) {
-      console.error('❌ No user authentication and no member_id');
-      throw new Error('Unauthorized');
-    }
-
-    // Determine member_id
-    let memberId = String(requestBody?.member_id || '').trim();
-    if (!memberId && user) {
-      // Fetch member_id from user's record
-      const { data: memberData, error: memberDataErr } = await supabase
-        .from('members')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!memberDataErr && memberData) {
-        memberId = memberData.id;
-      }
-    }
-
+    // member_id must be provided
+    const memberId = String(requestBody?.member_id || '').trim();
     if (!memberId) {
-      console.error('❌ Could not determine member_id');
-      throw new Error('Member not found');
+      console.error('❌ member_id is required in request body');
+      throw new Error('member_id required');
     }
 
-    console.log('📝 Fetching member:', memberId);
+    console.log('📝 member_id from request:', memberId);
 
     // Fetch full member record
     const { data: member, error: memberErr } = await supabase
@@ -139,10 +121,17 @@ serve(async (req) => {
       throw new Error('Member not found');
     }
 
-    // Verify user owns this member record (if user is authenticated)
-    if (user && (member as any).user_id !== user.id) {
-      console.error('❌ User (', user.id, ') does not own member record (', (member as any).user_id, ')');
-      throw new Error('Unauthorized');
+    console.log('✅ Member found:', (member as any).membership_id);
+
+    // Only verify ownership if user is authenticated
+    if (user) {
+      if ((member as any).user_id !== user.id) {
+        console.error('❌ User (', user.id, ') does not own member record (', (member as any).user_id, ')');
+        throw new Error('Unauthorized');
+      }
+      console.log('✅ User owns member record');
+    } else {
+      console.warn('⚠️ No user authentication - member_id trust mode');
     }
 
     console.log('✅ Member found:', (member as any).membership_id);
