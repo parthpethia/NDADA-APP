@@ -27,6 +27,14 @@ serve(async (req) => {
     });
   }
 
+  // Only accept POST
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     console.log('🔐 Razorpay function started');
 
@@ -48,7 +56,7 @@ serve(async (req) => {
     // Validate required environment variables
     if (!razorpayKeyId || !razorpayKeySecret) {
       console.error('❌ Missing Razorpay credentials');
-      const msg = 'Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Supabase environment variables.';
+      const msg = 'Razorpay credentials not configured.';
       return new Response(JSON.stringify({ error: msg }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -67,39 +75,74 @@ serve(async (req) => {
     // Create Supabase client INSIDE handler
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get token from request body
-    let token = '';
+    // Parse request body once
+    let requestBody: any = {};
     try {
-      const body = await req.json();
-      token = String(body?.token || '').trim();
+      requestBody = await req.json();
     } catch (e) {
-      console.error('❌ Failed to parse request body:', e);
+      console.warn('⚠️ Could not parse request body:', e);
     }
 
-    if (!token) {
-      console.error('❌ No token in request body');
+    // Get token from request body (optional - for user validation)
+    const token = String(requestBody?.token || '').trim();
+    let user = null;
+
+    if (token) {
+      console.log('🔍 Token extracted from body, length:', token.length);
+      const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser(token);
+      if (authErr) {
+        console.warn('⚠️ Token validation failed:', authErr.message);
+      } else if (authUser) {
+        user = authUser;
+        console.log('✅ User authenticated:', user.id);
+      }
+    } else {
+      console.warn('⚠️ No token provided in request body');
+    }
+
+    if (!user && !requestBody.member_id) {
+      console.error('❌ No user authentication and no member_id');
       throw new Error('Unauthorized');
     }
 
-    console.log('✅ Token extracted from body, length:', token.length);
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-    if (authErr || !user) {
-      console.error('❌ Auth error:', authErr?.message);
-      console.error('❌ Token validation failed for token:', token.substring(0, 20) + '...');
-      throw new Error('Unauthorized');
+    // Determine member_id
+    let memberId = String(requestBody?.member_id || '').trim();
+    if (!memberId && user) {
+      // Fetch member_id from user's record
+      const { data: memberData, error: memberDataErr } = await supabase
+        .from('members')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!memberDataErr && memberData) {
+        memberId = memberData.id;
+      }
     }
 
-    console.log('✅ User authenticated:', user.id);
+    if (!memberId) {
+      console.error('❌ Could not determine member_id');
+      throw new Error('Member not found');
+    }
 
+    console.log('📝 Fetching member:', memberId);
+
+    // Fetch full member record
     const { data: member, error: memberErr } = await supabase
       .from('members')
-      .select('id, full_name, email, payment_status, membership_id')
-      .eq('user_id', user.id)
+      .select('id, full_name, email, payment_status, membership_id, user_id')
+      .eq('id', memberId)
       .single();
 
     if (memberErr || !member) {
       console.error('❌ Member fetch error:', memberErr?.message);
       throw new Error('Member not found');
+    }
+
+    // Verify user owns this member record (if user is authenticated)
+    if (user && (member as any).user_id !== user.id) {
+      console.error('❌ User (', user.id, ') does not own member record (', (member as any).user_id, ')');
+      throw new Error('Unauthorized');
     }
 
     console.log('✅ Member found:', (member as any).membership_id);

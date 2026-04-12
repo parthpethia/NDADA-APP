@@ -68,11 +68,13 @@ export default function PaymentScreen() {
       console.log('\n4️⃣ Invoking razorpay-create-payment-link...');
       console.log('   URL: razorpay-create-payment-link');
       console.log('   Auth: Bearer ' + session.access_token.substring(0, 20) + '...');
-      console.log('   Body: { token: ... }');
+      console.log('   Member ID:', member.id);
+      console.log('   Body: { token: ..., member_id: ... }');
 
       const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
         body: {
           token: session.access_token,
+          member_id: member.id,
         },
       });
 
