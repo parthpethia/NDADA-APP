@@ -3,12 +3,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const webhookSecret = Deno.env.get('RAZORPAY_WEBHOOK_SECRET')!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -23,7 +17,6 @@ async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
 }
 
 function timingSafeEqualHex(a: string, b: string) {
-  // Basic constant-time compare for equal-length hex strings.
   a = a.toLowerCase();
   b = b.toLowerCase();
   if (a.length !== b.length) return false;
@@ -40,6 +33,19 @@ serve(async (req) => {
   }
 
   try {
+    // Load environment variables INSIDE handler
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const webhookSecret = Deno.env.get('RAZORPAY_WEBHOOK_SECRET') || '';
+
+    if (!supabaseUrl || !supabaseServiceKey || !webhookSecret) {
+      return new Response(JSON.stringify({ error: 'Configuration missing' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const signatureHeader = req.headers.get('x-razorpay-signature') || req.headers.get('X-Razorpay-Signature');
     if (!signatureHeader) throw new Error('Missing signature');
 
