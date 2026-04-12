@@ -40,16 +40,35 @@ export default function PaymentScreen() {
   if (!member) return null;
 
   const handlePayWithRazorpay = async () => {
-    if (!member || !session) {
-      console.error('❌ Missing member or session');
-      Alert.alert('Error', 'Not authenticated');
+    console.log('▶️ === PAYMENT FLOW START ===');
+    console.log('1️⃣ Checking member:', member ? `✅ ${member.id}` : '❌ MISSING');
+    console.log('2️⃣ Checking session:', session ? `✅ ${session.user?.id}` : '❌ MISSING');
+    console.log('3️⃣ Checking token:', session?.access_token ? `✅ ${session.access_token.substring(0, 20)}...` : '❌ MISSING');
+
+    if (!member) {
+      console.error('❌ No member data');
+      Alert.alert('Error', 'Member data not found');
+      return;
+    }
+
+    if (!session) {
+      console.error('❌ No session');
+      Alert.alert('Error', 'Not authenticated - no session');
+      return;
+    }
+
+    if (!session.access_token) {
+      console.error('❌ No access token');
+      Alert.alert('Error', 'Not authenticated - no token');
       return;
     }
 
     setPaymentLoading(true);
     try {
-      console.log('💳 Starting Razorpay payment flow for member:', member.id);
-      console.log('🔐 Using session token:', session.access_token ? '✅ Present' : '❌ Missing');
+      console.log('\n4️⃣ Invoking razorpay-create-payment-link...');
+      console.log('   URL: razorpay-create-payment-link');
+      console.log('   Auth: Bearer ' + session.access_token.substring(0, 20) + '...');
+      console.log('   Body: {}');
 
       const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
         body: {},
@@ -58,46 +77,73 @@ export default function PaymentScreen() {
         },
       });
 
-      console.log('📢 Razorpay response:', { data, error });
+      console.log('\n5️⃣ Response received:');
+      console.log('   Data:', JSON.stringify(data));
+      console.log('   Error:', error ? `${error.message}` : 'None');
 
       if (error) {
-        console.error('❌ Razorpay function error:', error);
-        throw new Error(error.message);
+        console.error('❌ RAZORPAY FUNCTION ERROR:', error);
+        throw new Error(`Function error: ${error.message}`);
+      }
+
+      if (!data) {
+        console.error('❌ NO DATA IN RESPONSE');
+        throw new Error('No data returned from function');
       }
 
       const url = String((data as any)?.payment_link_url || '');
+      console.log('\n6️⃣ Extracted URL:', url ? `✅ ${url.substring(0, 50)}...` : '❌ MISSING');
+
       if (!url) {
-        console.error('❌ No payment link URL in response:', data);
+        console.error('❌ NO PAYMENT LINK URL');
         throw new Error('Could not create payment link');
       }
 
-      console.log('✅ Got payment link:', url);
+      console.log('\n7️⃣ Attempting redirect...');
+      console.log('   Platform:', Platform.OS);
+
       setPaymentLinkUrl(url);
 
       if (Platform.OS === 'web') {
-        // Popups can be blocked if opened after an async call; use same-tab navigation.
-        const location = (globalThis as any)?.location as { assign?: (u: string) => void; href?: string } | undefined;
+        console.log('   Method: window.location');
+        const location = (globalThis as any)?.location;
+        console.log('   location object:', location ? '✅ Available' : '❌ Missing');
+        console.log('   location.assign:', typeof location?.assign);
+        console.log('   location.href:', typeof location?.href);
+
         if (typeof location?.assign === 'function') {
-          console.log('🌐 Navigating to Razorpay (web - assign)');
+          console.log('   🔗 Using location.assign()');
           location.assign(url);
+          console.log('   ✅ Navigate called');
         } else if (location && typeof location.href === 'string') {
-          console.log('🌐 Navigating to Razorpay (web - href)');
+          console.log('   🔗 Using location.href');
           location.href = url;
+          console.log('   ✅ Navigate called');
+        } else {
+          console.error('   ❌ No navigation method available');
+          Alert.alert('Success', 'Payment link created:\n' + url + '\n\nPlease visit manually');
         }
       } else {
         try {
-          console.log('📱 Opening Razorpay in browser');
+          console.log('   Opening in WebBrowser...');
           await WebBrowser.openBrowserAsync(url);
-        } catch {
-          console.log('📱 WebBrowser failed, trying Linking');
+          console.log('   ✅ Browser opened');
+        } catch (e) {
+          console.log('   WebBrowser failed, trying Linking:', e);
           await Linking.openURL(url);
+          console.log('   ✅ Linking used');
         }
       }
+
+      console.log('\n✅ === PAYMENT FLOW COMPLETE ===\n');
     } catch (err: any) {
-      console.error('❌ Payment error:', err);
+      console.error('\n❌ === PAYMENT FLOW FAILED ===');
+      console.error('Error:', err.message);
+      console.error('Stack:', err.stack);
       Alert.alert('Error', err?.message || 'Failed to start payment');
+    } finally {
+      setPaymentLoading(false);
     }
-    setPaymentLoading(false);
   };
 
   const handleRefreshStatus = async () => {
