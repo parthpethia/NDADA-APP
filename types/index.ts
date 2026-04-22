@@ -173,7 +173,7 @@ export interface CertificateQueueJob {
 // ============================================================
 export interface AccountWithDetails extends Account {
   payments: Payment[];
-  certificate: Certificate | null;
+  certificates: Certificate[];
   fraud_flags: FraudFlag[];
 }
 

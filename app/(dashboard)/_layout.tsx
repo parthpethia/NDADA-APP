@@ -60,6 +60,21 @@ export default function DashboardLayout() {
           href: null,
         }}
       />
+      {/* Hidden screens — accessible via navigation, not shown in tab bar */}
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifications',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="timeline"
+        options={{
+          title: 'Timeline',
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

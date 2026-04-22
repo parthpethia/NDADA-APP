@@ -145,8 +145,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          await fetchMember(session.user.id, session.user);
-          await fetchAdminUser(session.user.id);
+          await Promise.all([
+            fetchMember(session.user.id, session.user),
+            fetchAdminUser(session.user.id),
+          ]);
         }
         setLoading(false);
       } catch (err) {
@@ -163,8 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          await fetchMember(session.user.id, session.user);
-          await fetchAdminUser(session.user.id);
+          await Promise.all([
+            fetchMember(session.user.id, session.user),
+            fetchAdminUser(session.user.id),
+          ]);
         } else {
           setMember(null);
           setAdminUser(null);

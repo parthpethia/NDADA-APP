@@ -93,7 +93,8 @@ export default function CartScreen() {
     }
   };
 
-  const latestFirm = firms.length > 0 ? firms[firms.length - 1] : null;
+  // With consolidated schema, the member record IS the firm
+  const hasFirmData = !!member.firm_name;
 
   return (
     <ScrollView className="flex-1 bg-gray-50" contentContainerClassName="p-4 pb-8">
@@ -135,20 +136,20 @@ export default function CartScreen() {
         </Card>
 
         {/* Registered Firm Summary */}
-        {latestFirm && (
+        {hasFirmData && (
           <Card className="mb-4">
             <CardHeader title="Registered Firm" />
             <View className="gap-2">
               <View className="flex-row items-center gap-2">
                 <Building2 size={16} color="#6b7280" />
-                <Text className="flex-1 font-medium text-gray-900">{latestFirm.firm_name}</Text>
+                <Text className="flex-1 font-medium text-gray-900">{member.firm_name}</Text>
               </View>
-              <CartRow label="License No." value={latestFirm.license_number} />
-              <CartRow label="Registration No." value={latestFirm.registration_number} />
-              <CartRow label="Type" value={latestFirm.firm_type} />
+              <CartRow label="License No." value={member.license_number} />
+              <CartRow label="Registration No." value={member.registration_number} />
+              <CartRow label="Type" value={member.firm_type} />
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm text-gray-500">Status</Text>
-                <StatusBadge status={latestFirm.approval_status} />
+                <StatusBadge status={member.approval_status} />
               </View>
             </View>
           </Card>

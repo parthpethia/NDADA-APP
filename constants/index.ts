@@ -42,8 +42,11 @@ export const APPROVAL_STATUS_LABELS: Record<string, string> = {
 
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
+  processing: 'Processing',
   paid: 'Paid',
   failed: 'Failed',
+  abandoned: 'Abandoned',
+  expired: 'Expired',
 };
 
 export const CERTIFICATE_STATUS_LABELS: Record<string, string> = {

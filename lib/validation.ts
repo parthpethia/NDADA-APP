@@ -3,6 +3,10 @@ import { z } from 'zod';
 /**
  * Validation Schemas using Zod
  * Centralized form validation for the NDADA app
+ *
+ * IMPORTANT: These schemas must match the field names used in
+ * AccountFormData (lib/useAccountForm.ts) and the registration
+ * form (app/(dashboard)/firms/new.tsx).
  */
 
 // ============================================================
@@ -16,6 +20,7 @@ const pinCodeRegex = /^\d{6}$/; // Indian PIN code
 
 // ============================================================
 // Step 1: Business Details Schema
+// Fields: firm_name, firm_address, firm_pin_code, gst_number, ifms_number
 // ============================================================
 export const businessDetailsSchema = z.object({
   firm_name: z
@@ -24,10 +29,6 @@ export const businessDetailsSchema = z.object({
     .min(3, 'Firm name must be at least 3 characters')
     .max(255, 'Firm name must be less than 255 characters')
     .trim(),
-
-  firm_type: z
-    .enum(['proprietorship', 'partnership', 'private_limited', 'llp', 'other'])
-    .default('proprietorship'),
 
   firm_address: z
     .string()
@@ -44,20 +45,6 @@ export const businessDetailsSchema = z.object({
       'PIN code must be a valid 6-digit number'
     ),
 
-  contact_email: z
-    .string()
-    .email('Please enter a valid email address')
-    .optional()
-    .or(z.literal('')),
-
-  contact_phone: z
-    .string()
-    .optional()
-    .refine(
-      (val) => !val || phoneNumberRegex.test(val.replace(/\s/g, '')),
-      'Please enter a valid 10-digit mobile number'
-    ),
-
   gst_number: z
     .string()
     .optional()
@@ -65,20 +52,6 @@ export const businessDetailsSchema = z.object({
       (val) => !val || gstRegex.test(val.toUpperCase()),
       'Please enter a valid GST number (format: 22AAAAA0000A1Z5)'
     ),
-
-  license_number: z
-    .string()
-    .min(1, 'License number is required')
-    .min(3, 'License number must be at least 3 characters')
-    .max(100, 'License number must be less than 100 characters')
-    .trim(),
-
-  registration_number: z
-    .string()
-    .min(1, 'Registration number is required')
-    .min(3, 'Registration number must be at least 3 characters')
-    .max(100, 'Registration number must be less than 100 characters')
-    .trim(),
 
   ifms_number: z
     .string()
@@ -90,15 +63,11 @@ export const businessDetailsSchema = z.object({
 
 // ============================================================
 // Step 2: Personal Details Schema
+// Fields match AccountFormData: partner_proprietor_name,
+// aadhaar_card_number, mobile_number, whatsapp_number,
+// email_id, residence_address, residence_pin_code
 // ============================================================
 export const personalDetailsSchema = z.object({
-  full_name: z
-    .string()
-    .min(1, 'Full name is required')
-    .min(3, 'Full name must be at least 3 characters')
-    .max(255, 'Full name must be less than 255 characters')
-    .trim(),
-
   partner_proprietor_name: z
     .string()
     .min(1, 'Partner/Proprietor name is required')
@@ -106,15 +75,12 @@ export const personalDetailsSchema = z.object({
     .max(255, 'Name must be less than 255 characters')
     .trim(),
 
-  email: z
+  aadhaar_card_number: z
     .string()
-    .email('Please enter a valid email address'),
-
-  phone: z
-    .string()
+    .optional()
     .refine(
-      (val) => phoneNumberRegex.test(val.replace(/\s/g, '')),
-      'Please enter a valid 10-digit mobile number starting with 6-9'
+      (val) => !val || aadhaarRegex.test(val),
+      'Please enter a valid Aadhaar number (format: XXXX XXXX XXXX)'
     ),
 
   mobile_number: z
@@ -133,11 +99,13 @@ export const personalDetailsSchema = z.object({
       'Please enter a valid 10-digit WhatsApp number'
     ),
 
-  address: z
+  email_id: z
     .string()
-    .min(10, 'Residential address must be at least 10 characters')
-    .max(500, 'Residential address must be less than 500 characters')
-    .trim(),
+    .optional()
+    .refine(
+      (val) => !val || z.string().email().safeParse(val).success,
+      'Please enter a valid email address'
+    ),
 
   residence_address: z
     .string()
@@ -153,14 +121,6 @@ export const personalDetailsSchema = z.object({
     .refine(
       (val) => !val || pinCodeRegex.test(val),
       'PIN code must be a valid 6-digit number'
-    ),
-
-  aadhaar_card_number: z
-    .string()
-    .optional()
-    .refine(
-      (val) => !val || aadhaarRegex.test(val),
-      'Please enter a valid Aadhaar number (format: XXXX XXXX XXXX)'
     ),
 });
 
@@ -179,8 +139,8 @@ export const licenseDetailsSchema = z.object({
     .string()
     .optional()
     .refine(
-      (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val),
-      'Please enter a valid date (YYYY-MM-DD)'
+      (val) => !val || /^\d{2}\/\d{2}\/\d{4}$/.test(val) || /^\d{4}-\d{2}-\d{2}$/.test(val),
+      'Please enter a valid date (DD/MM/YYYY or YYYY-MM-DD)'
     ),
 
   sarthi_id_cotton: z
@@ -203,8 +163,8 @@ export const licenseDetailsSchema = z.object({
     .string()
     .optional()
     .refine(
-      (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val),
-      'Please enter a valid date (YYYY-MM-DD)'
+      (val) => !val || /^\d{2}\/\d{2}\/\d{4}$/.test(val) || /^\d{4}-\d{2}-\d{2}$/.test(val),
+      'Please enter a valid date (DD/MM/YYYY or YYYY-MM-DD)'
     ),
 
   sarthi_id_general: z
@@ -227,8 +187,8 @@ export const licenseDetailsSchema = z.object({
     .string()
     .optional()
     .refine(
-      (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val),
-      'Please enter a valid date (YYYY-MM-DD)'
+      (val) => !val || /^\d{2}\/\d{2}\/\d{4}$/.test(val) || /^\d{4}-\d{2}-\d{2}$/.test(val),
+      'Please enter a valid date (DD/MM/YYYY or YYYY-MM-DD)'
     ),
 
   fertilizer_license_number: z
@@ -243,8 +203,8 @@ export const licenseDetailsSchema = z.object({
     .string()
     .optional()
     .refine(
-      (val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val),
-      'Please enter a valid date (YYYY-MM-DD)'
+      (val) => !val || /^\d{2}\/\d{2}\/\d{4}$/.test(val) || /^\d{4}-\d{2}-\d{2}$/.test(val),
+      'Please enter a valid date (DD/MM/YYYY or YYYY-MM-DD)'
     ),
 });
 
@@ -273,10 +233,7 @@ export const signupSchema = z.object({
     .email('Please enter a valid email address'),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-    .regex(/[a-z]/, 'Password must contain a lowercase letter')
-    .regex(/[0-9]/, 'Password must contain a number'),
+    .min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match',

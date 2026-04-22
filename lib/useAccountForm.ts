@@ -29,6 +29,8 @@ export interface AccountFormData {
   partner_proprietor_name: string;
   aadhaar_card_number: string;
   whatsapp_number: string;
+  mobile_number: string;
+  email_id: string;
   residence_address: string;
   residence_pin_code: string;
 
@@ -51,9 +53,9 @@ export interface AccountFormData {
 
 export interface UseAccountFormReturn {
   formData: AccountFormData;
-  setFormData: (data: AccountFormData) => void;
+  setFormData: (data: AccountFormData | ((prev: AccountFormData) => AccountFormData)) => void;
   currentStep: number;
-  setCurrentStep: (step: number) => void;
+  setCurrentStep: (step: number | ((prev: number) => number)) => void;
   isDrafting: boolean;
   lastSaved: Date | null;
   saveDraft: () => Promise<void>;
@@ -76,6 +78,8 @@ const INITIAL_FORM_DATA: AccountFormData = {
   partner_proprietor_name: '',
   aadhaar_card_number: '',
   whatsapp_number: '',
+  mobile_number: '',
+  email_id: '',
   residence_address: '',
   residence_pin_code: '',
   seed_cotton_license_number: '',
@@ -117,9 +121,10 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
       }
 
       if (data) {
-        setFormData(data.form_data || INITIAL_FORM_DATA);
+        const loadedData = { ...INITIAL_FORM_DATA, ...(data.form_data || {}) };
+        setFormData(loadedData);
         setCurrentStep(data.current_step || 0);
-        setInitialFormData(data.form_data || INITIAL_FORM_DATA);
+        setInitialFormData(loadedData);
         setLastSaved(new Date(data.saved_at));
       }
     } catch (err) {
@@ -127,39 +132,25 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
     }
   }, [userId]);
 
-  // Auto-save draft (debounced)
+  // Auto-save draft using UPSERT to avoid race conditions
   const saveDraft = useCallback(async () => {
     if (!userId) return;
 
     setIsDrafting(true);
 
     try {
-      const { data: existing } = await supabase
+      await supabase
         .from('account_drafts')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (existing?.id) {
-        // Update existing draft
-        await supabase
-          .from('account_drafts')
-          .update({
-            form_data: formData,
-            current_step: currentStep,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', userId);
-      } else {
-        // Insert new draft
-        await supabase
-          .from('account_drafts')
-          .insert({
+        .upsert(
+          {
             user_id: userId,
             form_data: formData,
             current_step: currentStep,
-          });
-      }
+            updated_at: new Date().toISOString(),
+            saved_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
 
       setLastSaved(new Date());
     } catch (err) {
@@ -187,7 +178,7 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
     }
   }, [userId]);
 
-  // Debounced auto-save on form change
+  // Debounced auto-save on form change (silent — user does not see this)
   useEffect(() => {
     if (!userId) return;
 

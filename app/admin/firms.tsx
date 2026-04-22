@@ -345,13 +345,13 @@ export default function AdminFirmsScreen() {
             <View className="flex-row gap-2">
               <Button
                 title="Bulk Approve"
-                size="xs"
+                size="sm"
                 variant="primary"
                 onPress={handleBulkApprove}
               />
               <Button
                 title="Clear"
-                size="xs"
+                size="sm"
                 variant="ghost"
                 onPress={() => setSelectedIds(new Set())}
               />

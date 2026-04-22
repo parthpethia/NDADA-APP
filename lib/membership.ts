@@ -13,7 +13,9 @@ export function getMembershipStage(
   certificate: Certificate | null
 ): MembershipStage {
   if (!account) return 'application';
-  // If account exists with firm info, but payment not done
+  // If account exists but firm details not submitted yet
+  if (!account.firm_name) return 'application';
+  // If firm submitted but payment not done
   if (account.payment_status !== 'paid') return 'payment';
   // If account has firm but not approved yet
   if (account.approval_status !== 'approved') return 'review';

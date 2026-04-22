@@ -13,15 +13,29 @@ import { supabase } from './supabase';
 import { Account, Certificate, Payment, FraudFlag, AdminUser, StatusTimeline, Notification, CertificateQueueJob } from '@/types';
 import { PostgrestError } from '@supabase/supabase-js';
 
+/**
+ * Helper to create a PostgrestError from a caught exception.
+ * Ensures the `name` property is always set (required by the type).
+ */
+function toPostgrestError(err: any, fallbackMessage: string): PostgrestError {
+  return {
+    name: 'PostgrestError',
+    message: err?.message || fallbackMessage,
+    details: err?.details || '',
+    hint: err?.hint || '',
+    code: err?.code || 'UNKNOWN',
+  };
+}
+
 export interface AccountWithDetails extends Account {
   payments: Payment[];
-  certificate: Certificate | null;
+  certificates: Certificate[];
   fraud_flags: FraudFlag[];
 }
 
 /**
  * Fetch complete account with all related data
- * Single query that returns account + payments + certificate + fraud flags
+ * Single query that returns account + payments + certificates + fraud flags
  */
 export async function fetchAccountWithDetails(
   userId: string
@@ -33,7 +47,7 @@ export async function fetchAccountWithDetails(
         `
         *,
         payments(id, amount, currency, status, razorpay_payment_link_url, razorpay_payment_link_id, created_at),
-        certificates(id, certificate_url, issued_at, status),
+        certificates(id, certificate_id, certificate_url, issued_at, status),
         fraud_flags(id, reason, details, resolved, created_at)
       `
       )
@@ -45,15 +59,9 @@ export async function fetchAccountWithDetails(
       return { data: null, error };
     }
 
-    return { data, error: null };
+    return { data: data as AccountWithDetails, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching account',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching account') };
   }
 }
 
@@ -77,13 +85,7 @@ export async function fetchAccountBasic(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching account',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching account') };
   }
 }
 
@@ -107,13 +109,7 @@ export async function fetchAccountPayments(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching payments',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching payments') };
   }
 }
 
@@ -142,13 +138,7 @@ export async function fetchAccountCertificate(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching certificate',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching certificate') };
   }
 }
 
@@ -172,13 +162,7 @@ export async function fetchAdminUser(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching admin user',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching admin user') };
   }
 }
 
@@ -212,13 +196,7 @@ export async function fetchAccountsList(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching accounts list',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching accounts list') };
   }
 }
 
@@ -242,13 +220,7 @@ export async function fetchAccountTimeline(
 
     return { data: data?.status_timeline || null, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching timeline',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching timeline') };
   }
 }
 
@@ -274,13 +246,7 @@ export async function fetchNotifications(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching notifications',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching notifications') };
   }
 }
 
@@ -304,13 +270,7 @@ export async function fetchUnreadNotificationCount(
 
     return { data: count || 0, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching notification count',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: 0, error };
+    return { data: 0, error: toPostgrestError(err, 'Unknown error fetching notification count') };
   }
 }
 
@@ -333,13 +293,7 @@ export async function markNotificationAsRead(
 
     return { error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error updating notification',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { error };
+    return { error: toPostgrestError(err, 'Unknown error updating notification') };
   }
 }
 
@@ -363,13 +317,7 @@ export async function markAllNotificationsAsRead(
 
     return { error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error updating notifications',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { error };
+    return { error: toPostgrestError(err, 'Unknown error updating notifications') };
   }
 }
 
@@ -398,13 +346,7 @@ export async function fetchCertificateQueueJobs(
 
     return { data, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching certificate queue',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching certificate queue') };
   }
 }
 
@@ -425,13 +367,7 @@ export async function getNextCertificateJob(): Promise<{
 
     return { data: data?.[0] || null, error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error fetching next job',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { data: null, error };
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching next job') };
   }
 }
 
@@ -449,13 +385,7 @@ export async function markCertificateProcessing(jobId: string): Promise<{ error:
 
     return { error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error marking job as processing',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { error };
+    return { error: toPostgrestError(err, 'Unknown error marking job as processing') };
   }
 }
 
@@ -473,13 +403,7 @@ export async function markCertificateCompleted(jobId: string): Promise<{ error: 
 
     return { error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error marking job as completed',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { error };
+    return { error: toPostgrestError(err, 'Unknown error marking job as completed') };
   }
 }
 
@@ -500,12 +424,6 @@ export async function markCertificateFailed(jobId: string, errorMessage: string)
 
     return { error: null };
   } catch (err: any) {
-    const error: PostgrestError = {
-      message: err?.message || 'Unknown error marking job as failed',
-      details: err?.details || '',
-      hint: err?.hint || '',
-      code: err?.code || 'UNKNOWN',
-    };
-    return { error };
+    return { error: toPostgrestError(err, 'Unknown error marking job as failed') };
   }
 }

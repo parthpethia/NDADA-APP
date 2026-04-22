@@ -3,6 +3,36 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// ============================================================
+// Crypto helpers (Web Crypto API available in Deno)
+// ============================================================
+
+async function hmacSha256Hex(key: string, data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function timingSafeEqualHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+// ============================================================
+// Main handler
+// ============================================================
+
 serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
@@ -84,10 +114,27 @@ serve(async (req) => {
     }
 
     if (eventType === 'payment_link.cancelled' || eventType === 'payment_link.expired') {
-      await supabase
+      const newPaymentStatus = eventType === 'payment_link.expired' ? 'expired' : 'failed';
+
+      // Update payment row
+      const { data: paymentRows } = await supabase
         .from('payments')
-        .update({ status: 'failed', provider_event: eventType, provider_payload: event })
-        .eq('razorpay_payment_link_id', paymentLinkId);
+        .update({
+          status: newPaymentStatus,
+          provider_event: eventType,
+          provider_payload: event,
+        })
+        .eq('razorpay_payment_link_id', paymentLinkId)
+        .select('member_id');
+
+      // Also update the account payment_status so dashboards reflect the failure
+      const memberId = (Array.isArray(paymentRows) ? paymentRows?.[0]?.member_id : (paymentRows as any)?.member_id) || memberIdFromNotes;
+      if (memberId) {
+        await supabase
+          .from('accounts')
+          .update({ payment_status: newPaymentStatus })
+          .eq('id', memberId);
+      }
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { 'Content-Type': 'application/json' },

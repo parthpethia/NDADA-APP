@@ -227,16 +227,13 @@ export default function NewFirmScreen() {
   const { width } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && width >= 768;
 
-  // Use auto-save form hook
+  // Use auto-save form hook (draft saves silently in background)
   const {
     formData: form,
     setFormData: setForm,
     currentStep: activeSection,
     setCurrentStep: setActiveSection,
-    isDrafting,
-    lastSaved,
     deleteDraft,
-    hasUnsavedChanges,
   } = useAccountForm(member?.user_id);
 
   const [documents, setDocuments] = useState<{ name: string; uri: string }[]>([]);
@@ -281,26 +278,52 @@ export default function NewFirmScreen() {
   };
 
   // Validate current step before moving forward
+  // Extract only the relevant fields for each step schema
   const validateStep = (stepIndex: number): boolean => {
     setFieldErrors({});
 
     if (stepIndex === 0) {
-      // Validate business details
-      const result = validateForm(form, businessDetailsSchema);
+      const stepData = {
+        firm_name: form.firm_name,
+        firm_address: form.firm_address,
+        firm_pin_code: form.firm_pin_code,
+        gst_number: form.gst_number,
+        ifms_number: form.ifms_number,
+      };
+      const result = validateForm(stepData, businessDetailsSchema);
       if (!result.isValid) {
         setFieldErrors(result.errors);
         return false;
       }
     } else if (stepIndex === 1) {
-      // Validate personal details
-      const result = validateForm(form, personalDetailsSchema);
+      const stepData = {
+        partner_proprietor_name: form.partner_proprietor_name,
+        aadhaar_card_number: form.aadhaar_card_number,
+        mobile_number: form.mobile_number,
+        whatsapp_number: form.whatsapp_number,
+        email_id: form.email_id,
+        residence_address: form.residence_address,
+        residence_pin_code: form.residence_pin_code,
+      };
+      const result = validateForm(stepData, personalDetailsSchema);
       if (!result.isValid) {
         setFieldErrors(result.errors);
         return false;
       }
     } else if (stepIndex === 2) {
-      // Validate license details
-      const result = validateForm(form, licenseDetailsSchema);
+      const stepData = {
+        seed_cotton_license_number: form.seed_cotton_license_number,
+        seed_cotton_license_expiry: form.seed_cotton_license_expiry,
+        sarthi_id_cotton: form.sarthi_id_cotton,
+        seed_general_license_number: form.seed_general_license_number,
+        seed_general_license_expiry: form.seed_general_license_expiry,
+        sarthi_id_general: form.sarthi_id_general,
+        pesticide_license_number: form.pesticide_license_number,
+        pesticide_license_expiry: form.pesticide_license_expiry,
+        fertilizer_license_number: form.fertilizer_license_number,
+        fertilizer_license_expiry: form.fertilizer_license_expiry,
+      };
+      const result = validateForm(stepData, licenseDetailsSchema);
       if (!result.isValid) {
         setFieldErrors(result.errors);
         return false;
@@ -902,16 +925,7 @@ export default function NewFirmScreen() {
           </View>
         ) : null}
 
-        {/* Auto-save indicator */}
-        {isDrafting || lastSaved ? (
-          <View className="mx-auto mt-2 w-full max-w-5xl px-8">
-            <View className="rounded-lg bg-blue-50 px-3 py-2">
-              <Text className="text-xs text-blue-600">
-                {isDrafting ? '💾 Saving draft...' : lastSaved ? `✓ Saved at ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-              </Text>
-            </View>
-          </View>
-        ) : null}
+
 
         {/* Sidebar + Form side-by-side */}
         <View className="mx-auto w-full max-w-5xl flex-row gap-6 px-8 py-8">
@@ -956,14 +970,7 @@ export default function NewFirmScreen() {
           </View>
         ) : null}
 
-        {/* Auto-save indicator */}
-        {isDrafting || lastSaved ? (
-          <View className="mx-4 mt-2 rounded-lg bg-blue-50 px-3 py-2">
-            <Text className="text-xs text-blue-600">
-              {isDrafting ? '💾 Saving draft...' : lastSaved ? `✓ Saved at ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-            </Text>
-          </View>
-        ) : null}
+
 
         {/* Section Content */}
         <View className="mt-5 px-4">
