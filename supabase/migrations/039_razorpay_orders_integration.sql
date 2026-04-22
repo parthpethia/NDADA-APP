@@ -27,8 +27,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   provider_payload JSONB,
 
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(member_id, status) WHERE status IN ('created', 'attempted') -- Only one active order per member
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ============================================================
@@ -78,6 +77,10 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON public.order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_signatures_razorpay_order_id ON public.payment_signatures(razorpay_order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_signatures_payment_id ON public.payment_signatures(payment_id);
+
+-- Partial unique index: only one active (created/attempted) order per member
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_member_active ON public.orders(member_id, status)
+WHERE status IN ('created', 'attempted');
 
 -- ============================================================
 -- SECTION 6: ENABLE RLS ON NEW TABLES
