@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, StatusBadge, Button, EmptyState } from '@/components/ui';
 import { Account } from '@/types';
-import { Plus } from 'lucide-react-native';
+
 import { formatDate } from '@/lib/utils';
 
 export default function FirmsListScreen() {
@@ -39,9 +39,7 @@ export default function FirmsListScreen() {
         title="No Account Found"
         message="Your firm details are not registered yet. Please complete your registration."
       >
-        <Link href="/(dashboard)/firms/new" asChild>
-          <Button title="Register Your Firm" />
-        </Link>
+        <Button title="Register Your Firm" onPress={() => router.push('/(dashboard)/firms/new')} />
       </EmptyState>
     );
   }
@@ -103,9 +101,15 @@ export default function FirmsListScreen() {
       </ScrollView>
 
       <View className="border-t border-gray-200 bg-white p-4">
-        <Link href="/(dashboard)/firms/new" asChild>
-          <Button title="Edit Firm Details" />
-        </Link>
+        {account.payment_status !== 'paid' ? (
+          <Button title="Go to Payment" onPress={() => router.push('/cart')} />
+        ) : (
+          <Button
+            title="View Firm Details"
+            variant="outline"
+            onPress={() => router.push(`/(dashboard)/firms/${account.id}`)}
+          />
+        )}
       </View>
     </View>
   );

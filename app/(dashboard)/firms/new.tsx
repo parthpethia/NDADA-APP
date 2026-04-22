@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -223,7 +223,7 @@ function LicenseCard({
 /*  Main Screen Component                                              */
 /* ================================================================== */
 export default function NewFirmScreen() {
-  const { member } = useAuth();
+  const { member, refreshMember } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && width >= 768;
 
@@ -235,6 +235,17 @@ export default function NewFirmScreen() {
     setCurrentStep: setActiveSection,
     deleteDraft,
   } = useAccountForm(member?.user_id);
+
+  // Guard: If user already has firm data submitted, redirect them
+  useEffect(() => {
+    if (member?.firm_name) {
+      if (member.payment_status !== 'paid') {
+        router.replace('/cart');
+      } else {
+        router.replace('/(dashboard)');
+      }
+    }
+  }, [member?.firm_name, member?.payment_status]);
 
   const [documents, setDocuments] = useState<{ name: string; uri: string }[]>([]);
   const [applicantPhoto, setApplicantPhoto] = useState<{ name: string; uri: string } | null>(null);
@@ -500,7 +511,10 @@ export default function NewFirmScreen() {
 
     // Clear draft after successful submission
     await deleteDraft();
-    router.back();
+    // Refresh member so dashboard picks up the new firm data
+    await refreshMember();
+    // Navigate forward to payment instead of going back
+    router.replace('/cart');
   };
 
   const goNext = () => {

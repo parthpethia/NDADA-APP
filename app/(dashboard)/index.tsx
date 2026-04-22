@@ -35,6 +35,11 @@ export default function DashboardHome() {
     setCertificate(cert);
   };
 
+  // Refresh member data on mount to pick up changes from form submission
+  useEffect(() => {
+    refreshMember();
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [member]);
