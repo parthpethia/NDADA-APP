@@ -71,11 +71,11 @@ serve(async (req) => {
 
       const memberId = (Array.isArray(paymentRows) ? paymentRows?.[0]?.member_id : (paymentRows as any)?.member_id) || memberIdFromNotes;
       if (memberId) {
-        const { error: memberErr } = await supabase
-          .from('members')
+        const { error: accountErr } = await supabase
+          .from('accounts')
           .update({ payment_status: 'paid' })
           .eq('id', memberId);
-        if (memberErr) throw new Error(memberErr.message);
+        if (accountErr) throw new Error(accountErr.message);
       }
 
       return new Response(JSON.stringify({ ok: true }), {

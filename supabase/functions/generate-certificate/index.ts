@@ -57,15 +57,15 @@ serve(async (req) => {
       });
     }
 
-    // Fetch member details
+    // Fetch account details
     const { data: member, error: memberErr } = await supabase
-      .from('members')
+      .from('accounts')
       .select('*')
       .eq('id', member_id)
       .single();
 
     if (memberErr || !member) {
-      return new Response(JSON.stringify({ error: 'Member not found' }), {
+      return new Response(JSON.stringify({ error: 'Account not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -79,15 +79,8 @@ serve(async (req) => {
       });
     }
 
-    const { data: approvedFirms } = await supabase
-      .from('firms')
-      .select('id')
-      .eq('member_id', member_id)
-      .eq('approval_status', 'approved')
-      .limit(1);
-
-    if (!approvedFirms || approvedFirms.length === 0) {
-      return new Response(JSON.stringify({ error: 'No approved firms' }), {
+    if (member.approval_status !== 'approved') {
+      return new Response(JSON.stringify({ error: 'Firm not approved' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -62,7 +62,7 @@ export default function ProfileScreen() {
 
     setSaving(true);
     const { error } = await supabase
-      .from('members')
+      .from('accounts')
       .update({
         full_name: form.full_name.trim(),
         phone: form.phone.trim(),

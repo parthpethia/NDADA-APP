@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Button, Card, CardHeader, EmptyState, LoadingScreen, StatusBadge } from '@/components/ui';
-import { Firm } from '@/types';
+import { Account } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { confirm } from '@/lib/confirm';
 
@@ -32,23 +32,22 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 export default function FirmDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { member } = useAuth();
-  const [firm, setFirm] = useState<Firm | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchFirm = async () => {
-    if (!member?.id || !id) {
+  const fetchAccount = async () => {
+    if (!member?.id) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
     const { data, error } = await supabase
-      .from('firms')
+      .from('accounts')
       .select('*')
-      .eq('id', id)
-      .eq('member_id', member.id)
-      .maybeSingle();
+      .eq('id', member.id)
+      .single();
 
     if (error) {
       Alert.alert('Error', error.message);
@@ -56,30 +55,35 @@ export default function FirmDetailsScreen() {
       return;
     }
 
-    setFirm(data ?? null);
+    setAccount(data ?? null);
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchFirm();
-  }, [member?.id, id]);
+    fetchAccount();
+  }, [member?.id]);
 
   const handleDelete = async () => {
-    if (!firm) return;
+    if (!account) return;
 
     const ok = await confirm(
       'Delete Firm',
-      `Delete ${firm.firm_name}? This will remove the submitted firm record from your account.`,
+      `Delete ${account.firm_name}? This will remove the submitted firm record from your account.`,
       { destructive: true, confirmText: 'Delete' }
     );
     if (!ok) return;
 
     setDeleting(true);
     const { error } = await supabase
-      .from('firms')
-      .delete()
-      .eq('id', firm.id)
-      .eq('member_id', member?.id || '');
+      .from('accounts')
+      .update({
+        firm_name: '',
+        firm_type: 'other',
+        license_number: '',
+        registration_number: '',
+        approval_status: 'pending',
+      })
+      .eq('id', account.id);
 
     setDeleting(false);
 
@@ -93,7 +97,7 @@ export default function FirmDetailsScreen() {
 
   if (loading) return <LoadingScreen message="Loading firm details..." />;
 
-  if (!firm) {
+  if (!account) {
     return (
       <EmptyState
         title="Firm not found"
@@ -108,14 +112,14 @@ export default function FirmDetailsScreen() {
     <ScrollView className="flex-1 bg-gray-50" contentContainerClassName="p-4 pb-8">
       <Card className="mb-4">
         <CardHeader
-          title={firm.firm_name}
-          subtitle={`Submitted on ${formatDate(firm.created_at)}`}
-          right={<StatusBadge status={firm.approval_status} />}
+          title={account.firm_name}
+          subtitle={`Submitted on ${formatDate(account.created_at)}`}
+          right={<StatusBadge status={account.approval_status} />}
         />
-        <DetailRow label="Firm Type" value={firm.firm_type.replace('_', ' ')} />
-        <DetailRow label="Firm Address" value={firm.firm_address} />
-        <DetailRow label="Firm PIN Code" value={firm.firm_pin_code} />
-        <DetailRow label="GST Number" value={firm.gst_number} />
+        <DetailRow label="Firm Type" value={account.firm_type.replace('_', ' ')} />
+        <DetailRow label="Firm Address" value={account.firm_address} />
+        <DetailRow label="Firm PIN Code" value={account.firm_pin_code} />
+        <DetailRow label="GST Number" value={account.gst_number} />
       </Card>
 
       <Card className="mb-4">
@@ -123,13 +127,13 @@ export default function FirmDetailsScreen() {
           title="Personal and Contact"
           subtitle="Details submitted in the membership form"
         />
-        <DetailRow label="Partner or Proprietor Name" value={firm.partner_proprietor_name} />
-        <DetailRow label="Mobile Number" value={firm.contact_phone} />
-        <DetailRow label="WhatsApp Number" value={firm.whatsapp_number} />
-        <DetailRow label="Email ID" value={firm.contact_email} />
-        <DetailRow label="Aadhaar Card Number" value={firm.aadhaar_card_number} />
-        <DetailRow label="Residence Address" value={firm.residence_address} />
-        <DetailRow label="Residence PIN Code" value={firm.residence_pin_code} />
+        <DetailRow label="Partner or Proprietor Name" value={account.partner_proprietor_name} />
+        <DetailRow label="Mobile Number" value={account.contact_phone} />
+        <DetailRow label="WhatsApp Number" value={account.whatsapp_number} />
+        <DetailRow label="Email ID" value={account.contact_email} />
+        <DetailRow label="Aadhaar Card Number" value={account.aadhaar_card_number} />
+        <DetailRow label="Residence Address" value={account.residence_address} />
+        <DetailRow label="Residence PIN Code" value={account.residence_pin_code} />
       </Card>
 
       <Card className="mb-4">
@@ -137,30 +141,30 @@ export default function FirmDetailsScreen() {
           title="Registration and Licenses"
           subtitle="Business identifiers and submitted license details"
         />
-        <DetailRow label="IFMS Number" value={firm.ifms_number || firm.registration_number} />
-        <DetailRow label="Seed Cotton License Number" value={firm.seed_cotton_license_number || firm.license_number} />
-        <DetailRow label="Seed Cotton License Expiry" value={firm.seed_cotton_license_expiry} />
-        <DetailRow label="Sarthi ID Cotton" value={firm.sarthi_id_cotton} />
-        <DetailRow label="Seed General License Number" value={firm.seed_general_license_number} />
-        <DetailRow label="Seed General License Expiry" value={firm.seed_general_license_expiry} />
-        <DetailRow label="Sarthi ID General" value={firm.sarthi_id_general} />
-        <DetailRow label="Pesticide License Number" value={firm.pesticide_license_number} />
-        <DetailRow label="Pesticide License Expiry" value={firm.pesticide_license_expiry} />
-        <DetailRow label="Fertilizer License Number" value={firm.fertilizer_license_number} />
-        <DetailRow label="Fertilizer License Expiry" value={firm.fertilizer_license_expiry} />
+        <DetailRow label="IFMS Number" value={account.ifms_number || account.registration_number} />
+        <DetailRow label="Seed Cotton License Number" value={account.seed_cotton_license_number || account.license_number} />
+        <DetailRow label="Seed Cotton License Expiry" value={account.seed_cotton_license_expiry} />
+        <DetailRow label="Sarthi ID Cotton" value={account.sarthi_id_cotton} />
+        <DetailRow label="Seed General License Number" value={account.seed_general_license_number} />
+        <DetailRow label="Seed General License Expiry" value={account.seed_general_license_expiry} />
+        <DetailRow label="Sarthi ID General" value={account.sarthi_id_general} />
+        <DetailRow label="Pesticide License Number" value={account.pesticide_license_number} />
+        <DetailRow label="Pesticide License Expiry" value={account.pesticide_license_expiry} />
+        <DetailRow label="Fertilizer License Number" value={account.fertilizer_license_number} />
+        <DetailRow label="Fertilizer License Expiry" value={account.fertilizer_license_expiry} />
       </Card>
 
       <Card className="mb-4">
         <CardHeader title="Uploads" subtitle="Files attached to this form" />
         <DetailRow
           label="Applicant Photo"
-          value={firm.applicant_photo_url ? 'Uploaded' : 'Not uploaded'}
+          value={account.applicant_photo_url ? 'Uploaded' : 'Not uploaded'}
         />
         <DetailRow
           label="Supporting Documents"
-          value={firm.documents_urls.length ? `${firm.documents_urls.length} file(s) uploaded` : 'No documents uploaded'}
+          value={account.documents_urls.length ? `${account.documents_urls.length} file(s) uploaded` : 'No documents uploaded'}
         />
-        {firm.documents_urls.map((documentPath, index) => (
+        {account.documents_urls.map((documentPath, index) => (
           <View key={documentPath} className="border-t border-gray-100 py-3">
             <Text className="text-xs font-medium uppercase tracking-wide text-gray-500">
               Document {index + 1}
@@ -170,10 +174,10 @@ export default function FirmDetailsScreen() {
         ))}
       </Card>
 
-      {firm.approval_status === 'rejected' && firm.rejection_reason && (
+      {account.approval_status === 'rejected' && account.rejection_reason && (
         <Card className="mb-4 border-red-200 bg-red-50">
           <CardHeader title="Rejection Reason" />
-          <Text className="text-sm text-red-700">{firm.rejection_reason}</Text>
+          <Text className="text-sm text-red-700">{account.rejection_reason}</Text>
         </Card>
       )}
 

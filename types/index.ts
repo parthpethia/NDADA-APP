@@ -1,28 +1,56 @@
 export type FirmType = 'proprietorship' | 'partnership' | 'private_limited' | 'llp' | 'other';
-export type PaymentStatus = 'pending' | 'paid' | 'failed';
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'processing' | 'abandoned' | 'expired';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type AccountStatus = 'active' | 'suspended' | 'deleted';
 export type CertificateStatus = 'valid' | 'revoked' | 'suspended';
 export type AdminRole = 'super_admin' | 'admin' | 'reviewer';
+export type NotificationType = 'payment' | 'approval' | 'certificate' | 'system';
 
-export interface Member {
+// ============================================================
+// STATUS TIMELINE TYPES
+// ============================================================
+export interface TimelineEvent {
+  timestamp: string;
+  [key: string]: unknown;
+}
+
+export interface StatusTimeline {
+  submitted?: TimelineEvent & { by_user: boolean };
+  payment_verified?: TimelineEvent & { by_system: boolean };
+  under_review?: TimelineEvent & { assigned_to_admin?: string };
+  approved?: TimelineEvent & { approved_by: string };
+  rejected?: TimelineEvent & { rejected_by: string; reason: string };
+}
+
+// ============================================================
+// NOTIFICATION TYPES
+// ============================================================
+export interface Notification {
   id: string;
   user_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  action_url?: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+// ============================================================
+// CONSOLIDATED ACCOUNT TYPE (One User = One Firm)
+// ============================================================
+export interface Account {
+  id: string;
+  user_id: string;
+
+  // Personal/Member Info
   full_name: string;
   email: string;
   phone: string;
   address: string;
   id_proof_url: string | null;
-  payment_status: PaymentStatus;
-  membership_id: string;
-  account_status: AccountStatus;
-  created_at: string;
-  updated_at: string;
-}
 
-export interface Firm {
-  id: string;
-  member_id: string;
+  // Firm Info
   firm_name: string;
   firm_type: FirmType;
   license_number: string;
@@ -50,13 +78,24 @@ export interface Firm {
   residence_pin_code: string | null;
   applicant_photo_url: string | null;
   documents_urls: string[];
+
+  // Status Fields
+  membership_id: string;
+  payment_status: PaymentStatus;
   approval_status: ApprovalStatus;
+  account_status: AccountStatus;
   rejection_reason: string | null;
+  status_timeline?: StatusTimeline;
+
+  // Approval Tracking
   reviewed_by: string | null;
   reviewed_at: string | null;
+
+  // Timestamps
   created_at: string;
   updated_at: string;
 }
+
 
 export interface Payment {
   id: string;
@@ -117,15 +156,27 @@ export interface CertificateDownload {
   ip_address: string | null;
 }
 
-export interface MemberWithFirms extends Member {
-  firms: Firm[];
+export type CertificateGenerationStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface CertificateQueueJob {
+  id: string;
+  account_id: string;
+  status: CertificateGenerationStatus;
+  error_message: string | null;
+  created_at: string;
+  processing_started_at: string | null;
+  completed_at: string | null;
 }
 
-export interface MemberWithDetails extends MemberWithFirms {
+// ============================================================
+// COMPOSITE TYPES (for queries with related data)
+// ============================================================
+export interface AccountWithDetails extends Account {
   payments: Payment[];
   certificate: Certificate | null;
   fraud_flags: FraudFlag[];
 }
+
 
 export interface CertificateVerification {
   certificate_id: string;
@@ -141,5 +192,8 @@ export interface DashboardStats {
   payments_completed: number;
   certificates_issued: number;
   pending_reviews: number;
+  pending_payments?: number;
+  approved_count?: number;
+  rejected_count?: number;
   suspicious_accounts: number;
 }

@@ -12,7 +12,6 @@ import {
   MEMBERSHIP_PLAN_NAME,
   MEMBERSHIP_VALIDITY_LABEL,
 } from '@/constants';
-import { Firm } from '@/types';
 import {
   ShoppingCart,
   CheckCircle,
@@ -24,18 +23,7 @@ import * as WebBrowser from 'expo-web-browser';
 export default function CartScreen() {
   const { member, refreshMember } = useAuth();
   const params = useLocalSearchParams<{ success?: string; cancelled?: string }>();
-  const [firms, setFirms] = useState<Firm[]>([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
-
-  useEffect(() => {
-    if (member) {
-      supabase
-        .from('firms')
-        .select('*')
-        .eq('member_id', member.id)
-        .then(({ data }) => setFirms(data || []));
-    }
-  }, [member]);
 
   useEffect(() => {
     if (params.success === 'true') {

@@ -4,13 +4,13 @@ import { supabase } from '@/lib/supabase';
 import { Card, Button, StatusBadge } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { confirm } from '@/lib/confirm';
-import { Member } from '@/types';
+import { Account } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { Search } from 'lucide-react-native';
 
 export default function AdminMembersScreen() {
   const { callAdminAction, role } = useAdmin();
-  const [members, setMembers] = useState<(Member & { firms_count: number })[]>([]);
+  const [members, setMembers] = useState<Account[]>([]);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export default function AdminMembersScreen() {
   const [createLoading, setCreateLoading] = useState(false);
 
   const fetchMembers = useCallback(async () => {
-    let query = supabase.from('members').select('*, firms(id)').order('created_at', { ascending: false });
+    let query = supabase.from('accounts').select('*').order('created_at', { ascending: false });
 
     if (search.trim()) {
       query = query.or(
@@ -32,13 +32,7 @@ export default function AdminMembersScreen() {
     }
 
     const { data } = await query.limit(50);
-    setMembers(
-      (data || []).map((m: any) => ({
-        ...m,
-        firms_count: m.firms?.length || 0,
-        firms: undefined,
-      }))
-    );
+    setMembers(data || []);
   }, [search]);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
@@ -49,16 +43,16 @@ export default function AdminMembersScreen() {
     setRefreshing(false);
   };
 
-  const handleAction = async (action: string, memberId: string, label: string) => {
+  const handleAction = async (action: string, accountId: string, label: string) => {
     const ok = await confirm('Confirm', `Are you sure you want to ${label}?`, {
       confirmText: 'Confirm',
       destructive: true,
     });
     if (!ok) return;
 
-    setActionLoading(memberId);
+    setActionLoading(accountId);
     try {
-      await callAdminAction(action, { member_id: memberId });
+      await callAdminAction(action, { account_id: accountId });
       await fetchMembers();
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -66,7 +60,7 @@ export default function AdminMembersScreen() {
     setActionLoading(null);
   };
 
-  const handleSetPaymentStatus = async (memberId: string, status: 'pending' | 'paid' | 'failed') => {
+  const handleSetPaymentStatus = async (accountId: string, status: 'pending' | 'paid' | 'failed') => {
     try {
       const label = status === 'paid' ? 'mark as PAID' : status === 'pending' ? 'mark as NOT PAID' : 'mark as FAILED';
       console.log('💬 Requesting confirmation for:', label);
@@ -82,12 +76,12 @@ export default function AdminMembersScreen() {
         return;
       }
 
-      console.log('📍 Setting action loading for member:', memberId);
-      setActionLoading(memberId);
+      console.log('📍 Setting action loading for account:', accountId);
+      setActionLoading(accountId);
 
       try {
-        console.log('🔄 Calling admin action with:', { member_id: memberId, status });
-        const result = await callAdminAction('set-member-payment-status', { member_id: memberId, status });
+        console.log('🔄 Calling admin action with:', { account_id: accountId, status });
+        const result = await callAdminAction('set-payment-status', { account_id: accountId, status });
         console.log('✅ Admin action result:', result);
 
         console.log('🔄 Fetching updated members list...');
@@ -232,8 +226,8 @@ export default function AdminMembersScreen() {
                 <Text className="text-xs text-gray-700">{m.phone}</Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-xs text-gray-500">Firms</Text>
-                <Text className="text-xs text-gray-700">{m.firms_count}</Text>
+                <Text className="text-xs text-gray-500">Approval</Text>
+                <StatusBadge status={m.approval_status} />
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-xs text-gray-500">Payment</Text>

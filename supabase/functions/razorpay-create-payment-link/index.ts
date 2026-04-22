@@ -110,32 +110,43 @@ serve(async (req) => {
 
     // If no member_id in body but user is authenticated, fetch from database
     if (!memberId && user) {
-      const { data: memberData } = await supabase
-        .from('members')
+      const { data: accountData } = await supabase
+        .from('accounts')
         .select('id')
         .eq('user_id', user.id)
         .single();
 
-      if (memberData?.id) {
-        memberId = memberData.id;
-        console.log('📝 member_id from user record:', memberId);
+      if (accountData?.id) {
+        memberId = accountData.id;
+        console.log('📝 member_id from account record:', memberId);
       }
     }
 
     // member_id must be determined somehow
     if (!memberId) {
       console.error('❌ Could not determine member_id');
-      return new Response(JSON.stringify({
+      console.error('   user:', user ? `authenticated (${user.id})` : 'NOT authenticated');
+      console.error('   body member_id:', '(empty)');
+
+      const errorDetails = {
         error: 'member_id required or user not authenticated',
-      }), {
+        debug: {
+          user_authenticated: !!user,
+          user_id: user?.id || null,
+          member_id_from_body: '(empty)',
+          auth_header_present: !!authHeader,
+        },
+      };
+
+      return new Response(JSON.stringify(errorDetails), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Fetch full member record
+    // Fetch full account record
     const { data: member, error: memberErr } = await supabase
-      .from('members')
+      .from('accounts')
       .select('id, full_name, email, payment_status, membership_id, user_id')
       .eq('id', memberId)
       .single();

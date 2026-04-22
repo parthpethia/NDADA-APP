@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
-import { Member, AdminUser } from '@/types';
+import { Account, AdminUser } from '@/types';
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  member: Member | null;
+  member: Account | null;
   adminUser: AdminUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [member, setMember] = useState<Member | null>(null);
+  const [member, setMember] = useState<Account | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMember = async (userId: string, currentUser?: User | null) => {
     const { data, error } = await supabase
-      .from('members')
+      .from('accounts')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (error) {
-      console.warn('Failed to fetch member profile:', error.message);
+      console.warn('Failed to fetch account profile:', error.message);
     }
 
     if (!currentUser) {
@@ -85,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data: createdMember, error: createError } = await supabase
-      .from('members')
+    const { data: createdAccount, error: createError } = await supabase
+      .from('accounts')
       .insert({
         user_id: userId,
         full_name:
@@ -96,17 +96,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: String(currentUser.email || '').trim() || 'unknown@example.com',
         phone: String(currentUser.user_metadata?.phone || '').trim() || 'N/A',
         address: String(currentUser.user_metadata?.address || '').trim(),
+        firm_name: '',
+        firm_address: '',
+        contact_phone: '',
+        contact_email: '',
       })
       .select('*')
       .single();
 
     if (createError) {
-      console.warn('Failed to create member profile:', createError.message);
+      console.warn('Failed to create account profile:', createError.message);
       setMember(null);
       return;
     }
 
-    setMember(createdMember);
+    setMember(createdAccount);
   };
 
   const fetchAdminUser = async (userId: string) => {

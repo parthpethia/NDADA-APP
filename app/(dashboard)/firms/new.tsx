@@ -8,13 +8,22 @@ import {
   Image,
   TouchableOpacity,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useAccountForm } from '@/lib/useAccountForm';
 import { Button, Input } from '@/components/ui';
 import { STORAGE_BUCKETS } from '@/constants';
 import * as DocumentPicker from 'expo-document-picker';
+import {
+  businessDetailsSchema,
+  personalDetailsSchema,
+  licenseDetailsSchema,
+  validateForm,
+  getFieldErrors,
+} from '@/lib/validation';
 
 const STEPS = [
   { key: 'business', label: 'Business Details', shortLabel: 'Business', subtitle: 'Firm registration & statutory info' },
@@ -218,36 +227,24 @@ export default function NewFirmScreen() {
   const { width } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && width >= 768;
 
-  const [form, setForm] = useState({
-    firm_name: '',
-    firm_address: '',
-    firm_pin_code: '',
-    partner_proprietor_name: '',
-    gst_number: '',
-    mobile_number: '',
-    whatsapp_number: '',
-    email_id: '',
-    aadhaar_card_number: '',
-    ifms_number: '',
-    seed_cotton_license_number: '',
-    seed_cotton_license_expiry: '',
-    sarthi_id_cotton: '',
-    seed_general_license_number: '',
-    seed_general_license_expiry: '',
-    sarthi_id_general: '',
-    pesticide_license_number: '',
-    pesticide_license_expiry: '',
-    fertilizer_license_number: '',
-    fertilizer_license_expiry: '',
-    residence_address: '',
-    residence_pin_code: '',
-  });
+  // Use auto-save form hook
+  const {
+    formData: form,
+    setFormData: setForm,
+    currentStep: activeSection,
+    setCurrentStep: setActiveSection,
+    isDrafting,
+    lastSaved,
+    deleteDraft,
+    hasUnsavedChanges,
+  } = useAccountForm(member?.user_id);
+
   const [documents, setDocuments] = useState<{ name: string; uri: string }[]>([]);
   const [applicantPhoto, setApplicantPhoto] = useState<{ name: string; uri: string } | null>(null);
-  const [activeSection, setActiveSection] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const requiredFields: Array<keyof typeof form> = [
     'firm_name',
@@ -265,13 +262,52 @@ export default function NewFirmScreen() {
   };
 
   const fieldHasError = (field: keyof typeof form) =>
-    missingRequiredFields.includes(field);
+    missingRequiredFields.includes(field) || !!fieldErrors[field];
+
+  const getFieldError = (field: keyof typeof form): string | undefined => {
+    return fieldErrors[field];
+  };
 
   const update = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (value.trim()) {
       setMissingRequiredFields((prev) => prev.filter((f) => f !== key));
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[key];
+        return newErrors;
+      });
     }
+  };
+
+  // Validate current step before moving forward
+  const validateStep = (stepIndex: number): boolean => {
+    setFieldErrors({});
+
+    if (stepIndex === 0) {
+      // Validate business details
+      const result = validateForm(form, businessDetailsSchema);
+      if (!result.isValid) {
+        setFieldErrors(result.errors);
+        return false;
+      }
+    } else if (stepIndex === 1) {
+      // Validate personal details
+      const result = validateForm(form, personalDetailsSchema);
+      if (!result.isValid) {
+        setFieldErrors(result.errors);
+        return false;
+      }
+    } else if (stepIndex === 2) {
+      // Validate license details
+      const result = validateForm(form, licenseDetailsSchema);
+      if (!result.isValid) {
+        setFieldErrors(result.errors);
+        return false;
+      }
+    }
+
+    return true;
   };
 
   const pickDocument = async () => {
@@ -324,27 +360,16 @@ export default function NewFirmScreen() {
     const licenseNumber = String(form.seed_cotton_license_number || '').trim();
     const registrationNumber = String(form.ifms_number || '').trim();
 
-    let existingFirm: { id: string; documents_urls: string[]; applicant_photo_url: string | null } | null = null;
-    const { data: existingFirmByLicense } = await supabase
-      .from('firms')
+    let existingAccountId: string | null = null;
+    const { data: existingAccount } = await supabase
+      .from('accounts')
       .select('id, documents_urls, applicant_photo_url')
-      .eq('member_id', member.id)
-      .eq('license_number', licenseNumber)
-      .maybeSingle();
+      .eq('id', member.id)
+      .single();
 
-    if (existingFirmByLicense?.id) {
-      existingFirm = existingFirmByLicense;
-    } else {
-      const { data: existingFirmByRegistration } = await supabase
-        .from('firms')
-        .select('id, documents_urls, applicant_photo_url')
-        .eq('member_id', member.id)
-        .eq('registration_number', registrationNumber)
-        .maybeSingle();
-      if (existingFirmByRegistration?.id) existingFirm = existingFirmByRegistration;
+    if (existingAccount?.id) {
+      existingAccountId = existingAccount.id;
     }
-
-    const existingFirmId = existingFirm?.id ?? null;
 
     setLoading(true);
     setError('');
@@ -386,11 +411,11 @@ export default function NewFirmScreen() {
       }
     }
 
-    const mergedDocumentsUrls = existingFirm
-      ? Array.from(new Set([...(existingFirm.documents_urls || []), ...documentUrls]))
+    const mergedDocumentsUrls = existingAccount
+      ? Array.from(new Set([...(existingAccount.documents_urls || []), ...documentUrls]))
       : documentUrls;
 
-    const mergedApplicantPhotoUrl = applicantPhotoUrl ?? existingFirm?.applicant_photo_url ?? null;
+    const mergedApplicantPhotoUrl = applicantPhotoUrl ?? existingAccount?.applicant_photo_url ?? null;
 
     const basePayload = {
       firm_name: form.firm_name,
@@ -422,9 +447,9 @@ export default function NewFirmScreen() {
       documents_urls: mergedDocumentsUrls,
     };
 
-    const { error: submitError } = existingFirmId
+    const { error: submitError } = existingAccountId
       ? await supabase
-          .from('firms')
+          .from('accounts')
           .update({
             ...basePayload,
             approval_status: 'pending',
@@ -432,10 +457,8 @@ export default function NewFirmScreen() {
             reviewed_by: null,
             reviewed_at: null,
           })
-          .eq('id', existingFirmId)
-          .eq('member_id', member.id)
-      : await supabase.from('firms').insert({
-          member_id: member.id,
+          .eq('id', existingAccountId)
+      : await supabase.from('accounts').insert({
           ...basePayload,
         });
 
@@ -452,10 +475,16 @@ export default function NewFirmScreen() {
       return;
     }
 
+    // Clear draft after successful submission
+    await deleteDraft();
     router.back();
   };
 
-  const goNext = () => setActiveSection((prev) => Math.min(STEPS.length - 1, prev + 1));
+  const goNext = () => {
+    if (validateStep(activeSection)) {
+      setActiveSection((prev) => Math.min(STEPS.length - 1, prev + 1));
+    }
+  };
   const goPrev = () => setActiveSection((prev) => Math.max(0, prev - 1));
 
   /* ---- Form section content (shared between web and mobile) ---- */
@@ -475,7 +504,7 @@ export default function NewFirmScreen() {
             placeholder="Enter your firm name"
             value={form.firm_name}
             onChangeText={(v) => update('firm_name', v)}
-            error={fieldHasError('firm_name') ? 'Required field' : undefined}
+            error={getFieldError('firm_name')}
           />
           <Input
             label="Address of Firm *"
@@ -484,7 +513,7 @@ export default function NewFirmScreen() {
             onChangeText={(v) => update('firm_address', v)}
             multiline
             numberOfLines={3}
-            error={fieldHasError('firm_address') ? 'Required field' : undefined}
+            error={getFieldError('firm_address')}
           />
           <View className="flex-row gap-3">
             <View className="flex-1">
@@ -495,6 +524,7 @@ export default function NewFirmScreen() {
                 onChangeText={(v) => update('firm_pin_code', v)}
                 keyboardType="numeric"
                 className="mb-0"
+                error={getFieldError('firm_pin_code')}
               />
             </View>
             <View className="flex-1">
@@ -504,6 +534,7 @@ export default function NewFirmScreen() {
                 value={form.gst_number}
                 onChangeText={(v) => update('gst_number', v)}
                 className="mb-0"
+                error={getFieldError('gst_number')}
               />
             </View>
           </View>
@@ -516,7 +547,7 @@ export default function NewFirmScreen() {
             placeholder="Enter IFMS number"
             value={form.ifms_number}
             onChangeText={(v) => update('ifms_number', v)}
-            error={fieldHasError('ifms_number') ? 'Required field' : undefined}
+            error={getFieldError('ifms_number')}
             className="mb-0"
           />
         </View>
@@ -536,7 +567,7 @@ export default function NewFirmScreen() {
             placeholder="Full name"
             value={form.partner_proprietor_name}
             onChangeText={(v) => update('partner_proprietor_name', v)}
-            error={fieldHasError('partner_proprietor_name') ? 'Required field' : undefined}
+            error={getFieldError('partner_proprietor_name')}
           />
           <Input
             label="Aadhaar Card Number"
@@ -545,6 +576,7 @@ export default function NewFirmScreen() {
             onChangeText={(v) => update('aadhaar_card_number', v)}
             keyboardType="numeric"
             className="mb-0"
+            error={getFieldError('aadhaar_card_number')}
           />
 
           <Divider />
@@ -558,7 +590,7 @@ export default function NewFirmScreen() {
                 value={form.mobile_number}
                 onChangeText={(v) => update('mobile_number', v)}
                 keyboardType="phone-pad"
-                error={fieldHasError('mobile_number') ? 'Required field' : undefined}
+                error={getFieldError('mobile_number')}
               />
             </View>
             <View className="flex-1">
@@ -568,6 +600,7 @@ export default function NewFirmScreen() {
                 value={form.whatsapp_number}
                 onChangeText={(v) => update('whatsapp_number', v)}
                 keyboardType="phone-pad"
+                error={getFieldError('whatsapp_number')}
               />
             </View>
           </View>
@@ -624,14 +657,28 @@ export default function NewFirmScreen() {
                   placeholder="Cotton license number"
                   value={form.seed_cotton_license_number}
                   onChangeText={(v) => update('seed_cotton_license_number', v)}
-                  error={fieldHasError('seed_cotton_license_number') ? 'Required field' : undefined}
+                  error={getFieldError('seed_cotton_license_number')}
                 />
                 <View className="flex-row gap-3">
                   <View className="flex-1">
-                    <Input label="Expiry Date" placeholder="DD/MM/YYYY" value={form.seed_cotton_license_expiry} onChangeText={(v) => update('seed_cotton_license_expiry', v)} className="mb-0" />
+                    <Input
+                      label="Expiry Date"
+                      placeholder="DD/MM/YYYY"
+                      value={form.seed_cotton_license_expiry}
+                      onChangeText={(v) => update('seed_cotton_license_expiry', v)}
+                      error={getFieldError('seed_cotton_license_expiry')}
+                      className="mb-0"
+                    />
                   </View>
                   <View className="flex-1">
-                    <Input label="Sarthi ID" placeholder="Sarthi ID" value={form.sarthi_id_cotton} onChangeText={(v) => update('sarthi_id_cotton', v)} className="mb-0" />
+                    <Input
+                      label="Sarthi ID"
+                      placeholder="Sarthi ID"
+                      value={form.sarthi_id_cotton}
+                      onChangeText={(v) => update('sarthi_id_cotton', v)}
+                      error={getFieldError('sarthi_id_cotton')}
+                      className="mb-0"
+                    />
                   </View>
                 </View>
               </LicenseCard>
@@ -644,13 +691,28 @@ export default function NewFirmScreen() {
                   placeholder="General license number"
                   value={form.seed_general_license_number}
                   onChangeText={(v) => update('seed_general_license_number', v)}
+                  error={getFieldError('seed_general_license_number')}
                 />
                 <View className="flex-row gap-3">
                   <View className="flex-1">
-                    <Input label="Expiry Date" placeholder="DD/MM/YYYY" value={form.seed_general_license_expiry} onChangeText={(v) => update('seed_general_license_expiry', v)} className="mb-0" />
+                    <Input
+                      label="Expiry Date"
+                      placeholder="DD/MM/YYYY"
+                      value={form.seed_general_license_expiry}
+                      onChangeText={(v) => update('seed_general_license_expiry', v)}
+                      error={getFieldError('seed_general_license_expiry')}
+                      className="mb-0"
+                    />
                   </View>
                   <View className="flex-1">
-                    <Input label="Sarthi ID" placeholder="Sarthi ID" value={form.sarthi_id_general} onChangeText={(v) => update('sarthi_id_general', v)} className="mb-0" />
+                    <Input
+                      label="Sarthi ID"
+                      placeholder="Sarthi ID"
+                      value={form.sarthi_id_general}
+                      onChangeText={(v) => update('sarthi_id_general', v)}
+                      error={getFieldError('sarthi_id_general')}
+                      className="mb-0"
+                    />
                   </View>
                 </View>
               </LicenseCard>
@@ -658,15 +720,41 @@ export default function NewFirmScreen() {
 
             <View className={isWide ? 'min-w-[48%] flex-1' : ''}>
               <LicenseCard color="orange" letter="P" title="Pesticide License">
-                <Input label="License Number" placeholder="Pesticide license number" value={form.pesticide_license_number} onChangeText={(v) => update('pesticide_license_number', v)} />
-                <Input label="Expiry Date" placeholder="DD/MM/YYYY" value={form.pesticide_license_expiry} onChangeText={(v) => update('pesticide_license_expiry', v)} className="mb-0" />
+                <Input
+                  label="License Number"
+                  placeholder="Pesticide license number"
+                  value={form.pesticide_license_number}
+                  onChangeText={(v) => update('pesticide_license_number', v)}
+                  error={getFieldError('pesticide_license_number')}
+                />
+                <Input
+                  label="Expiry Date"
+                  placeholder="DD/MM/YYYY"
+                  value={form.pesticide_license_expiry}
+                  onChangeText={(v) => update('pesticide_license_expiry', v)}
+                  error={getFieldError('pesticide_license_expiry')}
+                  className="mb-0"
+                />
               </LicenseCard>
             </View>
 
             <View className={isWide ? 'min-w-[48%] flex-1' : ''}>
               <LicenseCard color="purple" letter="F" title="Fertilizer License">
-                <Input label="License Number" placeholder="Fertilizer license number" value={form.fertilizer_license_number} onChangeText={(v) => update('fertilizer_license_number', v)} />
-                <Input label="Expiry Date" placeholder="DD/MM/YYYY" value={form.fertilizer_license_expiry} onChangeText={(v) => update('fertilizer_license_expiry', v)} className="mb-0" />
+                <Input
+                  label="License Number"
+                  placeholder="Fertilizer license number"
+                  value={form.fertilizer_license_number}
+                  onChangeText={(v) => update('fertilizer_license_number', v)}
+                  error={getFieldError('fertilizer_license_number')}
+                />
+                <Input
+                  label="Expiry Date"
+                  placeholder="DD/MM/YYYY"
+                  value={form.fertilizer_license_expiry}
+                  onChangeText={(v) => update('fertilizer_license_expiry', v)}
+                  error={getFieldError('fertilizer_license_expiry')}
+                  className="mb-0"
+                />
               </LicenseCard>
             </View>
           </View>
@@ -814,6 +902,17 @@ export default function NewFirmScreen() {
           </View>
         ) : null}
 
+        {/* Auto-save indicator */}
+        {isDrafting || lastSaved ? (
+          <View className="mx-auto mt-2 w-full max-w-5xl px-8">
+            <View className="rounded-lg bg-blue-50 px-3 py-2">
+              <Text className="text-xs text-blue-600">
+                {isDrafting ? '💾 Saving draft...' : lastSaved ? `✓ Saved at ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* Sidebar + Form side-by-side */}
         <View className="mx-auto w-full max-w-5xl flex-row gap-6 px-8 py-8">
           {/* Left: Sidebar stepper (sticky-like via self-start) */}
@@ -854,6 +953,15 @@ export default function NewFirmScreen() {
         {error ? (
           <View className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <Text className="text-sm font-medium text-red-700">{error}</Text>
+          </View>
+        ) : null}
+
+        {/* Auto-save indicator */}
+        {isDrafting || lastSaved ? (
+          <View className="mx-4 mt-2 rounded-lg bg-blue-50 px-3 py-2">
+            <Text className="text-xs text-blue-600">
+              {isDrafting ? '💾 Saving draft...' : lastSaved ? `✓ Saved at ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+            </Text>
           </View>
         ) : null}
 

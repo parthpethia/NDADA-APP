@@ -51,3 +51,6 @@ hs_err_pid*.log
 # generated native folders
 /ios
 /android
+
+# Gradle user home
+.gradle-user-home/

@@ -19,18 +19,17 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchStats = async () => {
-    const [members, firms, payments, certs, pending, fraud] = await Promise.all([
-      supabase.from('members').select('id', { count: 'exact', head: true }),
-      supabase.from('firms').select('id', { count: 'exact', head: true }),
+    const [accounts, payments, certs, pending, fraud] = await Promise.all([
+      supabase.from('accounts').select('id', { count: 'exact', head: true }),
       supabase.from('payments').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
       supabase.from('certificates').select('id', { count: 'exact', head: true }),
-      supabase.from('firms').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending'),
+      supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending'),
       supabase.from('fraud_flags').select('id', { count: 'exact', head: true }).eq('resolved', false),
     ]);
 
     setStats({
-      total_members: members.count || 0,
-      total_firms: firms.count || 0,
+      total_members: accounts.count || 0,
+      total_firms: accounts.count || 0,  // One account = one firm now
       payments_completed: payments.count || 0,
       certificates_issued: certs.count || 0,
       pending_reviews: pending.count || 0,

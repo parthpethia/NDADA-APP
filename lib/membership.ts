@@ -1,4 +1,4 @@
-import { Certificate, Firm, Member } from '@/types';
+import { Account, Certificate } from '@/types';
 
 export type MembershipStage =
   | 'application'
@@ -7,14 +7,17 @@ export type MembershipStage =
   | 'certificate'
   | 'active';
 
+// Updated for new consolidated account schema
 export function getMembershipStage(
-  member: Member | null,
-  firms: Firm[],
+  account: Account | null,
   certificate: Certificate | null
 ): MembershipStage {
-  if (!member || firms.length === 0) return 'application';
-  if (member.payment_status !== 'paid') return 'payment';
-  if (!firms.some((firm) => firm.approval_status === 'approved')) return 'review';
+  if (!account) return 'application';
+  // If account exists with firm info, but payment not done
+  if (account.payment_status !== 'paid') return 'payment';
+  // If account has firm but not approved yet
+  if (account.approval_status !== 'approved') return 'review';
+  // If account and firm approved but certificate not issued
   if (!certificate) return 'certificate';
   return 'active';
 }

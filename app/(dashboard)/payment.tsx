@@ -172,6 +172,16 @@ export default function PaymentScreen() {
                   Your registration is complete
                 </Text>
               </>
+            ) : member.payment_status === 'processing' ? (
+              <>
+                <View className="mb-3 rounded-full bg-blue-100 p-4">
+                  <Clock size={48} color="#2563eb" />
+                </View>
+                <Text className="text-xl font-bold text-blue-700">Verifying Payment</Text>
+                <Text className="mt-1 text-center text-sm text-gray-500">
+                  We're confirming your payment. This usually takes a few seconds.
+                </Text>
+              </>
             ) : member.payment_status === 'failed' ? (
               <>
                 <View className="mb-3 rounded-full bg-red-100 p-4">
@@ -179,7 +189,27 @@ export default function PaymentScreen() {
                 </View>
                 <Text className="text-xl font-bold text-red-700">Payment Failed</Text>
                 <Text className="mt-1 text-gray-500">
-                  Please try again
+                  Your payment couldn't be processed
+                </Text>
+              </>
+            ) : member.payment_status === 'expired' ? (
+              <>
+                <View className="mb-3 rounded-full bg-orange-100 p-4">
+                  <Clock size={48} color="#ea580c" />
+                </View>
+                <Text className="text-xl font-bold text-orange-700">Payment Link Expired</Text>
+                <Text className="mt-1 text-center text-sm text-gray-500">
+                  Your payment link has expired. Generate a new one below.
+                </Text>
+              </>
+            ) : member.payment_status === 'abandoned' ? (
+              <>
+                <View className="mb-3 rounded-full bg-gray-100 p-4">
+                  <XCircle size={48} color="#6b7280" />
+                </View>
+                <Text className="text-xl font-bold text-gray-700">Payment Abandoned</Text>
+                <Text className="mt-1 text-center text-sm text-gray-500">
+                  You didn't complete payment. Create a new payment link to continue.
                 </Text>
               </>
             ) : (
@@ -236,27 +266,67 @@ export default function PaymentScreen() {
         </Card>
 
         {/* Razorpay */}
-        {member.payment_status !== 'paid' && (
+        {(member.payment_status === 'pending' || member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' || member.payment_status === 'processing') && (
           <Card className="mb-4">
-            <CardHeader title="Pay with Razorpay" subtitle="Fast, secure online payment" />
+            <CardHeader
+              title={member.payment_status === 'processing' ? 'Verify Payment' : 'Pay with Razorpay'}
+              subtitle={member.payment_status === 'processing' ? 'Confirm your payment status' : 'Fast, secure online payment'}
+            />
             <View className="gap-3">
-              <Button
-                title={paymentLinkUrl ? 'Continue Payment' : 'Pay Now'}
-                onPress={handlePayWithRazorpay}
-                loading={paymentLoading}
-                size="lg"
-                className="w-full"
-              />
-              <Button
-                title="Refresh Status"
-                variant="outline"
-                onPress={handleRefreshStatus}
-                loading={refreshing}
-                className="w-full"
-              />
-              <Text className="text-center text-xs text-gray-500">
-                After completing payment in Razorpay, come back and tap Refresh Status.
-              </Text>
+              {member.payment_status === 'processing' ? (
+                <>
+                  <Button
+                    title="Verify Payment Now"
+                    onPress={handleRefreshStatus}
+                    loading={refreshing}
+                    size="lg"
+                    className="w-full"
+                  />
+                  <Text className="text-center text-xs text-gray-500">
+                    We're checking your payment status. This usually takes a few seconds.
+                  </Text>
+                </>
+              ) : member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' ? (
+                <>
+                  <Button
+                    title="Create New Payment Link"
+                    onPress={handlePayWithRazorpay}
+                    loading={paymentLoading}
+                    size="lg"
+                    className="w-full"
+                  />
+                  <Button
+                    title="Check Status"
+                    variant="outline"
+                    onPress={handleRefreshStatus}
+                    loading={refreshing}
+                    className="w-full"
+                  />
+                  <Text className="text-center text-xs text-gray-500">
+                    A new payment link will be created. You'll be redirected to Razorpay.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Button
+                    title={paymentLinkUrl ? 'Continue Payment' : 'Pay Now'}
+                    onPress={handlePayWithRazorpay}
+                    loading={paymentLoading}
+                    size="lg"
+                    className="w-full"
+                  />
+                  <Button
+                    title="Refresh Status"
+                    variant="outline"
+                    onPress={handleRefreshStatus}
+                    loading={refreshing}
+                    className="w-full"
+                  />
+                  <Text className="text-center text-xs text-gray-500">
+                    After completing payment in Razorpay, come back and tap Refresh Status.
+                  </Text>
+                </>
+              )}
             </View>
           </Card>
         )}

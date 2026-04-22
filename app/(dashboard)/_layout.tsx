@@ -2,6 +2,7 @@ import { Tabs, Redirect } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/ui';
 import { LayoutDashboard, Building2, Award, User } from 'lucide-react-native';
+import { NotificationBell } from './notifications';
 
 export default function DashboardLayout() {
   const { session, loading, adminUser } = useAuth();
@@ -26,6 +27,7 @@ export default function DashboardLayout() {
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} />,
+          headerRight: () => <NotificationBell />,
         }}
       />
       <Tabs.Screen

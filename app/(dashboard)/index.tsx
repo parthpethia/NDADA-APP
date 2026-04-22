@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { fetchAccountCertificate } from '@/lib/queries';
 import { Card, CardHeader, StatusBadge, Button, LoadingScreen, EmptyState } from '@/components/ui';
-import { Firm, Certificate } from '@/types';
+import { TimelineDisplay } from './timeline';
+import { Certificate } from '@/types';
 import {
   APP_NAME,
   MEMBERSHIP_AMOUNT,
@@ -25,18 +26,13 @@ import {
 
 export default function DashboardHome() {
   const { member, refreshMember, signOut, loading } = useAuth();
-  const [firms, setFirms] = useState<Firm[]>([]);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async () => {
     if (!member) return;
-    const [firmsRes, certRes] = await Promise.all([
-      supabase.from('firms').select('*').eq('member_id', member.id),
-      supabase.from('certificates').select('*').eq('member_id', member.id).single(),
-    ]);
-    setFirms(firmsRes.data || []);
-    setCertificate(certRes.data);
+    const { data: cert } = await fetchAccountCertificate(member.id);
+    setCertificate(cert);
   };
 
   useEffect(() => {
@@ -66,20 +62,20 @@ export default function DashboardHome() {
     );
   }
 
-  const hasFirms = firms.length > 0;
+  const hasFirm = !!member.firm_name;
   const isPaid = member.payment_status === 'paid';
-  const approvedFirms = firms.filter((f) => f.approval_status === 'approved');
+  const isApproved = member.approval_status === 'approved';
   const hasCertificate = !!certificate;
-  const stage = getMembershipStage(member, firms, certificate);
+  const stage = getMembershipStage(member, certificate);
   const stageMeta = getMembershipStageMeta(stage);
 
   const currentStep =
     stage === 'application' ? 1 : stage === 'payment' ? 2 : stage === 'review' ? 3 : 4;
 
   const steps = [
-    { label: 'Submit Application', icon: FileText, done: hasFirms },
+    { label: 'Submit Application', icon: FileText, done: hasFirm },
     { label: 'Pay Registration Fee', icon: ShoppingCart, done: isPaid },
-    { label: 'Approval Review', icon: CheckCircle, done: approvedFirms.length > 0 },
+    { label: 'Approval Review', icon: CheckCircle, done: isApproved },
     { label: 'Get Certificate', icon: Award, done: hasCertificate },
   ];
 
@@ -116,7 +112,7 @@ export default function DashboardHome() {
         </View>
       </Card>
 
-      {!hasFirms && (
+      {!hasFirm && (
         <Card className="mb-5 overflow-hidden border-primary-200 bg-primary-50">
           <View className="items-center py-4">
             <View className="mb-3 rounded-full bg-primary-100 p-4">
@@ -170,8 +166,15 @@ export default function DashboardHome() {
         </View>
       </Card>
 
+      {/* Status Timeline */}
+      {member.status_timeline && Object.keys(member.status_timeline).length > 0 && (
+        <Card className="mb-5">
+          <TimelineDisplay timeline={member.status_timeline} />
+        </Card>
+      )}
+
       {/* Action based on current step */}
-      {hasFirms && !isPaid && (
+      {hasFirm && !isPaid && (
         <Card className="mb-5 border-yellow-200 bg-yellow-50">
           <View className="items-center py-3">
             <View className="mb-2 rounded-full bg-yellow-100 p-3">
@@ -188,7 +191,7 @@ export default function DashboardHome() {
         </Card>
       )}
 
-      {isPaid && approvedFirms.length === 0 && (
+      {isPaid && !isApproved && (
         <Card className="mb-5 border-blue-200 bg-blue-50">
           <View className="items-center py-3">
             <View className="mb-2 rounded-full bg-blue-100 p-3">
@@ -205,7 +208,7 @@ export default function DashboardHome() {
         </Card>
       )}
 
-      {isPaid && !hasCertificate && approvedFirms.length > 0 && (
+      {isPaid && !hasCertificate && isApproved && (
         <Card className="mb-5 border-green-200 bg-green-50">
           <View className="items-center py-3">
             <View className="mb-2 rounded-full bg-green-100 p-3">
@@ -247,7 +250,7 @@ export default function DashboardHome() {
               <Building2 size={20} color="#1d4ed8" />
             </View>
             <View>
-              <Text className="text-2xl font-bold text-gray-900">{firms.length}</Text>
+              <Text className="text-2xl font-bold text-gray-900">{hasFirm ? 1 : 0}</Text>
               <Text className="text-xs text-gray-500">Applications</Text>
             </View>
           </View>
@@ -265,26 +268,24 @@ export default function DashboardHome() {
         </Card>
       </View>
 
-      {/* Your Firms List */}
-      {firms.length > 0 && (
+      {/* Your Application */}
+      {hasFirm && (
         <Card className="mt-4">
           <CardHeader
-            title="Your Applications"
+            title="Your Application"
             right={
               <TouchableOpacity onPress={() => router.push('/(dashboard)/firms')}>
-                <Text className="text-sm font-medium text-primary-700">View All</Text>
+                <Text className="text-sm font-medium text-primary-700">Edit</Text>
               </TouchableOpacity>
             }
           />
-          {firms.slice(0, 3).map((firm) => (
-            <View key={firm.id} className="flex-row items-center justify-between border-t border-gray-100 py-3">
-              <View className="flex-1">
-                <Text className="font-medium text-gray-900">{firm.firm_name}</Text>
-                <Text className="text-xs text-gray-500">Lic: {firm.license_number}</Text>
-              </View>
-              <StatusBadge status={firm.approval_status} />
+          <View className="flex-row items-center justify-between border-t border-gray-100 py-3">
+            <View className="flex-1">
+              <Text className="font-medium text-gray-900">{member.firm_name}</Text>
+              <Text className="text-xs text-gray-500">Lic: {member.license_number}</Text>
             </View>
-          ))}
+            <StatusBadge status={member.approval_status} />
+          </View>
         </Card>
       )}
     </ScrollView>
