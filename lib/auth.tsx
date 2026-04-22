@@ -94,9 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           String(currentUser.email || '').split('@')[0] ||
           'Member',
         email: String(currentUser.email || '').trim() || 'unknown@example.com',
-        phone: String(currentUser.user_metadata?.phone || '').trim() || 'N/A',
+        phone: String(currentUser.user_metadata?.phone || '').trim() || '',
         address: String(currentUser.user_metadata?.address || '').trim(),
         firm_name: '',
+        license_number: '',
+        registration_number: '',
         firm_address: '',
         contact_phone: '',
         contact_email: '',
@@ -105,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (createError) {
-      console.warn('Failed to create account profile:', createError.message);
+      console.error('Failed to create account profile:', createError.message, createError.details, createError.hint);
       setMember(null);
       return;
     }

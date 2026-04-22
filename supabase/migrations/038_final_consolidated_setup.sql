@@ -7,6 +7,13 @@
 -- ============================================================
 
 -- ============================================================
+-- SECTION 0: SEQUENCES
+-- ============================================================
+
+CREATE SEQUENCE IF NOT EXISTS public.membership_id_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS public.certificate_id_seq START 1;
+
+-- ============================================================
 -- SECTION 1: CUSTOM TYPES
 -- ============================================================
 
@@ -48,10 +55,10 @@ CREATE TABLE IF NOT EXISTS public.accounts (
   id_proof_url TEXT,
 
   -- Firm Information
-  firm_name TEXT NOT NULL,
+  firm_name TEXT NOT NULL DEFAULT '',
   firm_type firm_type DEFAULT 'proprietorship',
-  license_number TEXT NOT NULL,
-  registration_number TEXT NOT NULL,
+  license_number TEXT NOT NULL DEFAULT '',
+  registration_number TEXT NOT NULL DEFAULT '',
   gst_number TEXT,
   firm_address TEXT,
   contact_phone TEXT,
@@ -507,6 +514,77 @@ CREATE TRIGGER trg_queue_certificate_on_approval
   EXECUTE FUNCTION queue_certificate_on_approval();
 
 -- ============================================================
+-- SECTION 5b: AUTO-ID GENERATION & USER SIGNUP TRIGGERS
+-- ============================================================
+
+-- Generate membership ID on insert
+CREATE OR REPLACE FUNCTION generate_membership_id()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.membership_id IS NULL OR NEW.membership_id = '' THEN
+    NEW.membership_id := 'NDADA-' || EXTRACT(YEAR FROM now())::TEXT || '-' || LPAD(nextval('membership_id_seq')::TEXT, 6, '0');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql
+SET search_path TO pg_catalog, public;
+
+DROP TRIGGER IF EXISTS trg_generate_membership_id_accounts ON public.accounts;
+CREATE TRIGGER trg_generate_membership_id_accounts
+  BEFORE INSERT ON public.accounts
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_membership_id();
+
+-- Generate certificate ID on insert
+CREATE OR REPLACE FUNCTION generate_certificate_id()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.certificate_id IS NULL OR NEW.certificate_id = '' THEN
+    NEW.certificate_id := 'CERT-' || EXTRACT(YEAR FROM now())::TEXT || '-' || LPAD(nextval('certificate_id_seq')::TEXT, 6, '0');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql
+SET search_path TO pg_catalog, public;
+
+DROP TRIGGER IF EXISTS trg_generate_certificate_id ON public.certificates;
+CREATE TRIGGER trg_generate_certificate_id
+  BEFORE INSERT ON public.certificates
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_certificate_id();
+
+-- Auto-create account when a new user signs up
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.accounts (
+    user_id, full_name, email, phone, address,
+    firm_name, license_number, registration_number,
+    firm_address, contact_phone, contact_email
+  ) VALUES (
+    NEW.id,
+    COALESCE(NULLIF(TRIM(NEW.raw_user_meta_data->>'full_name'), ''), SPLIT_PART(COALESCE(NEW.email, ''), '@', 1)),
+    COALESCE(NEW.email, 'unknown@example.com'),
+    COALESCE(NEW.raw_user_meta_data->>'phone', ''),
+    COALESCE(NEW.raw_user_meta_data->>'address', ''),
+    '', '', '', '', '', ''
+  )
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE LOG 'handle_new_user failed for user %: %', NEW.id, SQLERRM;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO pg_catalog, public;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION handle_new_user();
+
+-- ============================================================
 -- SECTION 6: MATERIALIZED VIEWS & HELPER FUNCTIONS
 -- ============================================================
 
@@ -615,6 +693,7 @@ ALTER TABLE public.certificate_downloads ENABLE ROW LEVEL SECURITY;
 -- Accounts RLS
 CREATE POLICY "users_view_own_account" ON public.accounts FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "admins_view_all_accounts" ON public.accounts FOR SELECT USING (EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid()));
+CREATE POLICY "users_insert_own_account" ON public.accounts FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "users_update_own_account" ON public.accounts FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Payments RLS
@@ -646,7 +725,10 @@ CREATE POLICY "admins_update_errors" ON public.error_logs FOR UPDATE USING (EXIS
 -- ============================================================
 
 GRANT SELECT ON public.accounts TO authenticated;
+GRANT INSERT ON public.accounts TO authenticated;
 GRANT UPDATE ON public.accounts TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.membership_id_seq TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.certificate_id_seq TO authenticated;
 GRANT SELECT ON public.payments TO authenticated;
 GRANT SELECT ON public.certificates TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.account_drafts TO authenticated;
