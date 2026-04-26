@@ -93,6 +93,44 @@ export default function CartScreen() {
     }
   };
 
+  const handlePayInCash = async () => {
+    Alert.alert(
+      'Confirm Cash Payment',
+      `Are you sure you want to pay ${formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?\n\nAn admin will verify and process your payment.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Proceed',
+          onPress: async () => {
+            try {
+              // Update payment method to cash
+              const { error } = await supabase
+                .from('accounts')
+                .update({
+                  payment_method: 'cash',
+                })
+                .eq('id', member.id);
+
+              if (error) {
+                Alert.alert('Error', 'Failed to process cash payment request');
+                return;
+              }
+
+              // Navigate to cash payment review page
+              router.push('/(dashboard)/cash-payment-review');
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to process request');
+            }
+          },
+          style: 'default',
+        },
+      ]
+    );
+  };
+
   // With consolidated schema, the member record IS the firm
   const hasFirmData = !!member.firm_name;
 
@@ -209,16 +247,32 @@ export default function CartScreen() {
           </View>
         </Card>
 
-        {/* Pay Button */}
-        <Button
-          title={`Pay ${formatCurrency(MEMBERSHIP_AMOUNT)}`}
-          onPress={handlePayment}
-          loading={paymentLoading}
-          size="lg"
-        />
+        {/* Payment Method Buttons */}
+        <Card className="mb-4">
+          <CardHeader
+            title="Choose Payment Method"
+            subtitle="Select how you'd like to pay"
+          />
+          <View className="gap-3">
+            <Button
+              title="Pay Online"
+              onPress={handlePayment}
+              loading={paymentLoading}
+              size="lg"
+              className="w-full"
+            />
+            <Button
+              title="Pay in Cash"
+              variant="outline"
+              onPress={handlePayInCash}
+              size="lg"
+              className="w-full"
+            />
+          </View>
+        </Card>
 
-        <Text className="mt-3 text-center text-xs text-gray-400">
-          Pay securely via Razorpay
+        <Text className="text-center text-xs text-gray-400">
+          Choose your preferred payment method above
         </Text>
       </View>
     </ScrollView>

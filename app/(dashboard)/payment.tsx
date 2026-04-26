@@ -20,12 +20,7 @@ export default function PaymentScreen() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
-  const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(
-    member?.payment_status === 'pending' ||
-    member?.payment_status === 'failed' ||
-    member?.payment_status === 'expired' ||
-    member?.payment_status === 'abandoned'
-  );
+  const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(true);
 
   useEffect(() => {
     const fetchLatestPaymentLink = async () => {
@@ -44,6 +39,14 @@ export default function PaymentScreen() {
 
     fetchLatestPaymentLink();
   }, [member?.id, member?.payment_status]);
+
+  const shouldShowPaymentMethods =
+    member.payment_status !== 'paid' &&
+    (member.payment_status === 'pending' ||
+     member.payment_status === 'failed' ||
+     member.payment_status === 'expired' ||
+     member.payment_status === 'abandoned' ||
+     member.payment_status === 'processing');
 
   if (!member) return null;
 
@@ -171,8 +174,8 @@ export default function PaymentScreen() {
 
   const handlePayInCash = () => {
     Alert.alert(
-      'Pay in Cash',
-      'Are you sure you want to proceed with cash payment? An admin will verify and process your payment.',
+      'Confirm Cash Payment',
+      `Are you sure you want to pay ${formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?\n\nAn admin will verify and process your payment.`,
       [
         {
           text: 'Cancel',
@@ -321,7 +324,7 @@ export default function PaymentScreen() {
         </Card>
 
         {/* Payment Method Selection */}
-        {showPaymentMethodSelection && (member.payment_status === 'pending' || member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' || member.payment_status === 'processing') && (
+        {showPaymentMethodSelection && shouldShowPaymentMethods && (
           <Card className="mb-4">
             <CardHeader
               title="Choose Payment Method"
@@ -349,7 +352,7 @@ export default function PaymentScreen() {
         )}
 
         {/* Razorpay */}
-        {!showPaymentMethodSelection && (member.payment_status === 'pending' || member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' || member.payment_status === 'processing') && (
+        {!showPaymentMethodSelection && shouldShowPaymentMethods && (
           <Card className="mb-4">
             <CardHeader
               title={member.payment_status === 'processing' ? 'Verify Payment' : 'Pay with Razorpay'}
