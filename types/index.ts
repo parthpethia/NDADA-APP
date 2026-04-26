@@ -82,6 +82,11 @@ export interface Account {
   // Status Fields
   membership_id: string;
   payment_status: PaymentStatus;
+  payment_method?: 'online' | 'cash';
+  cash_payment_verified?: boolean;
+  cash_payment_verified_by?: string | null;
+  cash_payment_verified_at?: string | null;
+  cash_payment_notes?: string | null;
   approval_status: ApprovalStatus;
   account_status: AccountStatus;
   rejection_reason: string | null;
@@ -104,6 +109,11 @@ export interface Payment {
   amount: number;
   currency: string;
   status: PaymentStatus;
+  payment_method?: 'online' | 'cash';
+  cash_verified?: boolean;
+  cash_verified_by?: string | null;
+  cash_verified_at?: string | null;
+  verification_notes?: string | null;
   provider?: string | null;
   razorpay_payment_link_id?: string | null;
   razorpay_payment_link_url?: string | null;

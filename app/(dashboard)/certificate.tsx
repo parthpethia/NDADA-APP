@@ -79,7 +79,7 @@ export default function CertificateScreen() {
       <EmptyState
         title="No Certificate Yet"
         message={
-          member?.payment_status !== 'paid'
+          member?.payment_status !== 'paid' && !member?.cash_payment_verified
             ? 'Complete your registration fee payment first.'
             : 'Your firm must be approved before a certificate is issued.'
         }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Alert, Platform, Linking } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge } from '@/components/ui';
@@ -10,14 +11,21 @@ import {
   MEMBERSHIP_VALIDITY_LABEL,
   MEMBERSHIP_SUPPORT_EMAIL,
 } from '@/constants';
-import { CheckCircle, Clock, XCircle } from 'lucide-react-native';
+import { CheckCircle, Clock, XCircle, DollarSign, Banknote } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 export default function PaymentScreen() {
+  const router = useRouter();
   const { member, refreshMember, session } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
+  const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(
+    member?.payment_status === 'pending' ||
+    member?.payment_status === 'failed' ||
+    member?.payment_status === 'expired' ||
+    member?.payment_status === 'abandoned'
+  );
 
   useEffect(() => {
     const fetchLatestPaymentLink = async () => {
@@ -156,6 +164,53 @@ export default function PaymentScreen() {
     }
   };
 
+  const handlePayOnline = () => {
+    setShowPaymentMethodSelection(false);
+    // The Razorpay section will now be visible
+  };
+
+  const handlePayInCash = () => {
+    Alert.alert(
+      'Pay in Cash',
+      'Are you sure you want to proceed with cash payment? An admin will verify and process your payment.',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => {
+            // Do nothing
+          },
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Proceed',
+          onPress: async () => {
+            try {
+              // Update payment method and status
+              const { error } = await supabase
+                .from('accounts')
+                .update({
+                  payment_method: 'cash',
+                })
+                .eq('id', member.id);
+
+              if (error) {
+                Alert.alert('Error', 'Failed to process cash payment request');
+                return;
+              }
+
+              setShowPaymentMethodSelection(false);
+              // Navigate to cash payment review page
+              router.push('/(dashboard)/cash-payment-review');
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to process request');
+            }
+          },
+          style: 'default',
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView className="flex-1 bg-gray-50" contentContainerClassName="p-4 pb-8">
       <View className="mx-auto w-full max-w-lg">
@@ -265,8 +320,36 @@ export default function PaymentScreen() {
           </View>
         </Card>
 
+        {/* Payment Method Selection */}
+        {showPaymentMethodSelection && (member.payment_status === 'pending' || member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' || member.payment_status === 'processing') && (
+          <Card className="mb-4">
+            <CardHeader
+              title="Choose Payment Method"
+              subtitle="Select how you'd like to pay"
+            />
+            <View className="gap-3">
+              <Button
+                title="Pay Online"
+                onPress={handlePayOnline}
+                size="lg"
+                className="w-full"
+              />
+              <Button
+                title="Pay in Cash"
+                variant="outline"
+                onPress={handlePayInCash}
+                size="lg"
+                className="w-full"
+              />
+              <Text className="text-center text-xs text-gray-500">
+                Choose your preferred payment method above
+              </Text>
+            </View>
+          </Card>
+        )}
+
         {/* Razorpay */}
-        {(member.payment_status === 'pending' || member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' || member.payment_status === 'processing') && (
+        {!showPaymentMethodSelection && (member.payment_status === 'pending' || member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' || member.payment_status === 'processing') && (
           <Card className="mb-4">
             <CardHeader
               title={member.payment_status === 'processing' ? 'Verify Payment' : 'Pay with Razorpay'}
@@ -302,6 +385,12 @@ export default function PaymentScreen() {
                     loading={refreshing}
                     className="w-full"
                   />
+                  <Button
+                    title="Back to Payment Method Selection"
+                    variant="outline"
+                    onPress={() => setShowPaymentMethodSelection(true)}
+                    className="w-full"
+                  />
                   <Text className="text-center text-xs text-gray-500">
                     A new payment link will be created. You'll be redirected to Razorpay.
                   </Text>
@@ -320,6 +409,12 @@ export default function PaymentScreen() {
                     variant="outline"
                     onPress={handleRefreshStatus}
                     loading={refreshing}
+                    className="w-full"
+                  />
+                  <Button
+                    title="Back to Payment Method Selection"
+                    variant="outline"
+                    onPress={() => setShowPaymentMethodSelection(true)}
                     className="w-full"
                   />
                   <Text className="text-center text-xs text-gray-500">
