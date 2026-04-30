@@ -116,11 +116,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchAdminUser = async (userId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('admin_users')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
+
+    if (error) {
+      console.warn(
+        'Failed to fetch admin user:',
+        {
+          message: error.message,
+          details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          code: (error as any)?.code,
+        }
+      );
+    }
     setAdminUser(data ?? null);
   };
 

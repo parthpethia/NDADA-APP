@@ -21,6 +21,9 @@ export default function PaymentScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(true);
+  const [showCashConfirm, setShowCashConfirm] = useState(false);
+  const [cashSubmitting, setCashSubmitting] = useState(false);
+  const [cashError, setCashError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchLatestPaymentLink = async () => {
@@ -39,6 +42,15 @@ export default function PaymentScreen() {
 
     fetchLatestPaymentLink();
   }, [member?.id, member?.payment_status]);
+
+  useEffect(() => {
+    if (!member) return;
+    const cashSelected = member.payment_method === 'cash';
+    const cashPending = cashSelected && member.payment_status !== 'paid' && !member.cash_payment_verified;
+    if (cashPending) {
+      router.replace('/(dashboard)/cash-payment-review');
+    }
+  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id, router]);
 
   if (!member) return null;
 
@@ -180,49 +192,36 @@ export default function PaymentScreen() {
   };
 
   const handlePayInCash = () => {
-    Alert.alert(
-      'Confirm Cash Payment',
-      `Are you sure you want to pay ${formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?\n\nAn admin will verify and process your payment.`,
-      [
-        {
-          text: 'Cancel',
-          onPress: () => {
-            console.log('Cash payment cancelled');
-          },
-          style: 'cancel',
-        },
-        {
-          text: 'Yes, Proceed',
-          onPress: async () => {
-            try {
-              console.log('Proceeding with cash payment for member:', member.id);
-              // Update payment method and status
-              const { error } = await supabase
-                .from('accounts')
-                .update({
-                  payment_method: 'cash',
-                })
-                .eq('id', member.id);
+    setCashError(null);
+    setShowCashConfirm(true);
+  };
 
-              if (error) {
-                console.error('Error updating payment method:', error);
-                Alert.alert('Error', 'Failed to process cash payment request');
-                return;
-              }
+  const confirmCashPayment = async () => {
+    if (!member) return;
+    setCashSubmitting(true);
+    setCashError(null);
+    try {
+      console.log('Proceeding with cash payment for member:', member.id);
+      const { error } = await supabase
+        .from('accounts')
+        .update({ payment_method: 'cash' })
+        .eq('id', member.id);
 
-              console.log('Payment method updated to cash, navigating to review page');
-              setShowPaymentMethodSelection(false);
-              // Navigate to cash payment review page
-              router.push('/(dashboard)/cash-payment-review');
-            } catch (err: any) {
-              console.error('Cash payment error:', err);
-              Alert.alert('Error', err?.message || 'Failed to process request');
-            }
-          },
-          style: 'default',
-        },
-      ]
-    );
+      if (error) {
+        console.error('Error updating payment method:', error);
+        setCashError(error.message || 'Failed to process cash payment request');
+        return;
+      }
+
+      setShowCashConfirm(false);
+      setShowPaymentMethodSelection(false);
+      router.push('/(dashboard)/cash-payment-review');
+    } catch (err: any) {
+      console.error('Cash payment error:', err);
+      setCashError(err?.message || 'Failed to process request');
+    } finally {
+      setCashSubmitting(false);
+    }
   };
 
   return (
@@ -358,6 +357,34 @@ export default function PaymentScreen() {
               <Text className="text-center text-xs text-gray-500">
                 Choose your preferred payment method above
               </Text>
+
+              {showCashConfirm && (
+                <View className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                  <Text className="font-semibold text-yellow-900">Confirm Cash Payment</Text>
+                  <Text className="mt-1 text-sm text-yellow-800">
+                    Are you sure you want to pay {formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?
+                    {'\n\n'}An admin will verify and process your payment.
+                  </Text>
+                  {cashError ? (
+                    <Text className="mt-2 text-sm text-red-700">{cashError}</Text>
+                  ) : null}
+                  <View className="mt-3 flex-row gap-2">
+                    <Button
+                      title="Cancel"
+                      variant="outline"
+                      onPress={() => setShowCashConfirm(false)}
+                      className="flex-1"
+                      disabled={cashSubmitting}
+                    />
+                    <Button
+                      title="Confirm"
+                      onPress={() => void confirmCashPayment()}
+                      loading={cashSubmitting}
+                      className="flex-1"
+                    />
+                  </View>
+                </View>
+              )}
             </View>
           </Card>
         )}

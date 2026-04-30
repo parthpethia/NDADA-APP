@@ -60,6 +60,15 @@ export default function DashboardLayout() {
           href: null,
         }}
       />
+
+      {/* Cash payment review (hidden, navigated to from Cart/Payment) */}
+      <Tabs.Screen
+        name="cash-payment-review"
+        options={{
+          title: 'Cash Payment Review',
+          href: null,
+        }}
+      />
       {/* Hidden screens — accessible via navigation, not shown in tab bar */}
       <Tabs.Screen
         name="notifications"
