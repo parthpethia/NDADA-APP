@@ -40,6 +40,8 @@ export default function PaymentScreen() {
     fetchLatestPaymentLink();
   }, [member?.id, member?.payment_status]);
 
+  if (!member) return null;
+
   const shouldShowPaymentMethods =
     member.payment_status !== 'paid' &&
     (member.payment_status === 'pending' ||
@@ -47,8 +49,6 @@ export default function PaymentScreen() {
      member.payment_status === 'expired' ||
      member.payment_status === 'abandoned' ||
      member.payment_status === 'processing');
-
-  if (!member) return null;
 
   const handlePayWithRazorpay = async () => {
     console.log('▶️ === PAYMENT FLOW START ===');
@@ -76,6 +76,13 @@ export default function PaymentScreen() {
 
     setPaymentLoading(true);
     try {
+      // Best-effort: ensure this is treated as an online payment attempt.
+      // Prevents members from lingering in the cash verification queue if they switch methods.
+      await supabase
+        .from('accounts')
+        .update({ payment_method: 'online' })
+        .eq('id', member.id);
+
       console.log('\n4️⃣ Invoking razorpay-create-payment-link...');
       console.log('   URL: razorpay-create-payment-link');
       console.log('   Auth: Automatic (session token as Authorization header)');
@@ -180,7 +187,7 @@ export default function PaymentScreen() {
         {
           text: 'Cancel',
           onPress: () => {
-            // Do nothing
+            console.log('Cash payment cancelled');
           },
           style: 'cancel',
         },
@@ -188,6 +195,7 @@ export default function PaymentScreen() {
           text: 'Yes, Proceed',
           onPress: async () => {
             try {
+              console.log('Proceeding with cash payment for member:', member.id);
               // Update payment method and status
               const { error } = await supabase
                 .from('accounts')
@@ -197,14 +205,17 @@ export default function PaymentScreen() {
                 .eq('id', member.id);
 
               if (error) {
+                console.error('Error updating payment method:', error);
                 Alert.alert('Error', 'Failed to process cash payment request');
                 return;
               }
 
+              console.log('Payment method updated to cash, navigating to review page');
               setShowPaymentMethodSelection(false);
               // Navigate to cash payment review page
               router.push('/(dashboard)/cash-payment-review');
             } catch (err: any) {
+              console.error('Cash payment error:', err);
               Alert.alert('Error', err?.message || 'Failed to process request');
             }
           },

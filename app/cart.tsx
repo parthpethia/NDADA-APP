@@ -64,6 +64,13 @@ export default function CartScreen() {
   const handlePayment = async () => {
     setPaymentLoading(true);
     try {
+      // Best-effort: ensure payment method is online when starting an online payment.
+      // This prevents members from remaining in the "cash" review queue if they later pay online.
+      await supabase
+        .from('accounts')
+        .update({ payment_method: 'online' })
+        .eq('id', member.id);
+
       const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
         body: {},
       });
@@ -93,7 +100,7 @@ export default function CartScreen() {
     }
   };
 
-  const handlePayInCash = async () => {
+  const handlePayInCash = () => {
     Alert.alert(
       'Confirm Cash Payment',
       `Are you sure you want to pay ${formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?\n\nAn admin will verify and process your payment.`,
@@ -106,6 +113,7 @@ export default function CartScreen() {
           text: 'Yes, Proceed',
           onPress: async () => {
             try {
+              console.log('Proceeding with cash payment for member:', member.id);
               // Update payment method to cash
               const { error } = await supabase
                 .from('accounts')
@@ -115,13 +123,16 @@ export default function CartScreen() {
                 .eq('id', member.id);
 
               if (error) {
+                console.error('Error updating payment method:', error);
                 Alert.alert('Error', 'Failed to process cash payment request');
                 return;
               }
 
+              console.log('Payment method updated to cash, navigating to review page');
               // Navigate to cash payment review page
               router.push('/(dashboard)/cash-payment-review');
             } catch (err: any) {
+              console.error('Cash payment error:', err);
               Alert.alert('Error', err?.message || 'Failed to process request');
             }
           },

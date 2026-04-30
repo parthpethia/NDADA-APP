@@ -31,7 +31,13 @@ export default function CashPaymentReviewScreen() {
           .single();
 
         if (data?.cash_payment_verified) {
-          setCashVerified(true);
+          // Transition to verified once, then refresh member context.
+          if (!cashVerified) {
+            setCashVerified(true);
+            await refreshMember();
+          }
+        } else if (cashVerified) {
+          setCashVerified(false);
         }
       } catch (err) {
         console.error('Error checking cash payment verification:', err);
@@ -45,7 +51,7 @@ export default function CashPaymentReviewScreen() {
     // Poll for verification every 5 seconds
     const interval = setInterval(checkCashPaymentVerification, 5000);
     return () => clearInterval(interval);
-  }, [member?.id]);
+  }, [member?.id, cashVerified, refreshMember]);
 
   if (!member) return null;
 

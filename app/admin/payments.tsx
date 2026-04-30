@@ -9,7 +9,6 @@ import { CheckCircle, XCircle } from 'lucide-react-native';
 interface PaymentWithMember extends Payment {
   member_name: string;
   member_email: string;
-  payment_method?: string;
 }
 
 interface CashPaymentWithMember {
@@ -20,7 +19,7 @@ interface CashPaymentWithMember {
   membership_id: string;
   payment_method: string;
   cash_payment_verified: boolean;
-  created_at: string;
+  requested_at: string;
 }
 
 export default function AdminPaymentsScreen() {
@@ -62,9 +61,9 @@ export default function AdminPaymentsScreen() {
     // Fetch cash payment requests
     const { data: cashPaymentAccounts } = await supabase
       .from('accounts')
-      .select('id, full_name, email, membership_id, payment_method, cash_payment_verified, created_at')
+      .select('id, full_name, email, membership_id, payment_method, cash_payment_verified, created_at, updated_at')
       .eq('payment_method', 'cash')
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(50);
 
     setCashPayments(
@@ -76,7 +75,7 @@ export default function AdminPaymentsScreen() {
         membership_id: a.membership_id,
         payment_method: a.payment_method,
         cash_payment_verified: a.cash_payment_verified,
-        created_at: a.created_at,
+        requested_at: a.updated_at || a.created_at,
       }))
     );
   };
@@ -253,7 +252,7 @@ export default function AdminPaymentsScreen() {
               <View className="mt-3 gap-2">
                 <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-600">Request Date</Text>
-                  <Text className="text-xs text-gray-700">{formatDate(p.created_at)}</Text>
+                    <Text className="text-xs text-gray-700">{formatDate(p.requested_at)}</Text>
                 </View>
 
                 {p.cash_payment_verified ? (
