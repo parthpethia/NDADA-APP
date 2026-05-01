@@ -27,7 +27,7 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     const fetchLatestPaymentLink = async () => {
-      if (!member) return;
+      if (!member?.id) return;
       const { data } = await supabase
         .from('payments')
         .select('razorpay_payment_link_url, status')
@@ -41,7 +41,7 @@ export default function PaymentScreen() {
     };
 
     fetchLatestPaymentLink();
-  }, [member?.id, member?.payment_status]);
+  }, [member?.id]);
 
   useEffect(() => {
     if (!member) return;

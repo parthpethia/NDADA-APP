@@ -29,10 +29,8 @@ export default function CartScreen() {
   const [cashError, setCashError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Keep cart in sync with latest account state (payment_method/payment_status).
-    // This helps when returning back to Cart from other screens.
+    // Sync cart with latest account state on mount only
     refreshMember();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

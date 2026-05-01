@@ -45,9 +45,12 @@ export function RazorpayCheckout() {
   const [verifying, setVerifying] = useState(false);
   const checkoutRef = useRef<any>(null);
 
-  // Initialize Razorpay script (Web only)
+  // Initialize Razorpay script (Web only) - memoized to prevent reloading
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+
+    // Check if script already loaded
+    if ((window as any).Razorpay) return;
 
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
