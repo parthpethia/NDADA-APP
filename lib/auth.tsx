@@ -116,6 +116,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchAdminUser = async (userId: string) => {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      try {
+        // Avoid printing keys; URL is safe and helps detect wrong project/env.
+        console.log('Auth: fetching admin user for', userId, 'from', (supabase as any)?.supabaseUrl);
+      } catch {}
+    }
+
     const { data, error } = await supabase
       .from('admin_users')
       .select('*')
@@ -133,6 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       );
     }
+
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('Auth: admin user lookup result', data ?? null);
+    }
+
     setAdminUser(data ?? null);
   };
 
