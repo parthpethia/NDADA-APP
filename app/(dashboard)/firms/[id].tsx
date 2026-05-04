@@ -6,19 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Button, Card, CardHeader, EmptyState, LoadingScreen, StatusBadge } from '@/components/ui';
 import { Account } from '@/types';
 import { formatDate } from '@/lib/utils';
-import { confirm } from '@/lib/confirm';
 
-function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') {
-    const webAlert = (globalThis as any)?.alert as ((text?: string) => void) | undefined;
-    if (typeof webAlert === 'function') {
-      webAlert(`${title}\n\n${message}`);
-      return;
-    }
-  }
-
-  Alert.alert(title, message);
-}
 
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -34,7 +22,6 @@ export default function FirmDetailsScreen() {
   const { member } = useAuth();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
 
   const fetchAccount = async () => {
     if (!member?.id) {
@@ -62,38 +49,6 @@ export default function FirmDetailsScreen() {
   useEffect(() => {
     fetchAccount();
   }, [member?.id]);
-
-  const handleDelete = async () => {
-    if (!account) return;
-
-    const ok = await confirm(
-      'Delete Firm',
-      `Delete ${account.firm_name}? This will remove the submitted firm record from your account.`,
-      { destructive: true, confirmText: 'Delete' }
-    );
-    if (!ok) return;
-
-    setDeleting(true);
-    const { error } = await supabase
-      .from('accounts')
-      .update({
-        firm_name: '',
-        firm_type: 'other',
-        license_number: '',
-        registration_number: '',
-        approval_status: 'pending',
-      })
-      .eq('id', account.id);
-
-    setDeleting(false);
-
-    if (error) {
-      showAlert('Error', error.message);
-      return;
-    }
-
-    router.replace('/(dashboard)/firms');
-  };
 
   if (loading) return <LoadingScreen message="Loading firm details..." />;
 
@@ -182,10 +137,8 @@ export default function FirmDetailsScreen() {
       )}
 
       <Button
-        title="Delete Firm"
-        variant="destructive"
-        loading={deleting}
-        onPress={handleDelete}
+        title="Edit Firm"
+        onPress={() => router.push({ pathname: '/(dashboard)/firms/new', params: { edit: 'true' } })}
       />
     </ScrollView>
   );

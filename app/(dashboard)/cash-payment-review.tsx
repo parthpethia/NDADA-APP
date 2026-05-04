@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +18,7 @@ export default function CashPaymentReviewScreen() {
   const { member, refreshMember } = useAuth();
   const [cashVerified, setCashVerified] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [changingMethod, setChangingMethod] = useState(false);
 
   useEffect(() => {
     const checkCashPaymentVerification = async () => {
@@ -61,6 +62,27 @@ export default function CashPaymentReviewScreen() {
 
   const handleProceedToCertificate = () => {
     router.push('/(dashboard)/certificate');
+  };
+
+  const handleChangePaymentMethod = async () => {
+    if (!member) return;
+    setChangingMethod(true);
+    try {
+      const { error } = await supabase
+        .from('accounts')
+        .update({ payment_method: 'online' })
+        .eq('id', member.id);
+
+      if (error) throw error;
+      
+      await refreshMember();
+      router.replace('/cart');
+    } catch (err) {
+      console.error('Error changing payment method:', err);
+      Alert.alert('Error', 'Failed to change payment method');
+    } finally {
+      setChangingMethod(false);
+    }
   };
 
   if (loading) {
@@ -241,6 +263,13 @@ export default function CashPaymentReviewScreen() {
               title="Go Back"
               onPress={handleGoBack}
               size="lg"
+              className="w-full"
+            />
+            <Button
+              title="Change Payment Method"
+              variant="outline"
+              onPress={handleChangePaymentMethod}
+              loading={changingMethod}
               className="w-full"
             />
             <Button

@@ -81,6 +81,8 @@ export default function CertificateScreen() {
         message={
           member?.payment_status !== 'paid' && !member?.cash_payment_verified
             ? 'Complete your registration fee payment first.'
+            : member?.approval_status === 'approved'
+            ? 'Your certificate is being generated. Please check back in a few minutes.'
             : 'Your firm must be approved before a certificate is issued.'
         }
       />

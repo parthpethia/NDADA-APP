@@ -112,7 +112,7 @@ serve(async (req) => {
 
         if (account?.approval_status === 'approved') {
           console.log(`Triggering certificate generation for member ${memberId}`);
-          supabase.functions.invoke('generate-certificate', {
+          await supabase.functions.invoke('generate-certificate', {
             body: { member_id: memberId }
           }).catch(err => console.error('Failed to trigger certificate generation:', err));
         }

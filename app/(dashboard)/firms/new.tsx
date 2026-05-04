@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   Alert,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useAccountForm } from '@/lib/useAccountForm';
@@ -236,16 +236,55 @@ export default function NewFirmScreen() {
     deleteDraft,
   } = useAccountForm(member?.user_id);
 
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
+
   // Guard: If user already has firm data submitted, redirect them
   useEffect(() => {
-    if (member?.firm_name) {
+    if (member?.firm_name && edit !== 'true') {
       if (member.payment_status !== 'paid') {
         router.replace('/cart');
       } else {
         router.replace('/(dashboard)');
       }
     }
-  }, [member?.firm_name, member?.payment_status]);
+  }, [member?.firm_name, member?.payment_status, edit]);
+
+  // If editing, load the existing account into form
+  useEffect(() => {
+    async function loadExistingAccount() {
+      if (edit === 'true' && member?.id) {
+        const { data } = await supabase.from('accounts').select('*').eq('id', member.id).single();
+        if (data) {
+          setForm((prev) => ({
+            ...prev,
+            firm_name: data.firm_name || '',
+            firm_address: data.firm_address || '',
+            firm_pin_code: data.firm_pin_code || '',
+            gst_number: data.gst_number || '',
+            ifms_number: data.ifms_number || data.registration_number || '',
+            partner_proprietor_name: data.partner_proprietor_name || '',
+            aadhaar_card_number: data.aadhaar_card_number || '',
+            mobile_number: data.contact_phone || '',
+            whatsapp_number: data.whatsapp_number || '',
+            email_id: data.contact_email || '',
+            residence_address: data.residence_address || '',
+            residence_pin_code: data.residence_pin_code || '',
+            seed_cotton_license_number: data.seed_cotton_license_number || data.license_number || '',
+            seed_cotton_license_expiry: data.seed_cotton_license_expiry || '',
+            sarthi_id_cotton: data.sarthi_id_cotton || '',
+            seed_general_license_number: data.seed_general_license_number || '',
+            seed_general_license_expiry: data.seed_general_license_expiry || '',
+            sarthi_id_general: data.sarthi_id_general || '',
+            pesticide_license_number: data.pesticide_license_number || '',
+            pesticide_license_expiry: data.pesticide_license_expiry || '',
+            fertilizer_license_number: data.fertilizer_license_number || '',
+            fertilizer_license_expiry: data.fertilizer_license_expiry || '',
+          }));
+        }
+      }
+    }
+    loadExistingAccount();
+  }, [edit, member?.id, setForm]);
 
   const [documents, setDocuments] = useState<{ name: string; uri: string }[]>([]);
   const [applicantPhoto, setApplicantPhoto] = useState<{ name: string; uri: string } | null>(null);
@@ -513,8 +552,12 @@ export default function NewFirmScreen() {
     await deleteDraft();
     // Refresh member so dashboard picks up the new firm data
     await refreshMember();
-    // Navigate forward to payment instead of going back
-    router.replace('/cart');
+    // Navigate forward appropriately
+    if (edit === 'true') {
+      router.replace('/(dashboard)/firms');
+    } else {
+      router.replace('/cart');
+    }
   };
 
   const goNext = () => {

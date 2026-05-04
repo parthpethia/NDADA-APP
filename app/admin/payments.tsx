@@ -120,27 +120,44 @@ export default function AdminPaymentsScreen() {
     );
   };
 
-  const handleCashPaymentAction = async (memberId: string, action: 'approved' | 'rejected') => {
+  const handleCashPaymentAction = async (memberId: string, action: 'approved' | 'rejected' | 'pending') => {
     setVerifyingId(memberId);
     setActionError(null);
     try {
+      console.log(`Starting cash payment action: ${action} for member: ${memberId}`);
+      
       const { data, error } = await supabase.rpc('verify_cash_payment', {
         p_member_id: memberId,
         p_status: action,
-        p_notes: action === 'approved' ? 'Verified by admin' : 'Rejected by admin',
+        p_notes: action === 'approved' ? 'Verified by admin' : (action === 'rejected' ? 'Rejected by admin' : 'Undo by admin'),
       });
 
       if (error) {
         console.error('Database RPC error:', error);
         setActionError(error.message || 'Failed to update payment.');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert(`Error: ${error.message}`);
+        } else {
+          Alert.alert('Error', error.message || 'Failed to update payment.');
+        }
+        setVerifyingId(null);
         return;
       }
 
+      console.log('RPC successful. Stopping spinner and fetching updated payments...');
+      // Stop the spinner immediately so the UI feels responsive
+      setVerifyingId(null);
+      
       await fetchPayments();
+      console.log('Payments updated successfully.');
     } catch (err: any) {
       console.error('Action error:', err);
-      setActionError(err.message || 'An error occurred');
-    } finally {
+      setActionError(err.message || 'An error occurred during verification.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`Error: ${err.message}`);
+      } else {
+        Alert.alert('Error', err.message || 'An error occurred during verification.');
+      }
       setVerifyingId(null);
     }
   };
@@ -255,9 +272,33 @@ export default function AdminPaymentsScreen() {
                 </View>
 
                 {p.cash_payment_verified ? (
-                  <View className="mt-2 flex-row items-center gap-2 rounded-lg bg-green-100 p-2">
-                    <CheckCircle size={16} color="#15803d" />
-                    <Text className="text-xs font-semibold text-green-700">Verified</Text>
+                  <View className="mt-2 flex-row items-center justify-between rounded-lg bg-green-100 p-2">
+                    <View className="flex-row items-center gap-2">
+                      <CheckCircle size={16} color="#15803d" />
+                      <Text className="text-xs font-semibold text-green-700">Verified</Text>
+                    </View>
+                    <Button 
+                      title="Undo" 
+                      variant="outline" 
+                      size="sm" 
+                      onPress={() => {
+                        if (Platform.OS === 'web') {
+                          if (typeof window !== 'undefined' && window.confirm(`Undo cash payment verification for ${p.full_name}?`)) {
+                            handleCashPaymentAction(p.member_id, 'pending');
+                          }
+                          return;
+                        }
+                        Alert.alert('Undo Verification', `Undo cash payment verification for ${p.full_name}?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Undo',
+                            onPress: () => handleCashPaymentAction(p.member_id, 'pending'),
+                            style: 'destructive',
+                          },
+                        ]);
+                      }}
+                      loading={verifyingId === p.member_id}
+                    />
                   </View>
                 ) : (
                   <View className="mt-2 flex-row gap-2">

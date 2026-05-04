@@ -145,7 +145,7 @@ async function approveAccount(supabase: any, accountId: string, adminId: string)
 
   if (updated.payment_status === 'paid') {
     console.log(`Triggering certificate generation for member ${accountId}`);
-    supabase.functions.invoke('generate-certificate', {
+    await supabase.functions.invoke('generate-certificate', {
       body: { member_id: accountId }
     }).catch(err => console.error('Failed to trigger certificate generation:', err));
   }
@@ -217,7 +217,7 @@ async function setPaymentStatus(
 
   if (status === 'paid' && account.approval_status === 'approved') {
     console.log(`Triggering certificate generation for member ${accountId}`);
-    supabase.functions.invoke('generate-certificate', {
+    await supabase.functions.invoke('generate-certificate', {
       body: { member_id: accountId }
     }).catch(err => console.error('Failed to trigger certificate generation:', err));
   }
