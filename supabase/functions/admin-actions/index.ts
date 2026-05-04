@@ -55,16 +55,17 @@ serve(async (req) => {
 
     switch (action) {
       case 'approve-account':
-        result = await approveAccount(params.account_id, user.id);
+        result = await approveAccount(supabase, params.account_id, user.id);
         break;
       case 'reject-account':
-        result = await rejectAccount(params.account_id, params.reason, user.id);
+        result = await rejectAccount(supabase, params.account_id, params.reason, user.id);
         break;
       case 'set-payment-status':
-        result = await setPaymentStatus(params.account_id, params.status, user.id);
+        result = await setPaymentStatus(supabase, params.account_id, params.status, user.id);
         break;
       case 'create-member':
         result = await createMemberUser(
+          supabase,
           {
             email: params.email,
             password: params.password,
@@ -76,21 +77,19 @@ serve(async (req) => {
         );
         break;
       case 'suspend-member':
-        result = await suspendAccount(params.account_id, user.id);
+        result = await suspendAccount(supabase, params.account_id, user.id);
         break;
       case 'activate-member':
-        result = await activateAccount(params.account_id, user.id);
+        result = await activateAccount(supabase, params.account_id, user.id);
         break;
       case 'delete-member':
         if (adminUser.role !== 'super_admin') throw new Error('Super admin required');
-        result = await deleteAccount(params.account_id, user.id);
+        result = await deleteAccount(supabase, params.account_id, user.id);
         break;
       case 'revoke-certificate':
-        result = await revokeCertificate(params.account_id, user.id);
+        result = await revokeCertificate(supabase, params.account_id, user.id);
         break;
-      case 'resolve-fraud-flag':
-        result = await resolveFraudFlag(params.flag_id, user.id);
-        break;
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -99,14 +98,21 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    let status = 400;
+    if (err.message === 'Unauthorized' || err.message === 'Not an admin') {
+      status = 403;
+    } else if (err.message === 'Supabase credentials not configured') {
+      status = 500;
+    }
+    
     return new Response(JSON.stringify({ error: err.message }), {
-      status: err.message === 'Unauthorized' || err.message === 'Not an admin' ? 403 : 500,
+      status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
 
-async function logAudit(adminId: string, action: string, targetUser?: string, details?: string) {
+async function logAudit(supabase: any, adminId: string, action: string, targetUser?: string, details?: string) {
   await supabase.from('audit_logs').insert({
     admin_id: adminId,
     action,
@@ -115,7 +121,7 @@ async function logAudit(adminId: string, action: string, targetUser?: string, de
   });
 }
 
-async function approveAccount(accountId: string, adminId: string) {
+async function approveAccount(supabase: any, accountId: string, adminId: string) {
   // Check payment is marked paid
   const { data: account } = await supabase
     .from('accounts')
@@ -132,16 +138,23 @@ async function approveAccount(accountId: string, adminId: string) {
     .from('accounts')
     .update({ approval_status: 'approved', reviewed_by: adminId, reviewed_at: new Date().toISOString() })
     .eq('id', accountId)
-    .select('id, user_id')
+    .select('id, user_id, payment_status')
     .single();
 
   if (!updated) throw new Error('Account not found');
 
-  await logAudit(adminId, 'account_approved', updated.user_id, `Account ${accountId} approved`);
+  if (updated.payment_status === 'paid') {
+    console.log(`Triggering certificate generation for member ${accountId}`);
+    supabase.functions.invoke('generate-certificate', {
+      body: { member_id: accountId }
+    }).catch(err => console.error('Failed to trigger certificate generation:', err));
+  }
+
+  await logAudit(supabase, adminId, 'account_approved', updated.user_id, `Account ${accountId} approved`);
   return { message: 'Account approved' };
 }
 
-async function rejectAccount(accountId: string, reason: string, adminId: string) {
+async function rejectAccount(supabase: any, accountId: string, reason: string, adminId: string) {
   const { data: updated } = await supabase
     .from('accounts')
     .update({
@@ -155,35 +168,37 @@ async function rejectAccount(accountId: string, reason: string, adminId: string)
     .single();
 
   if (!updated) throw new Error('Account not found');
-  await logAudit(adminId, 'account_rejected', updated.user_id, `Account ${accountId} rejected: ${reason}`);
+  await logAudit(supabase, adminId, 'account_rejected', updated.user_id, `Account ${accountId} rejected: ${reason}`);
   return { message: 'Account rejected' };
 }
 
-async function suspendAccount(accountId: string, adminId: string) {
+async function suspendAccount(supabase: any, accountId: string, adminId: string) {
   await supabase.from('accounts').update({ account_status: 'suspended' }).eq('id', accountId);
-  await logAudit(adminId, 'account_suspended', accountId);
+  await logAudit(supabase, adminId, 'account_suspended', accountId);
   return { message: 'Account suspended' };
 }
 
-async function activateAccount(accountId: string, adminId: string) {
+async function activateAccount(supabase: any, accountId: string, adminId: string) {
   await supabase.from('accounts').update({ account_status: 'active' }).eq('id', accountId);
-  await logAudit(adminId, 'account_activated', accountId);
+  await logAudit(supabase, adminId, 'account_activated', accountId);
   return { message: 'Account activated' };
 }
 
-async function deleteAccount(accountId: string, adminId: string) {
+async function deleteAccount(supabase: any, accountId: string, adminId: string) {
   await supabase.from('accounts').update({ account_status: 'deleted' }).eq('id', accountId);
-  await logAudit(adminId, 'account_deleted', accountId);
+  await logAudit(supabase, adminId, 'account_deleted', accountId);
   return { message: 'Account deleted' };
 }
 
-async function revokeCertificate(accountId: string, adminId: string) {
+async function revokeCertificate(supabase: any, accountId: string, adminId: string) {
   await supabase.from('certificates').update({ status: 'revoked' }).eq('member_id', accountId);
-  await logAudit(adminId, 'certificate_revoked', accountId);
+  await logAudit(supabase, adminId, 'certificate_revoked', accountId);
   return { message: 'Certificate revoked' };
 }
 
+
 async function setPaymentStatus(
+  supabase: any,
   accountId: string,
   status: 'pending' | 'paid' | 'failed',
   adminId: string
@@ -195,15 +210,24 @@ async function setPaymentStatus(
     .from('accounts')
     .update({ payment_status: status })
     .eq('id', accountId)
-    .select('id')
+    .select('id, approval_status')
     .single();
 
   if (!account) throw new Error('Account not found');
-  await logAudit(adminId, 'payment_status_set', accountId, `Set payment_status=${status}`);
+
+  if (status === 'paid' && account.approval_status === 'approved') {
+    console.log(`Triggering certificate generation for member ${accountId}`);
+    supabase.functions.invoke('generate-certificate', {
+      body: { member_id: accountId }
+    }).catch(err => console.error('Failed to trigger certificate generation:', err));
+  }
+
+  await logAudit(supabase, adminId, 'payment_status_set', accountId, `Set payment_status=${status}`);
   return { message: 'Payment status updated' };
 }
 
 async function createMemberUser(
+  supabase: any,
   params: {
     email: string;
     password: string;
@@ -233,6 +257,6 @@ async function createMemberUser(
   if (error) throw new Error(error.message);
   if (!data?.user) throw new Error('Failed to create user');
 
-  await logAudit(adminId, 'member_created', data.user.id, `Created member user ${email}`);
+  await logAudit(supabase, adminId, 'member_created', data.user.id, `Created member user ${email}`);
   return { message: 'Member created', user_id: data.user.id };
 }

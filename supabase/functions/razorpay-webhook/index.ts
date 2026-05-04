@@ -101,11 +101,21 @@ serve(async (req) => {
 
       const memberId = (Array.isArray(paymentRows) ? paymentRows?.[0]?.member_id : (paymentRows as any)?.member_id) || memberIdFromNotes;
       if (memberId) {
-        const { error: accountErr } = await supabase
+        const { data: account, error: accountErr } = await supabase
           .from('accounts')
           .update({ payment_status: 'paid' })
-          .eq('id', memberId);
+          .eq('id', memberId)
+          .select('approval_status')
+          .single();
+          
         if (accountErr) throw new Error(accountErr.message);
+
+        if (account?.approval_status === 'approved') {
+          console.log(`Triggering certificate generation for member ${memberId}`);
+          supabase.functions.invoke('generate-certificate', {
+            body: { member_id: memberId }
+          }).catch(err => console.error('Failed to trigger certificate generation:', err));
+        }
       }
 
       return new Response(JSON.stringify({ ok: true }), {

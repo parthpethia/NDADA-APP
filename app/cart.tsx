@@ -10,7 +10,6 @@ import {
   APP_NAME,
   MEMBERSHIP_BENEFITS,
   MEMBERSHIP_PLAN_NAME,
-  MEMBERSHIP_VALIDITY_LABEL,
 } from '@/constants';
 import {
   ShoppingCart,
@@ -93,15 +92,12 @@ export default function CartScreen() {
       });
       if (error) throw new Error(error.message);
 
-      const url = String((data as any)?.payment_link_url || '');
+      const url = String((data as { payment_link_url?: string })?.payment_link_url || '');
       if (!url) throw new Error('Could not create payment link');
 
       if (Platform.OS === 'web') {
-        const location = (globalThis as any)?.location as { assign?: (u: string) => void; href?: string } | undefined;
-        if (typeof location?.assign === 'function') {
-          location.assign(url);
-        } else if (location && typeof location.href === 'string') {
-          location.href = url;
+        if (typeof window !== 'undefined' && window.location) {
+          window.location.href = url;
         }
       } else {
         try {
@@ -110,8 +106,9 @@ export default function CartScreen() {
           await Linking.openURL(url);
         }
       }
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to start payment');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to start payment';
+      Alert.alert('Error', message);
     } finally {
       setPaymentLoading(false);
     }
@@ -140,10 +137,11 @@ export default function CartScreen() {
       }
 
       setShowCashConfirm(false);
-      router.push('/(dashboard)/cash-payment-review');
-    } catch (err: any) {
+      router.replace('/(dashboard)/cash-payment-review');
+    } catch (err: unknown) {
       console.error('Cash payment error:', err);
-      setCashError(err?.message || 'Failed to process request');
+      const message = err instanceof Error ? err.message : 'Failed to process request';
+      setCashError(message);
     } finally {
       setCashSubmitting(false);
     }

@@ -86,14 +86,7 @@ export default function AdminLayout() {
           href: isReviewer ? null : undefined,
         }}
       />
-      <Tabs.Screen
-        name="fraud"
-        options={{
-          title: 'Fraud',
-          tabBarIcon: ({ color, size }) => <AlertTriangle size={size} color={color} />,
-          href: isReviewer ? null : undefined,
-        }}
-      />
+
       <Tabs.Screen
         name="audit"
         options={{

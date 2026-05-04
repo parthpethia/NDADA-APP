@@ -57,13 +57,13 @@ export default function CertificateScreen() {
       } else {
         const outputFile = new FileSystem.File(
           FileSystem.Paths.document,
-          `${certificate.certificate_id}.jpg`
+          `${certificate.certificate_id}.pdf`
         );
         const downloadedFile = await FileSystem.File.downloadFileAsync(
           urlData.signedUrl,
           outputFile
         );
-        await Sharing.shareAsync(downloadedFile.uri, { mimeType: 'image/jpeg' });
+        await Sharing.shareAsync(downloadedFile.uri, { mimeType: 'application/pdf' });
       }
     } catch (err) {
       console.error('Download error:', err);

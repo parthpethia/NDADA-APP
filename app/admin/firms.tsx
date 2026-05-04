@@ -30,7 +30,7 @@ export default function AdminFirmsScreen() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   // Filter states
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending_payment' | 'pending_review' | 'approved' | 'rejected'>('pending_review');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('pending_review');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'created_at' | 'updated_at'>('created_at');
 
@@ -43,9 +43,8 @@ export default function AdminFirmsScreen() {
   // Fetch dashboard stats
   const fetchStats = useCallback(async () => {
     try {
-      const [pendingPayment, pendingReview, approved, rejected, total] = await Promise.all([
-        supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('payment_status', 'pending'),
-        supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending').eq('payment_status', 'paid'),
+      const [pendingReview, approved, rejected, total] = await Promise.all([
+        supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending'),
         supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'approved'),
         supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'rejected'),
         supabase.from('accounts').select('id', { count: 'exact', head: true }),
@@ -53,7 +52,7 @@ export default function AdminFirmsScreen() {
 
       setStats({
         pending_reviews: pendingReview.count || 0,
-        pending_payments: pendingPayment.count || 0,
+        pending_payments: 0,
         approved_count: approved.count || 0,
         rejected_count: rejected.count || 0,
         total_members: total.count || 0,
@@ -75,10 +74,8 @@ export default function AdminFirmsScreen() {
       .order(sortBy, { ascending: false });
 
     // Apply status filter
-    if (filterStatus === 'pending_payment') {
-      query = query.eq('payment_status', 'pending');
-    } else if (filterStatus === 'pending_review') {
-      query = query.eq('approval_status', 'pending').eq('payment_status', 'paid');
+    if (filterStatus === 'pending_review') {
+      query = query.eq('approval_status', 'pending');
     } else if (filterStatus === 'approved') {
       query = query.eq('approval_status', 'approved');
     } else if (filterStatus === 'rejected') {
@@ -158,23 +155,8 @@ export default function AdminFirmsScreen() {
 
   const handleApprove = async (accountId: string) => {
     try {
-      // Always re-check payment status at click-time to avoid stale UI state.
-      const { data: latest, error: latestError } = await supabase
-        .from('accounts')
-        .select('id, payment_status')
-        .eq('id', accountId)
-        .single();
-
-      if (latestError) throw new Error(latestError.message);
-
-      const latestPaymentStatus = (latest as any)?.payment_status;
-      if (latestPaymentStatus !== 'paid') {
-        showAlert('Cannot approve', 'Payment must be verified as paid before approving the application.');
-        return;
-      }
-
       setActionLoading(accountId);
-      await callAdminAction('approve-firm', { firm_id: accountId });
+      await callAdminAction('approve-account', { account_id: accountId });
       await fetchAccounts();
       showAlert('Success', "Application approved. Switch to 'All Applications' to upload the certificate.");
     } catch (err: any) {
@@ -191,7 +173,7 @@ export default function AdminFirmsScreen() {
     }
     try {
       setActionLoading(accountId);
-      await callAdminAction('reject-firm', { firm_id: accountId, reason: rejectReason });
+      await callAdminAction('reject-account', { account_id: accountId, reason: rejectReason });
       setRejectingId(null);
       setRejectReason('');
       await fetchAccounts();
@@ -259,10 +241,6 @@ export default function AdminFirmsScreen() {
           contentContainerClassName="gap-3 px-4 py-3"
           showsHorizontalScrollIndicator={false}
         >
-          <Card className="min-w-[140px]">
-            <Text className="text-xs text-gray-500">Pending Payment</Text>
-            <Text className="mt-1 text-2xl font-bold text-orange-600">{stats.pending_payments}</Text>
-          </Card>
           <Card className="min-w-[140px] border-red-200 bg-red-50">
             <Text className="text-xs text-red-600">Pending Review</Text>
             <Text className="mt-1 text-2xl font-bold text-red-700">{stats.pending_reviews}</Text>
@@ -294,7 +272,6 @@ export default function AdminFirmsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
           {[
             { key: 'pending_review' as const, label: `Pending Review (${stats?.pending_reviews || 0})` },
-            { key: 'pending_payment' as const, label: `Pending Payment (${stats?.pending_payments || 0})` },
             { key: 'approved' as const, label: `Approved (${stats?.approved_count || 0})` },
             { key: 'rejected' as const, label: `Rejected (${stats?.rejected_count || 0})` },
             { key: 'all' as const, label: `All (${stats?.total_members || 0})` },

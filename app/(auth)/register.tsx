@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { Button, Input } from '@/components/ui';
@@ -13,6 +13,23 @@ import {
 } from '@/constants';
 import { formatCurrency } from '@/lib/utils';
 
+const DISTRICTS = [
+  'Nagpur',
+  'Nagpur Gramin',
+  'Hingna',
+  'Kuhi',
+  'Kalmeshwar',
+  'Katol',
+  'Narkhed',
+  'Saoner',
+  'Parshivani',
+  'Kamthi',
+  'Ramtek',
+  'Mouda',
+  'Umred',
+  'Bhiwapur',
+];
+
 export default function RegisterScreen() {
   const { signUp } = useAuth();
   const [form, setForm] = useState({
@@ -20,6 +37,7 @@ export default function RegisterScreen() {
     email: '',
     phone: '',
     address: '',
+    district: '',
     password: '',
     confirmPassword: '',
   });
@@ -49,6 +67,7 @@ export default function RegisterScreen() {
       full_name: form.full_name,
       phone: form.phone,
       address: form.address,
+      district: form.district,
     });
     if (err) {
       setError(err);
@@ -132,6 +151,32 @@ export default function RegisterScreen() {
               multiline
               numberOfLines={3}
             />
+
+            <View className="mb-4">
+              <Text className="mb-2 text-sm font-medium text-gray-700">District (Optional)</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {DISTRICTS.map((district) => (
+                  <TouchableOpacity
+                    key={district}
+                    onPress={() => update('district', form.district === district ? '' : district)}
+                    className={`rounded-full border px-4 py-2 ${
+                      form.district === district
+                        ? 'border-primary-600 bg-primary-50'
+                        : 'border-gray-200 bg-white'
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm ${
+                        form.district === district ? 'font-medium text-primary-700' : 'text-gray-600'
+                      }`}
+                    >
+                      {district}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <Input
               label="Password *"
               placeholder="Min 6 characters"

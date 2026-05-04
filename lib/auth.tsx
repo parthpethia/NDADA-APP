@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { Account, AdminUser } from '@/types';
@@ -14,6 +14,7 @@ interface AuthContextType {
     full_name: string;
     phone: string;
     address: string;
+    district: string;
   }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshMember: () => Promise<void>;
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  const fetchMember = async (userId: string, currentUser?: User | null) => {
+  const fetchMember = useCallback(async (userId: string, currentUser?: User | null) => {
     const { data, error } = await supabase
       .from('accounts')
       .select('*')
@@ -96,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: String(currentUser.email || '').trim() || 'unknown@example.com',
         phone: String(currentUser.user_metadata?.phone || '').trim() || '',
         address: String(currentUser.user_metadata?.address || '').trim(),
+        district: String(currentUser.user_metadata?.district || '').trim(),
         firm_name: '',
         license_number: '',
         registration_number: '',
@@ -113,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setMember(createdAccount);
-  };
+  }, []);
 
   const fetchAdminUser = async (userId: string) => {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -148,9 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminUser(data ?? null);
   };
 
-  const refreshMember = async () => {
+  const refreshMember = useCallback(async () => {
     if (user) await fetchMember(user.id);
-  };
+  }, [user, fetchMember]);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -224,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    profile: { full_name: string; phone: string; address: string }
+    profile: { full_name: string; phone: string; address: string; district: string }
   ) => {
     // Pass profile data as user metadata — the database trigger
     // handle_new_user() reads this and creates the member row automatically
@@ -236,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: profile.full_name,
           phone: profile.phone,
           address: profile.address,
+          district: profile.district,
         },
       },
     });

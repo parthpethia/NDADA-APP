@@ -19,7 +19,6 @@ const actionLabels: Record<string, { label: string; color: string }> = {
   certificate_revoked: { label: 'Certificate Revoked', color: 'text-red-700' },
   certificate_regenerated: { label: 'Certificate Regenerated', color: 'text-blue-700' },
   payment_verified: { label: 'Payment Verified', color: 'text-green-700' },
-  fraud_flag_resolved: { label: 'Fraud Flag Resolved', color: 'text-gray-700' },
 };
 
 export default function AdminAuditScreen() {

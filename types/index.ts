@@ -48,6 +48,7 @@ export interface Account {
   email: string;
   phone: string;
   address: string;
+  district: string | null;
   id_proof_url: string | null;
 
   // Firm Info
@@ -140,14 +141,7 @@ export interface AdminUser {
   created_at: string;
 }
 
-export interface FraudFlag {
-  id: string;
-  member_id: string;
-  reason: string;
-  details: string | null;
-  resolved: boolean;
-  created_at: string;
-}
+
 
 export interface AuditLog {
   id: string;
@@ -184,7 +178,6 @@ export interface CertificateQueueJob {
 export interface AccountWithDetails extends Account {
   payments: Payment[];
   certificates: Certificate[];
-  fraud_flags: FraudFlag[];
 }
 
 
@@ -205,5 +198,4 @@ export interface DashboardStats {
   pending_payments?: number;
   approved_count?: number;
   rejected_count?: number;
-  suspicious_accounts: number;
 }

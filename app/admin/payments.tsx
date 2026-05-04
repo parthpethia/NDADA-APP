@@ -91,6 +91,13 @@ export default function AdminPaymentsScreen() {
   };
 
   const handleVerifyCashPayment = (memberId: string, memberName: string) => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Approve cash payment for ${memberName}?`)) {
+        handleCashPaymentAction(memberId, 'approved');
+      }
+      return;
+    }
+
     Alert.alert(
       'Verify Cash Payment',
       `Approve cash payment for ${memberName}?`,
@@ -115,32 +122,24 @@ export default function AdminPaymentsScreen() {
 
   const handleCashPaymentAction = async (memberId: string, action: 'approved' | 'rejected') => {
     setVerifyingId(memberId);
+    setActionError(null);
     try {
-      const { data, error } = await supabase.functions.invoke('verify-cash-payment', {
-        body: {
-          member_id: memberId,
-          status: action,
-          notes: action === 'approved' ? 'Verified by admin' : 'Rejected by admin',
-        },
+      const { data, error } = await supabase.rpc('verify_cash_payment', {
+        p_member_id: memberId,
+        p_status: action,
+        p_notes: action === 'approved' ? 'Verified by admin' : 'Rejected by admin',
       });
 
       if (error) {
-        setActionError(error.message || 'Failed to update payment');
-        showMessage('Error', error.message || 'Failed to update payment');
+        console.error('Database RPC error:', error);
+        setActionError(error.message || 'Failed to update payment.');
         return;
       }
 
-      showMessage(
-        'Success',
-        action === 'approved'
-          ? 'Cash payment verified and approved'
-          : 'Cash payment request rejected'
-      );
       await fetchPayments();
-      setActionError(null);
     } catch (err: any) {
+      console.error('Action error:', err);
       setActionError(err.message || 'An error occurred');
-      showMessage('Error', err.message || 'An error occurred');
     } finally {
       setVerifyingId(null);
     }
@@ -273,6 +272,12 @@ export default function AdminPaymentsScreen() {
                       title="Reject"
                       variant="outline"
                       onPress={() => {
+                        if (Platform.OS === 'web') {
+                          if (typeof window !== 'undefined' && window.confirm(`Reject cash payment for ${p.full_name}?`)) {
+                            handleCashPaymentAction(p.member_id, 'rejected');
+                          }
+                          return;
+                        }
                         Alert.alert('Reject Payment', `Reject cash payment for ${p.full_name}?`, [
                           { text: 'Cancel', style: 'cancel' },
                           {

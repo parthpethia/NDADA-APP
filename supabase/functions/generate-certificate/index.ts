@@ -125,170 +125,95 @@ serve(async (req) => {
     const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 150, margin: 1 });
     const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), (c) => c.charCodeAt(0));
 
+    // --- TEMPLATE CONFIGURATION ---
+    // Replace these coordinates with the ones you found using the tool.
+    // Remember: (0,0) is the Bottom-Left corner in pdf-lib!
+    const COORDS = {
+      name: { x: 421, y: 380, size: 28, color: rgb(0, 0, 0) }, // Default center of A4
+      date: { x: 1237, y: 352, size: 12, color: rgb(0, 0, 0) },
+      certId: { x: 421, y: 285, size: 11, color: rgb(0, 0, 0) },
+      memId: { x: 430, y: 371, size: 11, color: rgb(0, 0, 0) },
+      qr: { x: 700, y: 50, size: 100 }
+    };
+    // ------------------------------
+
+    // Load Template JPG
+    let templateBytes;
+    try {
+      const templateUrl = new URL('./template.jpeg', import.meta.url);
+      templateBytes = await Deno.readFile(templateUrl);
+    } catch (e) {
+      console.error('Error loading template.jpeg. Please ensure it is placed in the generate-certificate folder.', e);
+      throw new Error('Certificate template not found.');
+    }
+
     // Generate PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([842, 595]); // A4 landscape
-    const { width, height } = page.getSize();
+    const templateImage = await pdfDoc.embedJpg(templateBytes);
+    const { width, height } = templateImage.scale(1); // Use original image dimensions
+    
+    const page = pdfDoc.addPage([width, height]);
+    
+    // Draw the background template
+    page.drawImage(templateImage, {
+      x: 0,
+      y: 0,
+      width,
+      height,
+    });
 
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const timesItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-
-    // Background
-    page.drawRectangle({
-      x: 0, y: 0, width, height,
-      color: rgb(0.98, 0.98, 1),
-    });
-
-    // Border
-    const borderMargin = 20;
-    page.drawRectangle({
-      x: borderMargin, y: borderMargin,
-      width: width - borderMargin * 2,
-      height: height - borderMargin * 2,
-      borderColor: rgb(0.11, 0.31, 0.68),
-      borderWidth: 3,
-    });
-
-    // Inner border
-    page.drawRectangle({
-      x: borderMargin + 8, y: borderMargin + 8,
-      width: width - (borderMargin + 8) * 2,
-      height: height - (borderMargin + 8) * 2,
-      borderColor: rgb(0.11, 0.31, 0.68),
-      borderWidth: 1,
-    });
-
-    // Header
-    const titleText = 'NDADA';
-    page.drawText(titleText, {
-      x: width / 2 - helveticaBold.widthOfTextAtSize(titleText, 36) / 2,
-      y: height - 80,
-      size: 36,
-      font: helveticaBold,
-      color: rgb(0.11, 0.31, 0.68),
-    });
-
-    // Subtitle
-    const subtitleText = 'Certificate of Membership';
-    page.drawText(subtitleText, {
-      x: width / 2 - helveticaBold.widthOfTextAtSize(subtitleText, 24) / 2,
-      y: height - 120,
-      size: 24,
-      font: helveticaBold,
-      color: rgb(0.2, 0.2, 0.2),
-    });
-
-    // Decorative line
-    page.drawLine({
-      start: { x: width / 2 - 150, y: height - 135 },
-      end: { x: width / 2 + 150, y: height - 135 },
-      thickness: 2,
-      color: rgb(0.11, 0.31, 0.68),
-    });
-
-    // "This is to certify that"
-    const certifyText = 'This is to certify that';
-    page.drawText(certifyText, {
-      x: width / 2 - timesItalic.widthOfTextAtSize(certifyText, 16) / 2,
-      y: height - 175,
-      size: 16,
-      font: timesItalic,
-      color: rgb(0.3, 0.3, 0.3),
-    });
 
     // Member name
     const nameText = member.full_name;
+    const nameWidth = helveticaBold.widthOfTextAtSize(nameText, COORDS.name.size);
     page.drawText(nameText, {
-      x: width / 2 - helveticaBold.widthOfTextAtSize(nameText, 28) / 2,
-      y: height - 215,
-      size: 28,
+      x: width / 2 - nameWidth / 2, // Automatically centered horizontally on the page
+      y: COORDS.name.y,
+      size: COORDS.name.size,
       font: helveticaBold,
-      color: rgb(0.11, 0.31, 0.68),
-    });
-
-    // Name underline
-    const nameWidth = helveticaBold.widthOfTextAtSize(nameText, 28);
-    page.drawLine({
-      start: { x: width / 2 - nameWidth / 2 - 10, y: height - 220 },
-      end: { x: width / 2 + nameWidth / 2 + 10, y: height - 220 },
-      thickness: 1,
-      color: rgb(0.11, 0.31, 0.68),
-    });
-
-    // Award text
-    const awardText = 'has been awarded membership of NDADA';
-    page.drawText(awardText, {
-      x: width / 2 - helvetica.widthOfTextAtSize(awardText, 14) / 2,
-      y: height - 255,
-      size: 14,
-      font: helvetica,
-      color: rgb(0.3, 0.3, 0.3),
+      color: COORDS.name.color,
     });
 
     // Date and time
     const dateText = `Issued on ${issueDateStr} at ${issueTimeStr}`;
     page.drawText(dateText, {
-      x: width / 2 - helvetica.widthOfTextAtSize(dateText, 12) / 2,
-      y: height - 285,
-      size: 12,
+      x: COORDS.date.x, // Start exactly at the given X coordinate (left-aligned)
+      y: COORDS.date.y,
+      size: COORDS.date.size,
       font: helvetica,
-      color: rgb(0.4, 0.4, 0.4),
+      color: COORDS.date.color,
     });
 
-    // Certificate ID and Membership ID
+    // Certificate ID
     const certIdText = `Certificate ID: ${certRecord.certificate_id}`;
+    const certIdWidth = helvetica.widthOfTextAtSize(certIdText, COORDS.certId.size);
     page.drawText(certIdText, {
-      x: width / 2 - helvetica.widthOfTextAtSize(certIdText, 11) / 2,
-      y: height - 310,
-      size: 11,
+      x: COORDS.certId.x - certIdWidth / 2,
+      y: COORDS.certId.y,
+      size: COORDS.certId.size,
       font: helvetica,
-      color: rgb(0.4, 0.4, 0.4),
+      color: COORDS.certId.color,
     });
 
+    // Membership ID
     const memIdText = `Membership ID: ${member.membership_id}`;
     page.drawText(memIdText, {
-      x: width / 2 - helvetica.widthOfTextAtSize(memIdText, 11) / 2,
-      y: height - 328,
-      size: 11,
+      x: COORDS.memId.x, // Start exactly at the given X coordinate (left-aligned)
+      y: COORDS.memId.y,
+      size: COORDS.memId.size,
       font: helvetica,
-      color: rgb(0.4, 0.4, 0.4),
+      color: COORDS.memId.color,
     });
 
     // Embed QR code
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
-    const qrSize = 100;
     page.drawImage(qrImage, {
-      x: width - borderMargin - qrSize - 30,
-      y: borderMargin + 30,
-      width: qrSize,
-      height: qrSize,
-    });
-
-    // QR label
-    const qrLabel = 'Scan to Verify';
-    page.drawText(qrLabel, {
-      x: width - borderMargin - qrSize - 30 + (qrSize - helvetica.widthOfTextAtSize(qrLabel, 8)) / 2,
-      y: borderMargin + 20,
-      size: 8,
-      font: helvetica,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-
-    // Footer - authority
-    const footerText = 'Authorized Signatory';
-    page.drawLine({
-      start: { x: 80, y: borderMargin + 60 },
-      end: { x: 250, y: borderMargin + 60 },
-      thickness: 1,
-      color: rgb(0.3, 0.3, 0.3),
-    });
-    page.drawText(footerText, {
-      x: 80 + (170 - helvetica.widthOfTextAtSize(footerText, 10)) / 2,
-      y: borderMargin + 45,
-      size: 10,
-      font: helvetica,
-      color: rgb(0.4, 0.4, 0.4),
+      x: COORDS.qr.x,
+      y: COORDS.qr.y,
+      width: COORDS.qr.size,
+      height: COORDS.qr.size,
     });
 
     // Generate PDF bytes
