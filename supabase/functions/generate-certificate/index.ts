@@ -44,17 +44,25 @@ serve(async (req) => {
       });
     }
 
-    // Idempotency check
+    // Idempotency check — only return existing cert if it's FULLY GENERATED
+    // (has a non-empty certificate_url and certificate_id, and is not revoked)
     const { data: existingCert } = await supabase
       .from('certificates')
       .select('*')
       .eq('member_id', member_id)
-      .single();
+      .maybeSingle();
 
     if (existingCert) {
-      return new Response(JSON.stringify({ certificate: existingCert }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // If the existing cert is fully valid with a real URL, return it
+      if (existingCert.certificate_url && existingCert.certificate_id && existingCert.status === 'valid') {
+        return new Response(JSON.stringify({ certificate: existingCert }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      // Otherwise, delete the broken/revoked record so we can regenerate
+      console.log(`Deleting broken/incomplete certificate record ${existingCert.id} for member ${member_id}`);
+      await supabase.from('certificate_downloads').delete().eq('certificate_id', existingCert.id);
+      await supabase.from('certificates').delete().eq('id', existingCert.id);
     }
 
     // Fetch account details
@@ -86,13 +94,34 @@ serve(async (req) => {
       });
     }
 
-    // Create certificate record first to get the auto-generated certificate_id
+    // --- LOAD TEMPLATE FROM SUPABASE STORAGE (before inserting record) ---
+    // Template is stored in the 'templates' bucket as 'certificate-template.jpeg'
+    // This ensures we don't create a broken DB record if the template is missing
+    let templateBytes: Uint8Array;
+    try {
+      const { data: templateData, error: templateErr } = await supabase.storage
+        .from('templates')
+        .download('certificate-template.jpeg');
+
+      if (templateErr || !templateData) {
+        console.error('Template download error:', templateErr);
+        throw new Error('Certificate template not found in storage.');
+      }
+
+      templateBytes = new Uint8Array(await templateData.arrayBuffer());
+      console.log(`Template loaded from storage: ${templateBytes.length} bytes`);
+    } catch (e) {
+      console.error('Error loading certificate template:', e);
+      throw new Error('Certificate template not found. Contact admin to upload template.');
+    }
+
+    // Create certificate record — the DB trigger auto-generates certificate_id
     const { data: certRecord, error: certInsertErr } = await supabase
       .from('certificates')
       .insert({
-        certificate_id: '', // trigger will generate
         member_id: member.id,
         certificate_url: '', // will update after upload
+        status: 'valid',
       })
       .select()
       .single();
@@ -105,12 +134,16 @@ serve(async (req) => {
           .select('*')
           .eq('member_id', member_id)
           .single();
-        return new Response(JSON.stringify({ certificate: existing }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        if (existing?.certificate_url && existing?.certificate_id) {
+          return new Response(JSON.stringify({ certificate: existing }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
       throw certInsertErr;
     }
+
+    console.log(`Certificate record created: id=${certRecord.id}, certificate_id=${certRecord.certificate_id}`);
 
     const now = new Date();
     const issueDateStr = now.toLocaleDateString('en-IN', {
@@ -126,26 +159,15 @@ serve(async (req) => {
     const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), (c) => c.charCodeAt(0));
 
     // --- TEMPLATE CONFIGURATION ---
-    // Replace these coordinates with the ones you found using the tool.
-    // Remember: (0,0) is the Bottom-Left corner in pdf-lib!
+    // Coordinates for text placement on the certificate template
+    // (0,0) is the Bottom-Left corner in pdf-lib
     const COORDS = {
-      name: { x: 421, y: 380, size: 28, color: rgb(0, 0, 0) }, // Default center of A4
+      name: { x: 421, y: 380, size: 28, color: rgb(0, 0, 0) },
       date: { x: 1237, y: 352, size: 12, color: rgb(0, 0, 0) },
       certId: { x: 421, y: 285, size: 11, color: rgb(0, 0, 0) },
       memId: { x: 430, y: 371, size: 11, color: rgb(0, 0, 0) },
       qr: { x: 700, y: 50, size: 100 }
     };
-    // ------------------------------
-
-    // Load Template JPG
-    let templateBytes;
-    try {
-      const templateUrl = new URL('./template.jpeg', import.meta.url);
-      templateBytes = await Deno.readFile(templateUrl);
-    } catch (e) {
-      console.error('Error loading template.jpeg. Please ensure it is placed in the generate-certificate folder.', e);
-      throw new Error('Certificate template not found.');
-    }
 
     // Generate PDF
     const pdfDoc = await PDFDocument.create();
@@ -165,11 +187,11 @@ serve(async (req) => {
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Member name
+    // Member name (centered horizontally)
     const nameText = member.full_name;
     const nameWidth = helveticaBold.widthOfTextAtSize(nameText, COORDS.name.size);
     page.drawText(nameText, {
-      x: width / 2 - nameWidth / 2, // Automatically centered horizontally on the page
+      x: width / 2 - nameWidth / 2,
       y: COORDS.name.y,
       size: COORDS.name.size,
       font: helveticaBold,
@@ -179,7 +201,7 @@ serve(async (req) => {
     // Date and time
     const dateText = `Issued on ${issueDateStr} at ${issueTimeStr}`;
     page.drawText(dateText, {
-      x: COORDS.date.x, // Start exactly at the given X coordinate (left-aligned)
+      x: COORDS.date.x,
       y: COORDS.date.y,
       size: COORDS.date.size,
       font: helvetica,
@@ -200,7 +222,7 @@ serve(async (req) => {
     // Membership ID
     const memIdText = `Membership ID: ${member.membership_id}`;
     page.drawText(memIdText, {
-      x: COORDS.memId.x, // Start exactly at the given X coordinate (left-aligned)
+      x: COORDS.memId.x,
       y: COORDS.memId.y,
       size: COORDS.memId.size,
       font: helvetica,
@@ -218,6 +240,7 @@ serve(async (req) => {
 
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
+    console.log(`PDF generated: ${pdfBytes.length} bytes`);
 
     // Upload to Supabase Storage
     const storagePath = `${member.id}.pdf`;
@@ -228,16 +251,34 @@ serve(async (req) => {
         upsert: true,
       });
 
-    if (uploadErr) throw uploadErr;
+    if (uploadErr) {
+      console.error('Storage upload error:', uploadErr);
+      // Clean up the certificate record since upload failed
+      await supabase.from('certificates').delete().eq('id', certRecord.id);
+      throw uploadErr;
+    }
 
-    // Update certificate record with storage path (bucket is private, so store path for signed URL generation)
-    await supabase
+    console.log(`PDF uploaded to storage: ${storagePath}`);
+
+    // Update certificate record with storage path
+    const { data: finalCert } = await supabase
       .from('certificates')
       .update({ certificate_url: storagePath })
-      .eq('id', certRecord.id);
+      .eq('id', certRecord.id)
+      .select()
+      .single();
+
+    // Also mark queue job as completed if one exists
+    await supabase
+      .from('certificate_generation_queue')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('account_id', member.id)
+      .eq('status', 'pending');
+
+    console.log(`Certificate generation complete for ${member.full_name} (${certRecord.certificate_id})`);
 
     return new Response(
-      JSON.stringify({ certificate: { ...certRecord, certificate_url: storagePath } }),
+      JSON.stringify({ certificate: finalCert || { ...certRecord, certificate_url: storagePath } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {

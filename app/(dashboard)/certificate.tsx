@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Platform } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, Text, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge, LoadingScreen, EmptyState } from '@/components/ui';
@@ -15,21 +15,75 @@ export default function CertificateScreen() {
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchCertificate();
-  }, [member]);
-
-  const fetchCertificate = async () => {
+  const fetchCertificate = useCallback(async () => {
     if (!member) return;
     const { data } = await supabase
       .from('certificates')
       .select('*')
       .eq('member_id', member.id)
       .maybeSingle();
-    setCertificate(data ?? null);
+
+    // Only treat it as a valid certificate if it has a URL and ID
+    if (data && data.certificate_url && data.certificate_id) {
+      setCertificate(data);
+    } else {
+      setCertificate(null);
+    }
     setLoading(false);
-  };
+  }, [member]);
+
+  const triggerGeneration = useCallback(async () => {
+    if (!member) return;
+    setGenerating(true);
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('You must be logged in.');
+        setGenerating(false);
+        return;
+      }
+
+      const { data, error: fnError } = await supabase.functions.invoke('generate-certificate', {
+        body: { member_id: member.id },
+      });
+
+      if (fnError) {
+        console.error('Certificate generation error:', fnError);
+        setError(fnError.message || 'Failed to generate certificate. Please try again.');
+      } else if (data?.error) {
+        setError(data.error);
+      } else if (data?.certificate) {
+        setCertificate(data.certificate);
+      }
+    } catch (err: any) {
+      console.error('Certificate generation error:', err);
+      setError(err.message || 'An unexpected error occurred.');
+    }
+
+    setGenerating(false);
+  }, [member]);
+
+  useEffect(() => {
+    fetchCertificate();
+  }, [fetchCertificate]);
+
+  // Auto-trigger generation if eligible and no certificate exists
+  useEffect(() => {
+    if (
+      !loading &&
+      !certificate &&
+      !generating &&
+      member?.payment_status === 'paid' &&
+      member?.approval_status === 'approved'
+    ) {
+      triggerGeneration();
+    }
+  }, [loading, certificate, member, generating, triggerGeneration]);
 
   const handleDownload = async () => {
     if (!certificate || !member) return;
@@ -74,18 +128,46 @@ export default function CertificateScreen() {
 
   if (loading) return <LoadingScreen />;
 
+  // Generating state
+  if (generating) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-50 p-8">
+        <ActivityIndicator size="large" color="#1d4ed8" />
+        <Text className="mt-4 text-lg font-semibold text-gray-900">
+          Generating Your Certificate...
+        </Text>
+        <Text className="mt-2 text-center text-sm text-gray-500">
+          This usually takes a few seconds. Please wait.
+        </Text>
+      </View>
+    );
+  }
+
   if (!certificate) {
+    const isEligible =
+      member?.payment_status === 'paid' && member?.approval_status === 'approved';
+
     return (
       <EmptyState
-        title="No Certificate Yet"
+        title={error ? 'Certificate Generation Failed' : 'No Certificate Yet'}
         message={
-          member?.payment_status !== 'paid' && !member?.cash_payment_verified
+          error
+            ? error
+            : member?.payment_status !== 'paid' && !member?.cash_payment_verified
             ? 'Complete your registration fee payment first.'
             : member?.approval_status === 'approved'
-            ? 'Your certificate is being generated. Please check back in a few minutes.'
+            ? 'Your certificate is being prepared. Tap below to generate it now.'
             : 'Your firm must be approved before a certificate is issued.'
         }
-      />
+      >
+        {isEligible && (
+          <Button
+            title="Generate Certificate Now"
+            onPress={triggerGeneration}
+            size="lg"
+          />
+        )}
+      </EmptyState>
     );
   }
 

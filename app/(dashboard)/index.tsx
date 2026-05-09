@@ -32,7 +32,8 @@ export default function DashboardHome() {
   const fetchData = async () => {
     if (!member) return;
     const { data: cert } = await fetchAccountCertificate(member.id);
-    setCertificate(cert);
+    // Only treat as valid if it has actual URL and certificate_id
+    setCertificate(cert?.certificate_url && cert?.certificate_id ? cert : null);
   };
 
   // Refresh member data on mount to pick up changes from form submission
