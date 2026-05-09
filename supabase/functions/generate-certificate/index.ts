@@ -161,18 +161,15 @@ serve(async (req) => {
     // --- TEMPLATE CONFIGURATION ---
     // Coordinates for text placement on the certificate template
     // (0,0) is the Bottom-Left corner in pdf-lib
-    const COORDS = {
-      name: { x: 421, y: 380, size: 28, color: rgb(0, 0, 0) },
-      date: { x: 1237, y: 352, size: 12, color: rgb(0, 0, 0) },
-      certId: { x: 421, y: 285, size: 11, color: rgb(0, 0, 0) },
-      memId: { x: 430, y: 371, size: 11, color: rgb(0, 0, 0) },
-      qr: { x: 700, y: 50, size: 100 }
-    };
+    // Template is landscape ~1500x1060 (actual dimensions come from the image)
+    // All positions are calibrated to the uploaded certificate-template.jpeg
 
     // Generate PDF
     const pdfDoc = await PDFDocument.create();
     const templateImage = await pdfDoc.embedJpg(templateBytes);
     const { width, height } = templateImage.scale(1); // Use original image dimensions
+    
+    console.log(`Template dimensions: ${width}x${height}`);
     
     const page = pdfDoc.addPage([width, height]);
     
@@ -187,55 +184,75 @@ serve(async (req) => {
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Member name (centered horizontally)
+    // --- Calculate proportional coordinates based on actual template size ---
+    // All percentages derived from analyzing the certificate template image
+
+    // 1. MEMBER NAME — centered horizontally, in the middle area below "This Certificate is issued to"
+    //    Vertically at ~42% from bottom of the template
+    const nameSize = Math.round(width * 0.019); // ~28px on a 1500px wide template
     const nameText = member.full_name;
-    const nameWidth = helveticaBold.widthOfTextAtSize(nameText, COORDS.name.size);
+    const nameWidth = helveticaBold.widthOfTextAtSize(nameText, nameSize);
+    const nameY = height * 0.42;
     page.drawText(nameText, {
       x: width / 2 - nameWidth / 2,
-      y: COORDS.name.y,
-      size: COORDS.name.size,
+      y: nameY,
+      size: nameSize,
       font: helveticaBold,
-      color: COORDS.name.color,
+      color: rgb(0, 0, 0),
     });
 
-    // Date and time
-    const dateText = `Issued on ${issueDateStr} at ${issueTimeStr}`;
-    page.drawText(dateText, {
-      x: COORDS.date.x,
-      y: COORDS.date.y,
-      size: COORDS.date.size,
-      font: helvetica,
-      color: COORDS.date.color,
-    });
-
-    // Certificate ID
-    const certIdText = `Certificate ID: ${certRecord.certificate_id}`;
-    const certIdWidth = helvetica.widthOfTextAtSize(certIdText, COORDS.certId.size);
-    page.drawText(certIdText, {
-      x: COORDS.certId.x - certIdWidth / 2,
-      y: COORDS.certId.y,
-      size: COORDS.certId.size,
-      font: helvetica,
-      color: COORDS.certId.color,
-    });
-
-    // Membership ID
+    // 2. MEMBERSHIP ID — small text positioned above the name, slightly left-of-center
+    //    On the template it appears as "Membership ID: NDADA-2026-XXXXXX" above the name area
+    //    Vertically at ~46% from bottom
+    const memIdSize = Math.round(width * 0.0073); // ~11px
     const memIdText = `Membership ID: ${member.membership_id}`;
+    const memIdWidth = helvetica.widthOfTextAtSize(memIdText, memIdSize);
+    const memIdY = height * 0.46;
     page.drawText(memIdText, {
-      x: COORDS.memId.x,
-      y: COORDS.memId.y,
-      size: COORDS.memId.size,
+      x: width / 2 - memIdWidth / 2 + width * 0.02,
+      y: memIdY,
+      size: memIdSize,
       font: helvetica,
-      color: COORDS.memId.color,
+      color: rgb(0, 0, 0),
     });
 
-    // Embed QR code
+    // 3. DATE AND TIME — positioned to the right of "Date of Issue:" label
+    //    At approximately 78% from left, 30% from bottom
+    const dateSize = Math.round(width * 0.0073); // ~11px
+    const dateText = `Issued on ${issueDateStr} at ${issueTimeStr}`;
+    const dateX = width * 0.78;
+    const dateY = height * 0.30;
+    page.drawText(dateText, {
+      x: dateX,
+      y: dateY,
+      size: dateSize,
+      font: helvetica,
+      color: rgb(0, 0, 0),
+    });
+
+    // 4. CERTIFICATE ID — below "Membership No. NDADA / MAH / NAG/" in bottom-left
+    //    At approximately 13% from left, 23% from bottom
+    const certIdSize = Math.round(width * 0.0073); // ~11px
+    const certIdText = `Certificate ID: ${certRecord.certificate_id}`;
+    const certIdX = width * 0.13;
+    const certIdY = height * 0.23;
+    page.drawText(certIdText, {
+      x: certIdX,
+      y: certIdY,
+      size: certIdSize,
+      font: helvetica,
+      color: rgb(0.7, 0, 0), // dark red to match template style
+    });
+
+    // 5. QR CODE — centered at the bottom, between the signature rows
+    //    At approximately 45% from left, 7% from bottom
+    const qrSize = Math.round(width * 0.073); // ~110px on a 1500px wide template
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     page.drawImage(qrImage, {
-      x: COORDS.qr.x,
-      y: COORDS.qr.y,
-      width: COORDS.qr.size,
-      height: COORDS.qr.size,
+      x: width * 0.45,
+      y: height * 0.07,
+      width: qrSize,
+      height: qrSize,
     });
 
     // Generate PDF bytes
