@@ -230,18 +230,14 @@ serve(async (req) => {
 
     if (uploadErr) throw uploadErr;
 
-    // Update certificate record with URL
-    const { data: urlData } = supabase.storage
-      .from('certificates')
-      .getPublicUrl(storagePath);
-
+    // Update certificate record with storage path (bucket is private, so store path for signed URL generation)
     await supabase
       .from('certificates')
-      .update({ certificate_url: urlData.publicUrl })
+      .update({ certificate_url: storagePath })
       .eq('id', certRecord.id);
 
     return new Response(
-      JSON.stringify({ certificate: { ...certRecord, certificate_url: urlData.publicUrl } }),
+      JSON.stringify({ certificate: { ...certRecord, certificate_url: storagePath } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {

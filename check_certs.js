@@ -8,7 +8,7 @@ const keyMatch = envFile.match(/SUPABASE_SERVICE_ROLE_KEY=(.*)/) || envFile.matc
 const supabase = createClient(urlMatch[1].trim(), keyMatch[1].trim());
 
 async function run() {
-  const { data: accounts } = await supabase.from('accounts').select('id, full_name, payment_status, approval_status');
+  const { data: accounts } = await supabase.from('accounts').select('id, full_name, payment_status, approval_status, cash_payment_verified');
   const { data: certs } = await supabase.from('certificates').select('member_id');
   const certMemberIds = new Set(certs.map(c => c.member_id));
   const missing = accounts.filter(a => a.approval_status === 'approved' && !certMemberIds.has(a.id));

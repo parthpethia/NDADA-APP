@@ -32,7 +32,7 @@ export default function VerifyScreen() {
         certificate_id,
         issued_at,
         status,
-        members (
+        accounts:member_id (
           full_name,
           membership_id
         )
@@ -47,7 +47,7 @@ export default function VerifyScreen() {
       return;
     }
 
-    const member = Array.isArray(data.members) ? data.members[0] : data.members;
+    const member = Array.isArray((data as any).accounts) ? (data as any).accounts[0] : (data as any).accounts;
     setResult({
       certificate_id: data.certificate_id,
       member_name: (member as any)?.full_name || 'Unknown',

@@ -11,14 +11,17 @@ interface AuditLogWithAdmin extends AuditLog {
 }
 
 const actionLabels: Record<string, { label: string; color: string }> = {
-  firm_approved: { label: 'Firm Approved', color: 'text-green-700' },
-  firm_rejected: { label: 'Firm Rejected', color: 'text-red-700' },
+  account_approved: { label: 'Account Approved', color: 'text-green-700' },
+  account_rejected: { label: 'Account Rejected', color: 'text-red-700' },
   account_suspended: { label: 'Account Suspended', color: 'text-red-700' },
   account_activated: { label: 'Account Activated', color: 'text-green-700' },
   account_deleted: { label: 'Account Deleted', color: 'text-red-700' },
   certificate_revoked: { label: 'Certificate Revoked', color: 'text-red-700' },
   certificate_regenerated: { label: 'Certificate Regenerated', color: 'text-blue-700' },
+  certificate_deleted: { label: 'Certificate Deleted', color: 'text-red-700' },
   payment_verified: { label: 'Payment Verified', color: 'text-green-700' },
+  payment_status_set: { label: 'Payment Status Updated', color: 'text-blue-700' },
+  member_created: { label: 'Member Created', color: 'text-green-700' },
 };
 
 export default function AdminAuditScreen() {

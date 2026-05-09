@@ -6,7 +6,7 @@ import { confirm } from '@/lib/confirm';
 import { LoadingScreen } from '@/components/ui';
 import {
   LayoutDashboard, Users, Building2, CreditCard,
-  AlertTriangle, FileText,
+  AlertTriangle, FileText, Award,
 } from 'lucide-react-native';
 
 export default function AdminLayout() {
@@ -76,6 +76,14 @@ export default function AdminLayout() {
         options={{
           title: 'Firms',
           tabBarIcon: ({ color, size }) => <Building2 size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="certificates"
+        options={{
+          title: 'Certs',
+          tabBarIcon: ({ color, size }) => <Award size={size} color={color} />,
+          href: isReviewer ? null : undefined,
         }}
       />
       <Tabs.Screen

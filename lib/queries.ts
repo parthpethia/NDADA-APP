@@ -10,7 +10,7 @@
  */
 
 import { supabase } from './supabase';
-import { Account, Certificate, Payment, FraudFlag, AdminUser, StatusTimeline, Notification, CertificateQueueJob } from '@/types';
+import { Account, Certificate, Payment, AdminUser, StatusTimeline, Notification, CertificateQueueJob } from '@/types';
 import { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -30,7 +30,6 @@ function toPostgrestError(err: any, fallbackMessage: string): PostgrestError {
 export interface AccountWithDetails extends Account {
   payments: Payment[];
   certificates: Certificate[];
-  fraud_flags: FraudFlag[];
 }
 
 /**
@@ -47,8 +46,7 @@ export async function fetchAccountWithDetails(
         `
         *,
         payments(id, amount, currency, status, razorpay_payment_link_url, razorpay_payment_link_id, created_at),
-        certificates(id, certificate_id, certificate_url, issued_at, status),
-        fraud_flags(id, reason, details, resolved, created_at)
+        certificates(id, certificate_id, certificate_url, issued_at, status)
       `
       )
       .eq('user_id', userId)
