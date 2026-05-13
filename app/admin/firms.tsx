@@ -2,13 +2,31 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, Alert, TextInput, Platform, FlatList, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
-import { Card, Button, StatusBadge } from '@/components/ui';
+import { Card, Button, StatusBadge, Select } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { Account, DashboardStats } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { STORAGE_BUCKETS } from '@/constants';
 import * as DocumentPicker from 'expo-document-picker';
 import { Check, X } from 'lucide-react-native';
+
+const DISTRICT_OPTIONS = [
+  { label: 'All Districts', value: 'all' },
+  { label: 'Nagpur', value: 'Nagpur' },
+  { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
+  { label: 'Hingna', value: 'Hingna' },
+  { label: 'Kuhi', value: 'Kuhi' },
+  { label: 'Kalmeshwar', value: 'Kalmeshwar' },
+  { label: 'Katol', value: 'Katol' },
+  { label: 'Narkhed', value: 'Narkhed' },
+  { label: 'Saoner', value: 'Saoner' },
+  { label: 'Parshivani', value: 'Parshivani' },
+  { label: 'Kamthi', value: 'Kamthi' },
+  { label: 'Ramtek', value: 'Ramtek' },
+  { label: 'Mouda', value: 'Mouda' },
+  { label: 'Umred', value: 'Umred' },
+  { label: 'Bhiwapur', value: 'Bhiwapur' },
+] as const;
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
@@ -33,6 +51,7 @@ export default function AdminFirmsScreen() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('pending_review');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'created_at' | 'updated_at'>('created_at');
+  const [filterDistrict, setFilterDistrict] = useState('all');
 
   // Bulk action states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -82,9 +101,14 @@ export default function AdminFirmsScreen() {
       query = query.eq('approval_status', 'rejected');
     }
 
+    // Apply district filter
+    if (filterDistrict !== 'all') {
+      query = query.eq('district', filterDistrict);
+    }
+
     const { data } = await query.limit(100);
     setAccounts(data || []);
-  }, [filterStatus, sortBy]);
+  }, [filterStatus, sortBy, filterDistrict]);
 
   // Filter and search accounts in memory
   useEffect(() => {
@@ -294,6 +318,16 @@ export default function AdminFirmsScreen() {
           ))}
         </ScrollView>
 
+        {/* District Filter */}
+        <Select
+          label="District"
+          options={DISTRICT_OPTIONS}
+          value={filterDistrict}
+          onValueChange={setFilterDistrict}
+          placeholder="All Districts"
+          className="mb-0"
+        />
+
         {/* Sort & Bulk Actions */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
@@ -400,6 +434,12 @@ export default function AdminFirmsScreen() {
                       <View className="flex-row justify-between">
                         <Text className="text-xs text-gray-500">GST #</Text>
                         <Text className="text-xs text-gray-700">{account.gst_number}</Text>
+                      </View>
+                    )}
+                    {account.district && (
+                      <View className="flex-row justify-between">
+                        <Text className="text-xs text-gray-500">District</Text>
+                        <Text className="text-xs text-gray-700">{account.district}</Text>
                       </View>
                     )}
                     <View className="flex-row justify-between">

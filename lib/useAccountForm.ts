@@ -23,6 +23,7 @@ export interface AccountFormData {
   contact_phone: string;
   contact_email: string;
   firm_pin_code: string;
+  district: string;
   ifms_number: string;
 
   // Personal Details (Step 2)
@@ -74,6 +75,7 @@ const INITIAL_FORM_DATA: AccountFormData = {
   contact_phone: '',
   contact_email: '',
   firm_pin_code: '',
+  district: '',
   ifms_number: '',
   partner_proprietor_name: '',
   aadhaar_card_number: '',

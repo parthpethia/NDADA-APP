@@ -45,6 +45,10 @@ export const businessDetailsSchema = z.object({
       'PIN code must be a valid 6-digit number'
     ),
 
+  district: z
+    .string()
+    .min(1, 'District is required'),
+
   gst_number: z
     .string()
     .optional()

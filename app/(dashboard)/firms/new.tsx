@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useAccountForm } from '@/lib/useAccountForm';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, Select } from '@/components/ui';
 import { STORAGE_BUCKETS } from '@/constants';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -30,6 +30,23 @@ const STEPS = [
   { key: 'personal', label: 'Personal Details', shortLabel: 'Personal', subtitle: 'Identity, contact & residence' },
   { key: 'licenses', label: 'License Details', shortLabel: 'Licenses', subtitle: 'Seed, pesticide & fertilizer' },
   { key: 'uploads', label: 'Upload Documents', shortLabel: 'Uploads', subtitle: 'Photo & supporting docs' },
+] as const;
+
+const DISTRICT_OPTIONS = [
+  { label: 'Nagpur', value: 'Nagpur' },
+  { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
+  { label: 'Hingna', value: 'Hingna' },
+  { label: 'Kuhi', value: 'Kuhi' },
+  { label: 'Kalmeshwar', value: 'Kalmeshwar' },
+  { label: 'Katol', value: 'Katol' },
+  { label: 'Narkhed', value: 'Narkhed' },
+  { label: 'Saoner', value: 'Saoner' },
+  { label: 'Parshivani', value: 'Parshivani' },
+  { label: 'Kamthi', value: 'Kamthi' },
+  { label: 'Ramtek', value: 'Ramtek' },
+  { label: 'Mouda', value: 'Mouda' },
+  { label: 'Umred', value: 'Umred' },
+  { label: 'Bhiwapur', value: 'Bhiwapur' },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -260,6 +277,7 @@ export default function NewFirmScreen() {
             firm_name: data.firm_name || '',
             firm_address: data.firm_address || '',
             firm_pin_code: data.firm_pin_code || '',
+            district: data.district || '',
             gst_number: data.gst_number || '',
             ifms_number: data.ifms_number || data.registration_number || '',
             partner_proprietor_name: data.partner_proprietor_name || '',
@@ -337,6 +355,7 @@ export default function NewFirmScreen() {
         firm_name: form.firm_name,
         firm_address: form.firm_address,
         firm_pin_code: form.firm_pin_code,
+        district: form.district,
         gst_number: form.gst_number,
         ifms_number: form.ifms_number,
       };
@@ -496,6 +515,7 @@ export default function NewFirmScreen() {
       license_number: licenseNumber,
       registration_number: registrationNumber,
       gst_number: form.gst_number || null,
+      district: form.district || null,
       firm_address: form.firm_address,
       contact_phone: form.mobile_number,
       contact_email: form.email_id,
@@ -618,6 +638,15 @@ export default function NewFirmScreen() {
               />
             </View>
           </View>
+
+          <Select
+            label="District *"
+            options={DISTRICT_OPTIONS}
+            value={form.district}
+            onValueChange={(v) => update('district', v)}
+            placeholder="Select your district"
+            error={getFieldError('district')}
+          />
 
           <Divider />
 
