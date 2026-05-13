@@ -6,8 +6,7 @@ import { Card, Button, StatusBadge, Select } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { Account, DashboardStats } from '@/types';
 import { formatDate } from '@/lib/utils';
-import { STORAGE_BUCKETS } from '@/constants';
-import * as DocumentPicker from 'expo-document-picker';
+
 import { Check, X } from 'lucide-react-native';
 
 const DISTRICT_OPTIONS = [
@@ -48,7 +47,7 @@ export default function AdminFirmsScreen() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   // Filter states
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('pending_review');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('approved');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'created_at' | 'updated_at'>('created_at');
   const [filterDistrict, setFilterDistrict] = useState('all');
@@ -182,7 +181,7 @@ export default function AdminFirmsScreen() {
       setActionLoading(accountId);
       await callAdminAction('approve-account', { account_id: accountId });
       await fetchAccounts();
-      showAlert('Success', "Application approved. Switch to 'All Applications' to upload the certificate.");
+      showAlert('Success', 'Application approved. Certificate will be generated automatically.');
     } catch (err: any) {
       showAlert('Error', err?.message || 'Failed to approve application');
     } finally {
@@ -208,53 +207,7 @@ export default function AdminFirmsScreen() {
     }
   };
 
-  const handleUploadCertificate = async (account: Account) => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*'],
-        multiple: false,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
 
-      const asset = result.assets[0];
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-
-      const safeName = (asset.name || 'certificate.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = `${account.id}/${account.id}_${Date.now()}_${safeName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(STORAGE_BUCKETS.certificates)
-        .upload(filePath, blob, { contentType: blob.type || 'image/jpeg' });
-
-      if (uploadError) throw new Error(uploadError.message);
-      const certificatePath = uploadData?.path;
-      if (!certificatePath) throw new Error('Upload failed');
-
-      const { data: existing } = await supabase
-        .from('certificates')
-        .select('id')
-        .eq('member_id', account.id)
-        .maybeSingle();
-
-      if (existing?.id) {
-        const { error } = await supabase
-          .from('certificates')
-          .update({ certificate_url: certificatePath, status: 'valid', issued_at: new Date().toISOString() })
-          .eq('id', existing.id);
-        if (error) throw new Error(error.message);
-      } else {
-        const { error } = await supabase
-          .from('certificates')
-          .insert({ member_id: account.id, certificate_url: certificatePath });
-        if (error) throw new Error(error.message);
-      }
-
-      showAlert('Success', 'Certificate uploaded and linked to account.');
-    } catch (err: any) {
-      showAlert('Error', err?.message || 'Failed to upload certificate');
-    }
-  };
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -506,16 +459,7 @@ export default function AdminFirmsScreen() {
                     </View>
                   )}
 
-                  {account.approval_status === 'approved' && (
-                    <View className="mt-3 border-t border-gray-100 pt-3">
-                      <Button
-                        title="Upload Certificate (JPEG)"
-                        variant="outline"
-                        size="sm"
-                        onPress={() => handleUploadCertificate(account)}
-                      />
-                    </View>
-                  )}
+
                 </View>
               </Card>
             </TouchableOpacity>
