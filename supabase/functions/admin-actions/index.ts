@@ -125,33 +125,15 @@ async function logAudit(supabase: any, adminId: string, action: string, targetUs
 }
 
 async function approveAccount(supabase: any, accountId: string, adminId: string) {
-  // Check payment is marked paid
-  const { data: account } = await supabase
-    .from('accounts')
-    .select('payment_status, id, user_id')
-    .eq('id', accountId)
-    .single();
-
-  if (!account) throw new Error('Account not found');
-  if (account.payment_status !== 'paid') {
-    throw new Error('Payment must be verified as paid before approving the account');
-  }
-
+  // Approval is now admin-only tracking — no longer gates certificate generation
   const { data: updated } = await supabase
     .from('accounts')
     .update({ approval_status: 'approved', reviewed_by: adminId, reviewed_at: new Date().toISOString() })
     .eq('id', accountId)
-    .select('id, user_id, payment_status')
+    .select('id, user_id')
     .single();
 
   if (!updated) throw new Error('Account not found');
-
-  if (updated.payment_status === 'paid') {
-    console.log(`Triggering certificate generation for member ${accountId}`);
-    await supabase.functions.invoke('generate-certificate', {
-      body: { member_id: accountId }
-    }).catch(err => console.error('Failed to trigger certificate generation:', err));
-  }
 
   await logAudit(supabase, adminId, 'account_approved', updated.user_id, `Account ${accountId} approved`);
   return { message: 'Account approved' };
@@ -248,12 +230,13 @@ async function setPaymentStatus(
     .from('accounts')
     .update({ payment_status: status })
     .eq('id', accountId)
-    .select('id, approval_status')
+    .select('id')
     .single();
 
   if (!account) throw new Error('Account not found');
 
-  if (status === 'paid' && account.approval_status === 'approved') {
+  // Certificate generation depends only on payment — trigger when paid
+  if (status === 'paid') {
     console.log(`Triggering certificate generation for member ${accountId}`);
     await supabase.functions.invoke('generate-certificate', {
       body: { member_id: accountId }

@@ -145,20 +145,11 @@ serve(async (req) => {
         console.warn('Warning: Failed to record verification:', verificationErr.message);
       }
 
-      // Check if the account is approved, and if so, trigger certificate generation
-      const { data: account } = await supabase
-        .from('accounts')
-        .select('approval_status')
-        .eq('id', member_id)
-        .single();
-        
-      if (account?.approval_status === 'approved') {
-        console.log(`Triggering certificate generation for member ${member_id}`);
-        // Wait for generation
-        await supabase.functions.invoke('generate-certificate', {
-          body: { member_id }
-        }).catch(err => console.error('Failed to trigger certificate generation:', err));
-      }
+      // Certificate generation depends only on payment — trigger immediately
+      console.log(`Triggering certificate generation for member ${member_id}`);
+      await supabase.functions.invoke('generate-certificate', {
+        body: { member_id }
+      }).catch(err => console.error('Failed to trigger certificate generation:', err));
 
       return new Response(JSON.stringify({
         success: true,

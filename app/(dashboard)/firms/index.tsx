@@ -62,7 +62,7 @@ export default function FirmsListScreen() {
                   {account.firm_type.replace('_', ' ')}
                 </Text>
               </View>
-              <StatusBadge status={account.approval_status} />
+              <StatusBadge status={account.payment_status} />
             </View>
 
             <View className="mt-3 border-t border-gray-100 pt-3">
@@ -88,14 +88,6 @@ export default function FirmsListScreen() {
                 Tap to view full form details
               </Text>
             </View>
-
-            {account.approval_status === 'rejected' && account.rejection_reason && (
-              <View className="mt-3 rounded-lg bg-red-50 p-3">
-                <Text className="text-xs font-medium text-red-700">
-                  Rejection Reason: {account.rejection_reason}
-                </Text>
-              </View>
-            )}
           </Card>
         </TouchableOpacity>
       </ScrollView>

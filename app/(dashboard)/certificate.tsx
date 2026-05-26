@@ -73,13 +73,13 @@ export default function CertificateScreen() {
   }, [fetchCertificate]);
 
   // Auto-trigger generation if eligible and no certificate exists
+  // Certificate depends only on payment — no approval check needed
   useEffect(() => {
     if (
       !loading &&
       !certificate &&
       !generating &&
-      member?.payment_status === 'paid' &&
-      member?.approval_status === 'approved'
+      member?.payment_status === 'paid'
     ) {
       triggerGeneration();
     }
@@ -144,8 +144,7 @@ export default function CertificateScreen() {
   }
 
   if (!certificate) {
-    const isEligible =
-      member?.payment_status === 'paid' && member?.approval_status === 'approved';
+    const isEligible = member?.payment_status === 'paid';
 
     return (
       <EmptyState
@@ -155,9 +154,7 @@ export default function CertificateScreen() {
             ? error
             : member?.payment_status !== 'paid' && !member?.cash_payment_verified
             ? 'Complete your registration fee payment first.'
-            : member?.approval_status === 'approved'
-            ? 'Your certificate is being prepared. Tap below to generate it now.'
-            : 'Your firm must be approved before a certificate is issued.'
+            : 'Your certificate is being prepared. Tap below to generate it now.'
         }
       >
         {isEligible && (

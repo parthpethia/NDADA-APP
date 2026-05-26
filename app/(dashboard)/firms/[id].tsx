@@ -69,7 +69,6 @@ export default function FirmDetailsScreen() {
         <CardHeader
           title={account.firm_name}
           subtitle={`Submitted on ${formatDate(account.created_at)}`}
-          right={<StatusBadge status={account.approval_status} />}
         />
         <DetailRow label="Firm Type" value={account.firm_type.replace('_', ' ')} />
         <DetailRow label="Firm Address" value={account.firm_address} />
@@ -128,13 +127,6 @@ export default function FirmDetailsScreen() {
           </View>
         ))}
       </Card>
-
-      {account.approval_status === 'rejected' && account.rejection_reason && (
-        <Card className="mb-4 border-red-200 bg-red-50">
-          <CardHeader title="Rejection Reason" />
-          <Text className="text-sm text-red-700">{account.rejection_reason}</Text>
-        </Card>
-      )}
 
       <Button
         title="Edit Firm"

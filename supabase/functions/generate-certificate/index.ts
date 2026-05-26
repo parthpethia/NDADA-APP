@@ -79,16 +79,9 @@ serve(async (req) => {
       });
     }
 
-    // Verify eligibility
+    // Verify eligibility — only payment is required
     if (member.payment_status !== 'paid') {
       return new Response(JSON.stringify({ error: 'Payment not completed' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (member.approval_status !== 'approved') {
-      return new Response(JSON.stringify({ error: 'Firm not approved' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

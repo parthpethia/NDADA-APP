@@ -317,7 +317,7 @@ export default function CartScreen() {
         <Card className="mb-4 border-primary-100 bg-primary-50">
           <CardHeader title={MEMBERSHIP_PLAN_NAME} subtitle="One-time payment" />
           <Text className="text-sm text-primary-700">
-            This registration fee activates the member profile linked to {member.membership_id} and enables certificate issuance after approval.
+            This registration fee activates the member profile linked to {member.membership_id} and enables certificate issuance.
           </Text>
         </Card>
 
@@ -333,10 +333,6 @@ export default function CartScreen() {
               <CartRow label="License No." value={member.license_number} />
               <CartRow label="Registration No." value={member.registration_number} />
               <CartRow label="Type" value={member.firm_type} />
-              <View className="flex-row items-center justify-between">
-                <Text className="text-sm text-gray-500">Status</Text>
-                <StatusBadge status={member.approval_status} />
-              </View>
             </View>
           </Card>
         )}

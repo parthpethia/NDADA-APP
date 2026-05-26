@@ -186,22 +186,19 @@ serve(async (req) => {
       }
 
       // Mark member as paid
-      const { data: account, error: accountErr } = await supabase
+      const { error: accountErr } = await supabase
         .from('accounts')
         .update({ payment_status: 'paid' })
-        .eq('id', memberId)
-        .select('approval_status')
-        .single();
+        .eq('id', memberId);
 
       if (accountErr) throw new Error(accountErr.message);
       console.log('✅ Account payment_status updated to paid');
 
-      if (account?.approval_status === 'approved') {
-        console.log(`Triggering certificate generation for member ${memberId}`);
-        await supabase.functions.invoke('generate-certificate', {
-          body: { member_id: memberId }
-        }).catch(err => console.error('Failed to trigger certificate generation:', err));
-      }
+      // Certificate generation depends only on payment — trigger immediately
+      console.log(`Triggering certificate generation for member ${memberId}`);
+      await supabase.functions.invoke('generate-certificate', {
+        body: { member_id: memberId }
+      }).catch(err => console.error('Failed to trigger certificate generation:', err));
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { 'Content-Type': 'application/json' },
@@ -237,21 +234,18 @@ serve(async (req) => {
 
       const memberId = (Array.isArray(paymentRows) ? paymentRows?.[0]?.member_id : (paymentRows as any)?.member_id) || memberIdFromNotes;
       if (memberId) {
-        const { data: account, error: accountErr } = await supabase
+        const { error: accountErr } = await supabase
           .from('accounts')
           .update({ payment_status: 'paid' })
-          .eq('id', memberId)
-          .select('approval_status')
-          .single();
+          .eq('id', memberId);
           
         if (accountErr) throw new Error(accountErr.message);
 
-        if (account?.approval_status === 'approved') {
-          console.log(`Triggering certificate generation for member ${memberId}`);
-          await supabase.functions.invoke('generate-certificate', {
-            body: { member_id: memberId }
-          }).catch(err => console.error('Failed to trigger certificate generation:', err));
-        }
+        // Certificate generation depends only on payment — trigger immediately
+        console.log(`Triggering certificate generation for member ${memberId}`);
+        await supabase.functions.invoke('generate-certificate', {
+          body: { member_id: memberId }
+        }).catch(err => console.error('Failed to trigger certificate generation:', err));
       }
 
       return new Response(JSON.stringify({ ok: true }), {

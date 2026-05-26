@@ -3,11 +3,11 @@ import { Account, Certificate } from '@/types';
 export type MembershipStage =
   | 'application'
   | 'payment'
-  | 'review'
   | 'certificate'
   | 'active';
 
 // Updated for new consolidated account schema
+// Certificate eligibility depends only on payment, not admin approval
 export function getMembershipStage(
   account: Account | null,
   certificate: Certificate | null
@@ -17,9 +17,7 @@ export function getMembershipStage(
   if (!account.firm_name) return 'application';
   // If firm submitted but payment not done
   if (account.payment_status !== 'paid') return 'payment';
-  // If account has firm but not approved yet
-  if (account.approval_status !== 'approved') return 'review';
-  // If account and firm approved but certificate not issued
+  // If paid but certificate not issued yet
   if (!certificate) return 'certificate';
   return 'active';
 }
@@ -28,19 +26,15 @@ export function getMembershipStageMeta(stage: MembershipStage) {
   const stages = {
     application: {
       title: 'Start your membership application',
-      message: 'Create your member profile and submit your firm details to begin the approval process.',
+      message: 'Create your member profile and submit your firm details to get started.',
     },
     payment: {
       title: 'Complete your registration payment',
-      message: 'Your application is saved. Pay the registration fee to move your profile into review.',
-    },
-    review: {
-      title: 'Application under review',
-      message: 'Your payment is received. Our team is now reviewing your firm details before issuing a certificate.',
+      message: 'Your application is saved. Pay the registration fee to receive your membership certificate.',
     },
     certificate: {
       title: 'Certificate ready soon',
-      message: 'Your firm is approved. The final certificate record is being prepared for download.',
+      message: 'Payment received! Your membership certificate is being prepared for download.',
     },
     active: {
       title: 'Membership is active',

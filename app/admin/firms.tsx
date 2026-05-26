@@ -181,7 +181,7 @@ export default function AdminFirmsScreen() {
       setActionLoading(accountId);
       await callAdminAction('approve-account', { account_id: accountId });
       await fetchAccounts();
-      showAlert('Success', 'Application approved. Certificate will be generated automatically.');
+      showAlert('Success', 'Application approved successfully.');
     } catch (err: any) {
       showAlert('Error', err?.message || 'Failed to approve application');
     } finally {

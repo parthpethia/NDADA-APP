@@ -70,18 +70,16 @@ export default function DashboardHome() {
 
   const hasFirm = !!member.firm_name;
   const isPaid = member.payment_status === 'paid';
-  const isApproved = member.approval_status === 'approved';
   const hasCertificate = !!certificate;
   const stage = getMembershipStage(member, certificate);
   const stageMeta = getMembershipStageMeta(stage);
 
   const currentStep =
-    stage === 'application' ? 1 : stage === 'payment' ? 2 : stage === 'review' ? 3 : 4;
+    stage === 'application' ? 1 : stage === 'payment' ? 2 : 3;
 
   const steps = [
     { label: 'Submit Application', icon: FileText, done: hasFirm },
     { label: 'Pay Registration Fee', icon: ShoppingCart, done: isPaid },
-    { label: 'Approval Review', icon: CheckCircle, done: isApproved },
     { label: 'Get Certificate', icon: Award, done: hasCertificate },
   ];
 
@@ -128,7 +126,7 @@ export default function DashboardHome() {
               Apply for {APP_NAME} membership
             </Text>
             <Text className="mb-5 max-w-[280px] text-center text-sm text-primary-700">
-              Submit your firm profile, pay the registration fee, and unlock certificate issuance after approval.
+              Submit your firm profile, pay the registration fee, and get your membership certificate.
             </Text>
             <Button title="Start Application" size="lg" onPress={() => router.push('/(dashboard)/firms/new')} />
           </View>
@@ -190,31 +188,14 @@ export default function DashboardHome() {
               Complete Your Payment
             </Text>
             <Text className="mb-4 max-w-[260px] text-center text-sm text-yellow-700">
-              Your application is saved. Pay {formatCurrency(MEMBERSHIP_AMOUNT)} to move your application into review.
+              Your application is saved. Pay {formatCurrency(MEMBERSHIP_AMOUNT)} to receive your membership certificate.
             </Text>
             <Button title="Go to Cart" size="lg" onPress={() => router.push('/cart')} />
           </View>
         </Card>
       )}
 
-      {isPaid && !isApproved && (
-        <Card className="mb-5 border-blue-200 bg-blue-50">
-          <View className="items-center py-3">
-            <View className="mb-2 rounded-full bg-blue-100 p-3">
-              <CheckCircle size={32} color="#2563eb" />
-            </View>
-            <Text className="mb-1 text-lg font-bold text-blue-900">
-              Review in Progress
-            </Text>
-            <Text className="mb-4 max-w-[280px] text-center text-sm text-blue-700">
-              Payment received. Your application is waiting for approval before the certificate is issued.
-            </Text>
-            <Button title="View Applications" size="lg" variant="outline" onPress={() => router.push('/(dashboard)/firms')} />
-          </View>
-        </Card>
-      )}
-
-      {isPaid && !hasCertificate && isApproved && (
+      {isPaid && !hasCertificate && (
         <Card className="mb-5 border-green-200 bg-green-50">
           <View className="items-center py-3">
             <View className="mb-2 rounded-full bg-green-100 p-3">
@@ -224,7 +205,7 @@ export default function DashboardHome() {
               Get Your Certificate
             </Text>
             <Text className="mb-4 max-w-[260px] text-center text-sm text-green-700">
-              Payment complete and application approved. Your membership certificate is ready to open.
+              Payment complete! Your membership certificate is ready.
             </Text>
             <Button title="View Certificate" size="lg" onPress={() => router.push('/(dashboard)/certificate')} />
           </View>
@@ -290,7 +271,7 @@ export default function DashboardHome() {
               <Text className="font-medium text-gray-900">{member.firm_name}</Text>
               <Text className="text-xs text-gray-500">Lic: {member.license_number}</Text>
             </View>
-            <StatusBadge status={member.approval_status} />
+            <StatusBadge status={member.payment_status} />
           </View>
         </Card>
       )}
