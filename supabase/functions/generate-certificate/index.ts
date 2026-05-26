@@ -139,9 +139,7 @@ serve(async (req) => {
     console.log(`Certificate record created: id=${certRecord.id}, certificate_id=${certRecord.certificate_id}`);
 
     const now = new Date();
-    const issueDateStr = now.toLocaleDateString('en-IN', {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
+    const issueDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
     const issueTimeStr = now.toLocaleTimeString('en-IN', {
       hour: '2-digit', minute: '2-digit',
     });
@@ -179,34 +177,47 @@ serve(async (req) => {
 
     // --- Calculate proportional coordinates based on actual template size ---
     // All percentages derived from analyzing the certificate template image
-
     // 1. MEMBER NAME
-    const nameSize = Math.round(width * 0.028); // Increased size
+    const nameSize = Math.round(width * 0.024); // Bold, slightly smaller than firm name
     const nameText = member.full_name;
     const nameWidth = helveticaBold.widthOfTextAtSize(nameText, nameSize);
-    const nameY = height * 0.4615;
+    const nameY = height * 0.4891;
     page.drawText(nameText, {
-      x: width * 0.4381,
+      x: (width * 0.5077) - (nameWidth / 2),
       y: nameY,
       size: nameSize,
       font: helveticaBold,
       color: rgb(0, 0, 0),
     });
 
+    // 1.5. DISTRICT
+    const districtText = member.district ? `AT ${member.district.toUpperCase()}` : '';
+    if (districtText) {
+      const districtSize = Math.round(width * 0.016); // Clean, slightly smaller size
+      const districtWidth = helveticaBold.widthOfTextAtSize(districtText, districtSize);
+      page.drawText(districtText, {
+        x: (width * 0.5083) - (districtWidth / 2),
+        y: height * 0.4327,
+        size: districtSize,
+        font: helveticaBold,
+        color: rgb(0, 0, 0),
+      });
+    }
+
     // 2. MEMBERSHIP ID
-    const memIdSize = Math.round(width * 0.012); // Increased size
+    const memIdSize = Math.round(width * 0.015); // Increased size
     const memIdText = `${member.membership_id}`;
     const memIdY = height * 0.2776;
     page.drawText(memIdText, {
       x: width * 0.2919,
       y: memIdY,
       size: memIdSize,
-      font: helvetica,
+      font: helveticaBold, // Matches bold style of printed prefix
       color: rgb(0, 0, 0),
     });
 
     // 3. DATE AND TIME
-    const dateSize = Math.round(width * 0.012); // Increased size
+    const dateSize = Math.round(width * 0.015); // Increased size
     const dateText = `${issueDateStr}`;
     const dateX = width * 0.7706;
     const dateY = height * 0.2935;
@@ -214,22 +225,21 @@ serve(async (req) => {
       x: dateX,
       y: dateY,
       size: dateSize,
-      font: helvetica,
+      font: helveticaBold, // Matches bold style of label
       color: rgb(0, 0, 0),
     });
 
     // 4. FIRM NAME
-    const firmNameSize = Math.round(width * 0.024); // Size slightly smaller than member name
+    const firmNameSize = Math.round(width * 0.026); // Large, prominent text
     const firmNameText = member.firm_name || '';
     const firmNameWidth = helveticaBold.widthOfTextAtSize(firmNameText, firmNameSize);
     page.drawText(firmNameText, {
-      x: width * 0.4531,
-      y: height * 0.5323,
+      x: (width * 0.5077) - (firmNameWidth / 2),
+      y: height * 0.5391,
       size: firmNameSize,
       font: helveticaBold,
-      color: rgb(0, 0, 0),
+      color: rgb(0.88, 0.05, 0.05), // Beautiful prominent red/crimson color to match reference
     });
-
 
     // 5. QR CODE
     const qrSize = Math.round(width * 0.073); // ~110px on a 1500px wide template
