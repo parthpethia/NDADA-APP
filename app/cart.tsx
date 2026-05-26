@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, Alert, Platform, Linking } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -23,9 +23,28 @@ export default function CartScreen() {
   const { member, refreshMember } = useAuth();
   const params = useLocalSearchParams<{ success?: string; cancelled?: string }>();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [cashSubmitting, setCashSubmitting] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
+  const checkoutRef = useRef<any>(null);
+
+  // Load Razorpay checkout.js script (Web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if ((window as any).Razorpay) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Sync cart with latest account state on mount only
@@ -77,41 +96,150 @@ export default function CartScreen() {
     );
   }
 
+  // ============================================================
+  // Standard Checkout: Create Order → Open Modal → Verify Signature
+  // ============================================================
   const handlePayment = async () => {
+    if (!member) return;
     setPaymentLoading(true);
+
     try {
-      // Best-effort: ensure payment method is online when starting an online payment.
-      // This prevents members from remaining in the "cash" review queue if they later pay online.
+      // Mark payment method as online
       await supabase
         .from('accounts')
         .update({ payment_method: 'online' })
         .eq('id', member.id);
 
-      const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
-        body: {},
+      // STEP 1: Create Razorpay Order
+      console.log('1️⃣ Creating Razorpay order...');
+      const { data: orderData, error: orderError } = await supabase.functions.invoke('razorpay-create-order', {
+        body: { member_id: member.id },
       });
-      if (error) throw new Error(error.message);
 
-      const url = String((data as { payment_link_url?: string })?.payment_link_url || '');
-      if (!url) throw new Error('Could not create payment link');
+      if (orderError) {
+        console.error('❌ Order creation failed:', orderError);
+        throw new Error(orderError.message || 'Failed to create order');
+      }
+
+      if (!orderData?.id) {
+        throw new Error('Invalid order response');
+      }
+
+      console.log('✅ Order created:', orderData.id);
+
+      // STEP 2: Open Razorpay Checkout Modal
+      const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
+      if (!keyId) {
+        throw new Error('Razorpay configuration missing (EXPO_PUBLIC_RAZORPAY_KEY_ID)');
+      }
+
+      const checkoutOptions = {
+        key: keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.id,
+        name: 'NDADA Membership',
+        description: 'Registration Fee',
+        prefill: {
+          name: member.full_name,
+          email: member.email,
+          contact: member.phone || '',
+        },
+        notes: {
+          member_id: member.id,
+          membership_id: member.membership_id,
+        },
+        theme: { color: '#1d4ed8' },
+        timeout: 600,
+      };
 
       if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && window.location) {
-          window.location.href = url;
+        const Razorpay = (window as any).Razorpay;
+        if (!Razorpay) {
+          throw new Error('Razorpay SDK not loaded. Please refresh the page.');
         }
+
+        checkoutRef.current = new Razorpay({
+          ...checkoutOptions,
+          handler: (response: any) => handlePaymentSuccess(response),
+          modal: {
+            ondismiss: () => {
+              console.log('ℹ️ User closed Razorpay modal');
+              setPaymentLoading(false);
+            },
+          },
+        });
+        checkoutRef.current.on('payment.failed', (response: any) => {
+          handlePaymentFailure(response.error);
+        });
+        checkoutRef.current.open();
       } else {
+        // React Native: try react-native-razorpay, fallback to WebBrowser
         try {
-          await WebBrowser.openBrowserAsync(url);
-        } catch {
-          await Linking.openURL(url);
+          const RazorpayCheckoutModule = require('react-native-razorpay').default;
+          RazorpayCheckoutModule.open(checkoutOptions)
+            .then((response: any) => handlePaymentSuccess(response))
+            .catch((error: any) => handlePaymentFailure(error));
+        } catch (err: any) {
+          console.warn('⚠️ react-native-razorpay not available, opening in browser');
+          await WebBrowser.openBrowserAsync(
+            `https://checkout.razorpay.com/?key_id=${keyId}&order_id=${orderData.id}`
+          );
         }
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to start payment';
       Alert.alert('Error', message);
-    } finally {
       setPaymentLoading(false);
     }
+  };
+
+  // STEP 3: Verify Payment Signature
+  const handlePaymentSuccess = async (response: any) => {
+    console.log('3️⃣ Payment successful, verifying signature...');
+    setVerifying(true);
+    setPaymentLoading(false);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('razorpay-verify-signature', {
+        body: {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        },
+      });
+
+      if (error) throw new Error(error.message || 'Verification failed');
+
+      if (!data?.verified) {
+        Alert.alert(
+          'Security Alert',
+          'Payment signature verification failed. This payment has not been processed for security reasons.'
+        );
+        return;
+      }
+
+      console.log('✅ Payment verified successfully');
+      Alert.alert('Success', 'Payment verified! Your membership is being confirmed.', [
+        { text: 'OK', onPress: () => refreshMember() },
+      ]);
+      setTimeout(() => refreshMember(), 2000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Verification failed';
+      Alert.alert('Verification Error', message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handlePaymentFailure = (error: any) => {
+    console.error('❌ Payment failed:', error);
+    setPaymentLoading(false);
+    const errorMessage = error?.description || error?.message || 'Payment failed';
+    Alert.alert('Payment Failed', errorMessage, [
+      { text: 'Retry', onPress: () => handlePayment() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handlePayInCash = () => {

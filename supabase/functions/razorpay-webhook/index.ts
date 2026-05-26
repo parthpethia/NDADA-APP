@@ -67,19 +67,155 @@ serve(async (req) => {
     const event = JSON.parse(bodyText);
     const eventType = String(event?.event || '');
 
-    // Prefer payment_link payloads (works well with hosted payment links)
+    // Extract IDs from different payload structures
     const paymentLinkId = String(event?.payload?.payment_link?.entity?.id || '');
     const paymentId = String(event?.payload?.payment?.entity?.id || '');
-    const memberIdFromNotes = String(event?.payload?.payment_link?.entity?.notes?.member_id || '');
+    const orderId = String(event?.payload?.payment?.entity?.order_id || event?.payload?.order?.entity?.id || '');
+    const memberIdFromNotes = String(
+      event?.payload?.payment_link?.entity?.notes?.member_id ||
+      event?.payload?.payment?.entity?.notes?.member_id ||
+      event?.payload?.order?.entity?.notes?.member_id ||
+      ''
+    );
 
     // Only handle the events we care about.
     if (!eventType) {
       throw new Error('Missing event type');
     }
 
+    console.log(`📨 Webhook event: ${eventType}`);
+    console.log(`   Payment ID: ${paymentId || '(none)'}`);
+    console.log(`   Order ID: ${orderId || '(none)'}`);
+    console.log(`   Payment Link ID: ${paymentLinkId || '(none)'}`);
+    console.log(`   Member ID (notes): ${memberIdFromNotes || '(none)'}`);
+
+    // ============================================================
+    // Standard Checkout flow: payment.captured / order.paid
+    // These events fire when payment is made via the Razorpay modal
+    // (create order → checkout modal → payment captured)
+    // ============================================================
+    if (eventType === 'payment.captured' || eventType === 'order.paid') {
+      if (!orderId && !paymentId) {
+        console.log('⚠️ No order_id or payment_id — ignoring');
+        return new Response(JSON.stringify({ ok: true, ignored: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Find the order record in our database
+      let memberId = memberIdFromNotes;
+      let orderRecord: any = null;
+
+      if (orderId) {
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('id, member_id, status')
+          .eq('razorpay_order_id', orderId)
+          .single();
+
+        if (orderData) {
+          orderRecord = orderData;
+          memberId = memberId || orderData.member_id;
+        }
+      }
+
+      // Also try to find via payment record if we have payment_id
+      if (!memberId && paymentId) {
+        const { data: paymentData } = await supabase
+          .from('payments')
+          .select('member_id')
+          .eq('razorpay_payment_id', paymentId)
+          .single();
+
+        if (paymentData) {
+          memberId = paymentData.member_id;
+        }
+      }
+
+      if (!memberId) {
+        console.error('❌ Could not determine member_id for Standard Checkout event');
+        return new Response(JSON.stringify({ ok: true, ignored: true, reason: 'no member_id' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`✅ Member identified: ${memberId}`);
+
+      // Update order status to 'paid'
+      if (orderRecord) {
+        await supabase
+          .from('orders')
+          .update({
+            status: 'paid',
+            provider_payload: event,
+          })
+          .eq('id', orderRecord.id);
+        console.log('✅ Order status updated to paid');
+      }
+
+      // Update payment record if exists
+      if (paymentId) {
+        const { data: existingPayment } = await supabase
+          .from('payments')
+          .select('id')
+          .eq('razorpay_payment_id', paymentId)
+          .single();
+
+        if (existingPayment) {
+          await supabase
+            .from('payments')
+            .update({
+              status: 'paid',
+              provider_event: eventType,
+              provider_payload: event,
+            })
+            .eq('razorpay_payment_id', paymentId);
+        } else if (orderId) {
+          // Update by order_id instead
+          await supabase
+            .from('payments')
+            .update({
+              status: 'paid',
+              razorpay_payment_id: paymentId,
+              provider_event: eventType,
+              provider_payload: event,
+            })
+            .eq('razorpay_order_id', orderId);
+        }
+        console.log('✅ Payment record updated');
+      }
+
+      // Mark member as paid
+      const { data: account, error: accountErr } = await supabase
+        .from('accounts')
+        .update({ payment_status: 'paid' })
+        .eq('id', memberId)
+        .select('approval_status')
+        .single();
+
+      if (accountErr) throw new Error(accountErr.message);
+      console.log('✅ Account payment_status updated to paid');
+
+      if (account?.approval_status === 'approved') {
+        console.log(`Triggering certificate generation for member ${memberId}`);
+        await supabase.functions.invoke('generate-certificate', {
+          body: { member_id: memberId }
+        }).catch(err => console.error('Failed to trigger certificate generation:', err));
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============================================================
+    // Payment Link flow: payment_link.paid / cancelled / expired
+    // These events fire when payment is made via a Razorpay Payment Link
+    // ============================================================
     if (!paymentLinkId) {
-      // For now we require a payment_link id; ignore unrelated events.
-      return new Response(JSON.stringify({ ok: true, ignored: true }), {
+      // No payment_link id and not a Standard Checkout event — ignore
+      console.log('⚠️ Unhandled event type, ignoring:', eventType);
+      return new Response(JSON.stringify({ ok: true, ignored: true, event: eventType }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
@@ -151,6 +287,8 @@ serve(async (req) => {
       });
     }
 
+    // Unhandled event type
+    console.log('⚠️ Unhandled event type:', eventType);
     return new Response(JSON.stringify({ ok: true, ignored: true, event: eventType }), {
       headers: { 'Content-Type': 'application/json' },
     });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, Alert, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -18,30 +18,30 @@ export default function PaymentScreen() {
   const router = useRouter();
   const { member, refreshMember, session } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(true);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [cashSubmitting, setCashSubmitting] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
+  const checkoutRef = useRef<any>(null);
 
+  // Load Razorpay checkout.js script (Web only)
   useEffect(() => {
-    const fetchLatestPaymentLink = async () => {
-      if (!member?.id) return;
-      const { data } = await supabase
-        .from('payments')
-        .select('razorpay_payment_link_url, status')
-        .eq('member_id', member.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      const latest = data?.[0] as any | undefined;
-      if (latest?.status === 'pending' && typeof latest?.razorpay_payment_link_url === 'string') {
-        setPaymentLinkUrl(latest.razorpay_payment_link_url);
+    if (Platform.OS !== 'web') return;
+    if ((window as any).Razorpay) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
       }
     };
-
-    fetchLatestPaymentLink();
-  }, [member?.id]);
+  }, []);
 
   useEffect(() => {
     if (!member) return;
@@ -62,6 +62,9 @@ export default function PaymentScreen() {
      member.payment_status === 'abandoned' ||
      member.payment_status === 'processing');
 
+  // ============================================================
+  // Standard Checkout: Create Order → Open Modal → Verify Signature
+  // ============================================================
   const handlePayWithRazorpay = async () => {
     console.log('▶️ === PAYMENT FLOW START ===');
     console.log('1️⃣ Checking member:', member ? `✅ ${member.id}` : '❌ MISSING');
@@ -95,86 +98,136 @@ export default function PaymentScreen() {
         .update({ payment_method: 'online' })
         .eq('id', member.id);
 
-      console.log('\n4️⃣ Invoking razorpay-create-payment-link...');
-      console.log('   URL: razorpay-create-payment-link');
-      console.log('   Auth: Automatic (session token as Authorization header)');
-      console.log('   User:', session.user?.id);
-
-      const { data, error } = await supabase.functions.invoke('razorpay-create-payment-link', {
-        body: {
-          member_id: member.id,
-        },
+      console.log('\n4️⃣ Invoking razorpay-create-order...');
+      const { data: orderData, error: orderError } = await supabase.functions.invoke('razorpay-create-order', {
+        body: { member_id: member.id },
       });
 
-      console.log('\n5️⃣ Response received:');
-      console.log('   Data:', JSON.stringify(data));
-      console.log('   Error:', error ? JSON.stringify(error) : 'None');
-
-      if (error) {
-        console.error('❌ RAZORPAY FUNCTION ERROR:', error);
-        console.error('   Message:', (error as any).message);
-        console.error('   Details:', (error as any).context?.json?.error);
-        throw new Error(`Function error: ${error.message}`);
+      if (orderError) {
+        console.error('❌ Order creation failed:', orderError);
+        throw new Error(orderError.message || 'Failed to create order');
       }
 
-      if (!data) {
-        console.error('❌ NO DATA IN RESPONSE');
-        throw new Error('No data returned from function');
+      if (!orderData?.id) {
+        throw new Error('Invalid order response');
       }
 
-      const url = String((data as any)?.payment_link_url || '');
-      console.log('\n6️⃣ Extracted URL:', url ? `✅ ${url.substring(0, 50)}...` : '❌ MISSING');
+      console.log('✅ Order created:', orderData.id);
 
-      if (!url) {
-        console.error('❌ NO PAYMENT LINK URL');
-        throw new Error('Could not create payment link');
+      // STEP 2: Open Razorpay Checkout Modal
+      const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
+      if (!keyId) {
+        throw new Error('Razorpay configuration missing (EXPO_PUBLIC_RAZORPAY_KEY_ID)');
       }
 
-      console.log('\n7️⃣ Attempting redirect...');
-      console.log('   Platform:', Platform.OS);
-
-      setPaymentLinkUrl(url);
+      const checkoutOptions = {
+        key: keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.id,
+        name: 'NDADA Membership',
+        description: 'Registration Fee',
+        prefill: {
+          name: member.full_name,
+          email: member.email,
+          contact: member.phone || '',
+        },
+        notes: {
+          member_id: member.id,
+          membership_id: member.membership_id,
+        },
+        theme: { color: '#1d4ed8' },
+        timeout: 600,
+      };
 
       if (Platform.OS === 'web') {
-        console.log('   Method: window.location');
-        const location = (globalThis as any)?.location;
-        console.log('   location object:', location ? '✅ Available' : '❌ Missing');
-        console.log('   location.assign:', typeof location?.assign);
-        console.log('   location.href:', typeof location?.href);
-
-        if (typeof location?.assign === 'function') {
-          console.log('   🔗 Using location.assign()');
-          location.assign(url);
-          console.log('   ✅ Navigate called');
-        } else if (location && typeof location.href === 'string') {
-          console.log('   🔗 Using location.href');
-          location.href = url;
-          console.log('   ✅ Navigate called');
-        } else {
-          console.error('   ❌ No navigation method available');
-          Alert.alert('Success', 'Payment link created:\n' + url + '\n\nPlease visit manually');
+        const Razorpay = (window as any).Razorpay;
+        if (!Razorpay) {
+          throw new Error('Razorpay SDK not loaded. Please refresh the page.');
         }
+
+        checkoutRef.current = new Razorpay({
+          ...checkoutOptions,
+          handler: (response: any) => handlePaymentSuccess(response),
+          modal: {
+            ondismiss: () => {
+              console.log('ℹ️ User closed Razorpay modal');
+              setPaymentLoading(false);
+            },
+          },
+        });
+        checkoutRef.current.on('payment.failed', (response: any) => {
+          handlePaymentFailure(response.error);
+        });
+        checkoutRef.current.open();
       } else {
+        // React Native: try react-native-razorpay, fallback to WebBrowser
         try {
-          console.log('   Opening in WebBrowser...');
-          await WebBrowser.openBrowserAsync(url);
-          console.log('   ✅ Browser opened');
-        } catch (e) {
-          console.log('   WebBrowser failed, trying Linking:', e);
-          await Linking.openURL(url);
-          console.log('   ✅ Linking used');
+          const RazorpayCheckoutModule = require('react-native-razorpay').default;
+          RazorpayCheckoutModule.open(checkoutOptions)
+            .then((response: any) => handlePaymentSuccess(response))
+            .catch((error: any) => handlePaymentFailure(error));
+        } catch (err: any) {
+          console.warn('⚠️ react-native-razorpay not available, opening in browser');
+          await WebBrowser.openBrowserAsync(
+            `https://checkout.razorpay.com/?key_id=${keyId}&order_id=${orderData.id}`
+          );
         }
       }
-
-      console.log('\n✅ === PAYMENT FLOW COMPLETE ===\n');
     } catch (err: any) {
       console.error('\n❌ === PAYMENT FLOW FAILED ===');
       console.error('Error:', err.message);
-      console.error('Stack:', err.stack);
       Alert.alert('Error', err?.message || 'Failed to start payment');
-    } finally {
       setPaymentLoading(false);
     }
+  };
+
+  // STEP 3: Verify Payment Signature
+  const handlePaymentSuccess = async (response: any) => {
+    console.log('3️⃣ Payment successful, verifying signature...');
+    setVerifying(true);
+    setPaymentLoading(false);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('razorpay-verify-signature', {
+        body: {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        },
+      });
+
+      if (error) throw new Error(error.message || 'Verification failed');
+
+      if (!data?.verified) {
+        Alert.alert(
+          'Security Alert',
+          'Payment signature verification failed. This payment has not been processed for security reasons.'
+        );
+        return;
+      }
+
+      console.log('✅ Payment verified successfully');
+      Alert.alert('Success', 'Payment verified! Your membership is being confirmed.', [
+        { text: 'OK', onPress: () => refreshMember() },
+      ]);
+      setTimeout(() => refreshMember(), 2000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Verification failed';
+      Alert.alert('Verification Error', message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handlePaymentFailure = (error: any) => {
+    console.error('❌ Payment failed:', error);
+    setPaymentLoading(false);
+    const errorMessage = error?.description || error?.message || 'Payment failed';
+    Alert.alert('Payment Failed', errorMessage, [
+      { text: 'Retry', onPress: () => handlePayWithRazorpay() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handleRefreshStatus = async () => {
@@ -393,16 +446,16 @@ export default function PaymentScreen() {
         {!showPaymentMethodSelection && shouldShowPaymentMethods && (
           <Card className="mb-4">
             <CardHeader
-              title={member.payment_status === 'processing' ? 'Verify Payment' : 'Pay with Razorpay'}
-              subtitle={member.payment_status === 'processing' ? 'Confirm your payment status' : 'Fast, secure online payment'}
+              title={member.payment_status === 'processing' || verifying ? 'Verify Payment' : 'Pay with Razorpay'}
+              subtitle={member.payment_status === 'processing' || verifying ? 'Confirming your payment status' : 'Fast, secure online payment'}
             />
             <View className="gap-3">
-              {member.payment_status === 'processing' ? (
+              {member.payment_status === 'processing' || verifying ? (
                 <>
                   <Button
-                    title="Verify Payment Now"
+                    title={verifying ? "Verifying Signature..." : "Verify Payment Now"}
                     onPress={handleRefreshStatus}
-                    loading={refreshing}
+                    loading={refreshing || verifying}
                     size="lg"
                     className="w-full"
                   />
@@ -413,7 +466,7 @@ export default function PaymentScreen() {
               ) : member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' ? (
                 <>
                   <Button
-                    title="Create New Payment Link"
+                    title="Pay Online Now"
                     onPress={handlePayWithRazorpay}
                     loading={paymentLoading}
                     size="lg"
@@ -433,13 +486,13 @@ export default function PaymentScreen() {
                     className="w-full"
                   />
                   <Text className="text-center text-xs text-gray-500">
-                    A new payment link will be created. You'll be redirected to Razorpay.
+                    You can try making the payment again.
                   </Text>
                 </>
               ) : (
                 <>
                   <Button
-                    title={paymentLinkUrl ? 'Continue Payment' : 'Pay Now'}
+                    title="Pay Now"
                     onPress={handlePayWithRazorpay}
                     loading={paymentLoading}
                     size="lg"
@@ -459,7 +512,7 @@ export default function PaymentScreen() {
                     className="w-full"
                   />
                   <Text className="text-center text-xs text-gray-500">
-                    After completing payment in Razorpay, come back and tap Refresh Status.
+                    Secure online checkout.
                   </Text>
                 </>
               )}

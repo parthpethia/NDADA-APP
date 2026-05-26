@@ -198,4 +198,5 @@ export interface DashboardStats {
   pending_payments?: number;
   approved_count?: number;
   rejected_count?: number;
+  suspicious_accounts?: number;
 }

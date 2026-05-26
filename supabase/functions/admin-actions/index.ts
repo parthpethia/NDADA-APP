@@ -194,40 +194,43 @@ async function deleteAccount(supabase: any, accountId: string, adminId: string) 
 }
 
 async function revokeCertificate(supabase: any, accountId: string, adminId: string) {
-  await supabase.from('certificates').update({ status: 'revoked' }).eq('member_id', accountId);
+  const { error } = await supabase.from('certificates').update({ status: 'revoked' }).eq('member_id', accountId);
+  if (error) throw new Error(error.message);
   await logAudit(supabase, adminId, 'certificate_revoked', accountId);
   return { message: 'Certificate revoked' };
 }
 
 async function deleteCertificate(supabase: any, accountId: string, adminId: string) {
-  // Fetch certificate record first
-  const { data: cert } = await supabase
+  // Fetch certificate records first
+  const { data: certs, error: fetchErr } = await supabase
     .from('certificates')
     .select('id, certificate_url')
-    .eq('member_id', accountId)
-    .single();
+    .eq('member_id', accountId);
 
-  if (!cert) throw new Error('No certificate found for this account');
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!certs || certs.length === 0) throw new Error('No certificate found for this account');
 
-  // Delete from storage if path exists
-  if (cert.certificate_url) {
-    await supabase.storage
-      .from('certificates')
-      .remove([cert.certificate_url])
-      .catch((err: any) => console.error('Failed to delete certificate file:', err));
+  for (const cert of certs) {
+    // Delete from storage if path exists
+    if (cert.certificate_url) {
+      await supabase.storage
+        .from('certificates')
+        .remove([cert.certificate_url])
+        .catch((err: any) => console.error('Failed to delete certificate file:', err));
+    }
+
+    // Delete certificate downloads
+    await supabase.from('certificate_downloads').delete().eq('certificate_id', cert.id);
   }
 
-  // Delete certificate downloads
-  await supabase.from('certificate_downloads').delete().eq('certificate_id', cert.id);
-
-  // Delete certificate record
-  const { error } = await supabase.from('certificates').delete().eq('id', cert.id);
+  // Delete all certificate records for member
+  const { error } = await supabase.from('certificates').delete().eq('member_id', accountId);
   if (error) throw new Error(error.message);
 
   // Also remove from queue if exists
   await supabase.from('certificate_generation_queue').delete().eq('account_id', accountId);
 
-  await logAudit(supabase, adminId, 'certificate_deleted', accountId, `Deleted certificate ${cert.id}`);
+  await logAudit(supabase, adminId, 'certificate_deleted', accountId, `Deleted certificate(s) for member`);
   return { message: 'Certificate deleted' };
 }
 
