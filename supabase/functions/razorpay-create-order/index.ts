@@ -158,32 +158,15 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(1);
 
-    const existingOrder = existingOrders?.[0] as any;
-    const isRecentOrder = existingOrder &&
-      (Date.now() - new Date(existingOrder.created_at).getTime()) < 30 * 60 * 1000;
-    const sameAmount = existingOrder && Number(existingOrder.amount) === feeAmountRupees;
-
-    if (isRecentOrder && sameAmount && existingOrder.razorpay_order_id) {
-      console.log('♻️ Reusing recent order:', existingOrder.razorpay_order_id);
-      return new Response(JSON.stringify({
-        id: existingOrder.razorpay_order_id,
-        entity: 'order',
-        amount: feeAmountRupees * 100, // in paise
-        amount_paid: 0,
-        amount_due: feeAmountRupees * 100,
-        currency: feeCurrency,
-        receipt: existingOrder.id,
-        status: existingOrder.status,
-        attempts: 0,
-        notes: {
-          member_id: (member as any).id,
-          membership_id: (member as any).membership_id,
-        },
-        created_at: Math.floor(new Date(existingOrder.created_at).getTime() / 1000),
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Mark any old pending orders as expired to avoid reusing orders
+    // created with different/expired API keys
+    if (existingOrders && existingOrders.length > 0) {
+      const oldOrderIds = existingOrders.map((o: any) => o.id);
+      console.log('🧹 Expiring old pending orders:', oldOrderIds);
+      await supabase
+        .from('orders')
+        .update({ status: 'expired' })
+        .in('id', oldOrderIds);
     }
 
     // Create new order in Razorpay
