@@ -29,13 +29,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const recoverFromInvalidRefreshToken = async (message?: string | null) => {
+  // Broader check for invalid/expired session errors from Supabase
+  const isInvalidSessionError = (message?: string | null): boolean => {
     const errorMessage = String(message || '').toLowerCase();
-    if (!errorMessage.includes('invalid refresh token') && !errorMessage.includes('refresh token not found')) {
-      return false;
-    }
+    return (
+      errorMessage.includes('invalid refresh token') ||
+      errorMessage.includes('refresh token not found') ||
+      errorMessage.includes('invalid jwt') ||
+      errorMessage.includes('jwt expired') ||
+      errorMessage.includes('session_not_found') ||
+      errorMessage.includes('auth session missing') ||
+      errorMessage.includes('token is expired') ||
+      errorMessage.includes('invalid claim') ||
+      errorMessage.includes('user not found')
+    );
+  };
 
-    // Clear the invalid session from storage
+  const clearInvalidSession = async () => {
+    // Clear the invalid session from Supabase client
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch (signOutError) {
@@ -62,7 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setMember(null);
     setAdminUser(null);
-    return true;
   };
 
   const fetchMember = useCallback(async (userId: string, currentUser?: User | null) => {
@@ -79,6 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.warn('Failed to fetch account profile:', error.message);
+      // If this is an auth error, the session is bad — don't try to create account
+      if (isInvalidSessionError(error.message)) {
+        throw new Error(`Auth error during fetch: ${error.message}`);
+      }
     }
 
     if (!currentUser) {
@@ -141,6 +155,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           code: (error as any)?.code,
         }
       );
+      // If this is an auth error, propagate it
+      if (isInvalidSessionError(error.message)) {
+        throw new Error(`Auth error during admin fetch: ${error.message}`);
+      }
     }
 
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -154,55 +172,99 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) await fetchMember(user.id);
   }, [user, fetchMember]);
 
+  // Helper: load user profile data with error recovery
+  const loadUserProfile = async (currentSession: Session): Promise<boolean> => {
+    try {
+      await Promise.all([
+        fetchMember(currentSession.user.id, currentSession.user),
+        fetchAdminUser(currentSession.user.id),
+      ]);
+      return true;
+    } catch (err) {
+      console.warn('Auth: profile fetch failed, clearing invalid session:', err);
+      await clearInvalidSession();
+      return false;
+    }
+  };
+
   useEffect(() => {
+    // Track whether initializeAuth has completed to avoid double-loading
+    let initialized = false;
+
     const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
 
         if (error) {
-          const recovered = await recoverFromInvalidRefreshToken(error.message);
-          if (!recovered) {
+          if (isInvalidSessionError(error.message)) {
+            console.warn('Auth: clearing invalid session on init:', error.message);
+            await clearInvalidSession();
+          } else {
             console.warn('Failed to restore auth session:', error.message);
           }
-          setLoading(false);
           return;
         }
 
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await Promise.all([
-            fetchMember(session.user.id, session.user),
-            fetchAdminUser(session.user.id),
-          ]);
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        if (currentSession?.user) {
+          await loadUserProfile(currentSession);
         }
-        setLoading(false);
       } catch (err) {
-        // Silently handle initialization errors
         console.warn('Auth initialization error:', err);
+        // On any unexpected error, clear session to prevent stuck state
+        await clearInvalidSession();
+      } finally {
+        initialized = true;
         setLoading(false);
       }
     };
 
     initializeAuth();
 
+    // Safety timeout: if initialization hangs (e.g. network issue), force loading to false
+    // so the user at least sees the login screen instead of infinite spinner
+    const safetyTimer = setTimeout(() => {
+      if (!initialized) {
+        console.warn('Auth: initialization timed out after 10s, forcing loading=false');
+        setLoading(false);
+      }
+    }, 10_000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await Promise.all([
-            fetchMember(session.user.id, session.user),
-            fetchAdminUser(session.user.id),
-          ]);
+      async (event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+
+        if (newSession?.user) {
+          try {
+            await Promise.all([
+              fetchMember(newSession.user.id, newSession.user),
+              fetchAdminUser(newSession.user.id),
+            ]);
+          } catch (err) {
+            console.warn('Auth: onAuthStateChange profile fetch failed:', err);
+            // If profile loading fails due to auth error, clear session
+            await clearInvalidSession();
+          }
         } else {
           setMember(null);
           setAdminUser(null);
         }
+
+        // If the listener fires before initializeAuth finishes (e.g. INITIAL_SESSION event),
+        // make sure we also stop the loading spinner
+        if (!initialized) {
+          initialized = true;
+          setLoading(false);
+        }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

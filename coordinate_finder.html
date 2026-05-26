@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Coordinate Finder</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .container { display: flex; flex-direction: column; align-items: center; }
+        .controls { margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 100%; max-width: 800px;}
+        .image-wrapper { position: relative; display: inline-block; border: 1px solid #ccc; cursor: crosshair; }
+        img { display: block; max-width: 100%; }
+        .point { position: absolute; width: 10px; height: 10px; background: red; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        .results { margin-top: 15px; font-family: monospace; background: #eee; padding: 10px; border-radius: 4px; }
+        button, input { margin: 5px; padding: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Certificate Coordinate Finder</h2>
+        <div class="controls">
+            <p><strong>1. Select your certificate template image:</strong></p>
+            <input type="file" id="imageLoader" accept="image/*" />
+            <br/><br/>
+            <p><strong>2. Click anywhere on the image below to find the coordinates:</strong></p>
+            <p><small>(Remember: The script uses coordinates calculated from the Bottom-Left. We show those converted coordinates below.)</small></p>
+            <div class="results" id="output">Click the image to see coordinates.</div>
+        </div>
+
+        <div class="image-wrapper" id="imageContainer" style="display:none;">
+            <img id="imageDisplay" src="" alt="Certificate Template" />
+            <div id="marker" class="point" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const imageLoader = document.getElementById('imageLoader');
+        const imageDisplay = document.getElementById('imageDisplay');
+        const imageContainer = document.getElementById('imageContainer');
+        const marker = document.getElementById('marker');
+        const output = document.getElementById('output');
+        
+        let originalWidth = 0;
+        let originalHeight = 0;
+
+        imageLoader.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    originalWidth = img.width;
+                    originalHeight = img.height;
+                    imageDisplay.src = event.target.result;
+                    imageContainer.style.display = 'inline-block';
+                    output.innerHTML = `Image loaded! Natural size: ${originalWidth}px x ${originalHeight}px. Click image to get coordinates.`;
+                    marker.style.display = 'none';
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        imageContainer.addEventListener('click', function(e) {
+            const rect = imageDisplay.getBoundingClientRect();
+            
+            // Get clicked coordinates relative to the displayed image element
+            const displayX = e.clientX - rect.left;
+            const displayY = e.clientY - rect.top;
+
+            // Calculate the scale between natural size and displayed size
+            const scaleX = originalWidth / rect.width;
+            const scaleY = originalHeight / rect.height;
+
+            // Calculate coordinates in the original image's pixel space
+            const naturalX = Math.round(displayX * scaleX);
+            const naturalY = Math.round(displayY * scaleY);
+
+            // Calculate percentage from left and bottom (since pdf-lib Y=0 is at bottom)
+            const percentX = (naturalX / originalWidth).toFixed(4);
+            const percentY = ((originalHeight - naturalY) / originalHeight).toFixed(4);
+
+            // Move the red marker dot visually
+            marker.style.left = displayX + 'px';
+            marker.style.top = displayY + 'px';
+            marker.style.display = 'block';
+
+            output.innerHTML = `
+                <strong>Original Image Size:</strong> ${originalWidth} x ${originalHeight}<br/>
+                <br/>
+                <strong>Clicked Pixel Position:</strong> X=${naturalX}, Y=${naturalY} (from top-left)<br/>
+                <br/>
+                <strong style="color:red; font-size: 1.2em;">Code Percentages (Ready to copy!):</strong><br/>
+                Distance from Left (X) = width * ${percentX}<br/>
+                Distance from Bottom (Y) = height * ${percentY}
+            `;
+        });
+    </script>
+</body>
+</html>
