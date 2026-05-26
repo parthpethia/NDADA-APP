@@ -220,10 +220,14 @@ export default function CartScreen() {
       }
 
       console.log('✅ Payment verified successfully');
+      await refreshMember();
       Alert.alert('Success', 'Payment verified! Your membership is being confirmed.', [
-        { text: 'OK', onPress: () => refreshMember() },
+        { text: 'View Certificate', onPress: () => router.push('/(dashboard)/certificate') },
       ]);
-      setTimeout(() => refreshMember(), 2000);
+      // Auto-redirect after a short delay if user doesn't tap
+      setTimeout(() => {
+        router.push('/(dashboard)/certificate');
+      }, 3000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
       Alert.alert('Verification Error', message);

@@ -255,11 +255,35 @@ serve(async (req) => {
 
     console.log('✅ Payment signature verified and recorded');
 
+    // ============================================================
+    // IMMEDIATELY UPDATE PAYMENT STATUS (belt-and-suspenders)
+    // The webhook will also do this, but updating here ensures
+    // the UI reflects "paid" right away without waiting for the
+    // async webhook callback.
+    // ============================================================
+    await supabase
+      .from('accounts')
+      .update({ payment_status: 'paid' })
+      .eq('id', order.member_id);
+    console.log('✅ Account payment_status set to paid');
+
+    await supabase
+      .from('payments')
+      .update({ status: 'paid' })
+      .eq('razorpay_payment_id', razorpay_payment_id);
+    console.log('✅ Payment record set to paid');
+
+    await supabase
+      .from('orders')
+      .update({ status: 'paid' })
+      .eq('id', order.id);
+    console.log('✅ Order status set to paid');
+
     const response: VerifySignatureResponse = {
       verified: true,
       order_id: razorpay_order_id,
       payment_id: razorpay_payment_id,
-      message: 'Signature verified successfully. Payment will be confirmed once webhook is received.',
+      message: 'Payment verified and confirmed successfully.',
     };
 
     return new Response(JSON.stringify(response), {
