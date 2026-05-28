@@ -105,8 +105,8 @@ export default function AdminMembersScreen() {
 
   const handleCreateMember = async () => {
     const email = createEmail.trim().toLowerCase();
-    if (!email || !createPassword.trim()) {
-      Alert.alert('Error', 'Email and password are required');
+    if (!email) {
+      Alert.alert('Error', 'Email is required');
       return;
     }
 
@@ -114,7 +114,7 @@ export default function AdminMembersScreen() {
     try {
       await callAdminAction('create-member', {
         email,
-        password: createPassword,
+        password: createPassword.trim() || '123456',
         full_name: createFullName,
         phone: createPhone,
         address: createAddress,
@@ -176,7 +176,7 @@ export default function AdminMembersScreen() {
             />
             <TextInput
               className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="Password * (min 6 chars)"
+              placeholder="Password (optional, defaults to 123456)"
               placeholderTextColor="#9ca3af"
               secureTextEntry
               value={createPassword}

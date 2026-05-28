@@ -251,7 +251,7 @@ async function createMemberUser(
   supabase: any,
   params: {
     email: string;
-    password: string;
+    password?: string;
     full_name?: string;
     phone?: string;
     address?: string;
@@ -259,10 +259,10 @@ async function createMemberUser(
   adminId: string
 ) {
   const email = String(params.email || '').trim().toLowerCase();
-  const password = String(params.password || '');
+  const password = String(params.password || '').trim() || '123456';
 
   if (!email) throw new Error('email is required');
-  if (!password || password.length < 6) throw new Error('password must be at least 6 characters');
+  if (password.length < 6) throw new Error('password must be at least 6 characters');
 
   const { data, error } = await supabase.auth.admin.createUser({
     email,
