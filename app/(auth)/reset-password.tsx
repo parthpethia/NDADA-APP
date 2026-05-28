@@ -14,9 +14,41 @@ export default function ResetPasswordScreen() {
   const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
-    // Supabase handles the recovery token via onAuthStateChange.
-    // When the user clicks the email link and lands here, Supabase
-    // fires a PASSWORD_RECOVERY event and sets a temporary session.
+    // Since detectSessionInUrl is false in our Supabase config, we must
+    // manually extract the recovery tokens from the URL hash fragment.
+    // Supabase reset links redirect to:
+    //   /reset-password#access_token=...&refresh_token=...&type=recovery
+    const handleRecoveryFromHash = async () => {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const hash = window.location.hash.substring(1); // remove leading '#'
+        if (!hash) return false;
+
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type');
+
+        if (accessToken && refreshToken && type === 'recovery') {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (sessionError) {
+            setError(`Failed to verify reset link: ${sessionError.message}`);
+            return false;
+          }
+
+          // Clean up the hash from the URL
+          window.history.replaceState(null, '', window.location.pathname);
+          setSessionReady(true);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Listen for PASSWORD_RECOVERY event as a fallback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
@@ -25,11 +57,15 @@ export default function ResetPasswordScreen() {
       }
     );
 
-    // Also check if there's already a session (user may already be authenticated
-    // via the recovery flow before this component mounts)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSessionReady(true);
+    // Try to extract tokens from hash first
+    handleRecoveryFromHash().then((handled) => {
+      if (!handled) {
+        // Fallback: check if there's already a valid session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            setSessionReady(true);
+          }
+        });
       }
     });
 
