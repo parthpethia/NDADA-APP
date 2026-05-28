@@ -64,6 +64,12 @@ export default function LoginScreen() {
               secureTextEntry
             />
 
+            <View className="items-end mb-2">
+              <Link href="/(auth)/forgot-password">
+                <Text className="text-sm font-medium text-primary-700">Forgot Password?</Text>
+              </Link>
+            </View>
+
             <Button
               title="Sign In to Membership Portal"
               onPress={handleLogin}

@@ -18,6 +18,7 @@ interface AuthContextType {
   }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshMember: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -316,9 +317,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminUser(null);
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081';
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${appUrl}/(auth)/reset-password`,
+      });
+      return { error: error?.message ?? null };
+    } catch (e) {
+      return {
+        error: 'Network error while sending reset email. Please check your internet connection.',
+      };
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ session, user, member, adminUser, loading, signIn, signUp, signOut, refreshMember }}
+      value={{ session, user, member, adminUser, loading, signIn, signUp, signOut, refreshMember, resetPassword }}
     >
       {children}
     </AuthContext.Provider>
