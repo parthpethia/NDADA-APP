@@ -21,28 +21,38 @@ export default function ResetPasswordScreen() {
     const handleRecoveryFromHash = async () => {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         const hash = window.location.hash.substring(1); // remove leading '#'
-        if (!hash) return false;
+        console.log('ResetPassword: hash fragment is:', hash);
+        if (!hash) {
+          console.log('ResetPassword: no hash fragment found');
+          return false;
+        }
 
         const params = new URLSearchParams(hash);
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         const type = params.get('type');
+        console.log('ResetPassword: extracted params:', { accessToken: accessToken ? 'exists' : 'null', refreshToken: refreshToken ? 'exists' : 'null', type });
 
         if (accessToken && refreshToken && type === 'recovery') {
+          console.log('ResetPassword: attempting to setSession...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
           if (sessionError) {
+            console.error('ResetPassword: setSession failed:', sessionError);
             setError(`Failed to verify reset link: ${sessionError.message}`);
             return false;
           }
 
+          console.log('ResetPassword: setSession succeeded, updating history and setting sessionReady');
           // Clean up the hash from the URL
           window.history.replaceState(null, '', window.location.pathname);
           setSessionReady(true);
           return true;
+        } else {
+          console.log('ResetPassword: params did not match recovery criteria');
         }
       }
       return false;
