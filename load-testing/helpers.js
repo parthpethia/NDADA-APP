@@ -62,44 +62,80 @@ export function loginTestUser(vuIndex) {
   };
 }
 
+// VU-local profile cache to avoid duplicate RPC calls when both fetchAccount and fetchAdminUser are called in sequence
+let cachedProfile = null;
+
 /**
  * Fetch the account record for a logged-in user.
+ * Consolidated: Calls the get_user_profile() RPC and caches result.
  * Returns the account object or null.
  */
 export function fetchAccount(accessToken, userId) {
-  const res = http.get(
-    restUrl('accounts', `select=id,user_id,full_name,email,phone,membership_id,payment_status,approval_status,firm_name&user_id=eq.${userId}`),
+  if (cachedProfile && cachedProfile.account && cachedProfile.account.user_id === userId) {
+    return cachedProfile.account;
+  }
+
+  const res = http.post(
+    restUrl('rpc/get_user_profile'),
+    JSON.stringify({ p_user_id: userId }),
     {
       headers: supabaseHeaders(accessToken),
-      tags: { flow: 'dashboard_load' },
+      tags: { flow: 'login', name: 'get_user_profile_rpc' },
     }
   );
 
   const success = check(res, {
-    'fetch account 200': (r) => r.status === 200,
+    'fetch profile RPC 200': (r) => r.status === 200,
   });
 
-  if (!success) return null;
+  if (!success) {
+    cachedProfile = null;
+    return null;
+  }
 
-  const accounts = JSON.parse(res.body);
-  return accounts.length > 0 ? accounts[0] : null;
+  try {
+    cachedProfile = JSON.parse(res.body);
+    return cachedProfile.account;
+  } catch {
+    cachedProfile = null;
+    return null;
+  }
 }
 
 /**
  * Fetch the admin_users record for a logged-in user.
+ * Consolidated: Uses the cached result from get_user_profile() RPC, or fetches if missing.
  */
 export function fetchAdminUser(accessToken, userId) {
-  const res = http.get(
-    restUrl('admin_users', `select=id,user_id,email,role,created_at&user_id=eq.${userId}`),
+  if (cachedProfile && cachedProfile.account && cachedProfile.account.user_id === userId) {
+    return cachedProfile.admin;
+  }
+
+  const res = http.post(
+    restUrl('rpc/get_user_profile'),
+    JSON.stringify({ p_user_id: userId }),
     {
       headers: supabaseHeaders(accessToken),
-      tags: { flow: 'admin_check' },
+      tags: { flow: 'login', name: 'get_user_profile_rpc' },
     }
   );
 
-  if (res.status !== 200) return null;
-  const data = JSON.parse(res.body);
-  return data.length > 0 ? data[0] : null;
+  const success = check(res, {
+    'fetch admin RPC 200': (r) => r.status === 200,
+  });
+
+  if (!success) {
+    cachedProfile = null;
+    return null;
+  }
+
+  try {
+    cachedProfile = JSON.parse(res.body);
+    return cachedProfile.admin;
+  } catch {
+    cachedProfile = null;
+    return null;
+  }
 }
 
 // ============================================================
@@ -108,44 +144,23 @@ export function fetchAdminUser(accessToken, userId) {
 
 /**
  * Simulate the full dashboard load sequence:
- * 1. Fetch account with details
- * 2. Fetch certificate
- * 3. Fetch unread notification count
+ * Consolidated: Calls the get_dashboard_data() RPC (replaces 3 batched REST calls).
  */
 export function loadDashboard(accessToken, userId, accountId) {
-  const responses = http.batch([
-    // Account with payments and certificates (like fetchAccountWithDetails)
-    ['GET', restUrl('accounts', `select=*,payments(id,amount,currency,status,created_at),certificates(id,certificate_id,certificate_url,issued_at,status)&user_id=eq.${userId}`), null, {
+  const res = http.post(
+    restUrl('rpc/get_dashboard_data'),
+    JSON.stringify({ p_user_id: userId }),
+    {
       headers: supabaseHeaders(accessToken),
-      tags: { flow: 'dashboard_load', name: 'account_details' },
-    }],
-    // Certificate check
-    ['GET', restUrl('certificates', `select=id,member_id,certificate_id,certificate_url,status,issued_at&member_id=eq.${accountId}`), null, {
-      headers: supabaseHeaders(accessToken),
-      tags: { flow: 'dashboard_load', name: 'certificate_check' },
-    }],
-    // Unread notifications count
-    ['GET', restUrl('notifications', `select=id&user_id=eq.${userId}&read=eq.false`), null, {
-      headers: {
-        ...supabaseHeaders(accessToken),
-        'Prefer': 'count=exact',
-        'Range': '0-0',
-      },
-      tags: { flow: 'dashboard_load', name: 'notification_count' },
-    }],
-  ]);
+      tags: { flow: 'dashboard_load', name: 'get_dashboard_rpc' },
+    }
+  );
 
-  check(responses[0], {
-    'dashboard account 200': (r) => r.status === 200,
-  });
-  check(responses[1], {
-    'dashboard cert 200': (r) => r.status === 200 || r.status === 406,
-  });
-  check(responses[2], {
-    'dashboard notifications 200': (r) => r.status === 200 || r.status === 206,
+  check(res, {
+    'dashboard RPC 200': (r) => r.status === 200,
   });
 
-  return responses;
+  return res;
 }
 
 // ============================================================
