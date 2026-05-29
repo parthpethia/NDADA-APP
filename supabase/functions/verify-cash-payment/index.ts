@@ -145,11 +145,15 @@ serve(async (req) => {
         console.warn('Warning: Failed to record verification:', verificationErr.message);
       }
 
-      // Certificate generation depends only on payment — trigger immediately
-      console.log(`Triggering certificate generation for member ${member_id}`);
-      await supabase.functions.invoke('generate-certificate', {
-        body: { member_id }
-      }).catch(err => console.error('Failed to trigger certificate generation:', err));
+      // Enqueue certificate generation (non-blocking)
+      console.log(`Queuing certificate generation for member ${member_id}`);
+      await supabase.from('certificate_generation_queue').upsert(
+        { account_id: member_id, status: 'pending' },
+        { onConflict: 'account_id' }
+      ).then(() => {
+        supabase.functions.invoke('process-certificate-queue', { body: {} })
+          .catch(() => {}); // Fire-and-forget
+      }).catch(err => console.error('Failed to enqueue certificate generation:', err));
 
       return new Response(JSON.stringify({
         success: true,

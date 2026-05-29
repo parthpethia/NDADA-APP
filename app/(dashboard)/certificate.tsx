@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -10,63 +10,182 @@ import { Award } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
+// Poll interval for checking certificate readiness (ms)
+const POLL_INTERVAL = 3000;
+// Maximum poll duration before giving up (ms)
+const MAX_POLL_DURATION = 120000; // 2 minutes
+
+type QueueStatus = 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
+
 export default function CertificateScreen() {
-  const { member } = useAuth();
+  const { member, session } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<QueueStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollStartRef = useRef<number>(0);
 
-  const fetchCertificate = useCallback(async () => {
-    if (!member) return;
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Check if a certificate exists in the DB
+  const checkCertificate = useCallback(async (): Promise<Certificate | null> => {
+    if (!member) return null;
     const { data } = await supabase
       .from('certificates')
-      .select('*')
+      .select('id, member_id, certificate_id, certificate_url, status, issued_at')
       .eq('member_id', member.id)
       .maybeSingle();
 
     // Only treat it as a valid certificate if it has a URL and ID
     if (data && data.certificate_url && data.certificate_id) {
-      setCertificate(data);
-    } else {
-      setCertificate(null);
+      return data as Certificate;
     }
-    setLoading(false);
+    return null;
   }, [member]);
 
-  const triggerGeneration = useCallback(async () => {
-    if (!member) return;
-    setGenerating(true);
-    setError(null);
+  // Check queue status for this member
+  const checkQueueStatus = useCallback(async (): Promise<QueueStatus> => {
+    if (!member) return 'idle';
+    const { data } = await supabase
+      .from('certificate_generation_queue')
+      .select('status')
+      .eq('account_id', member.id)
+      .maybeSingle();
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setError('You must be logged in.');
-        setGenerating(false);
+    if (!data) return 'idle';
+    if (data.status === 'pending') return 'queued';
+    if (data.status === 'processing') return 'processing';
+    if (data.status === 'completed') return 'completed';
+    if (data.status === 'failed') return 'failed';
+    return 'idle';
+  }, [member]);
+
+  // Start polling for certificate readiness
+  const startPolling = useCallback(() => {
+    // Don't start if already polling
+    if (pollTimerRef.current) return;
+
+    pollStartRef.current = Date.now();
+    setQueueStatus('queued');
+
+    pollTimerRef.current = setInterval(async () => {
+      // Check timeout
+      if (Date.now() - pollStartRef.current > MAX_POLL_DURATION) {
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        setQueueStatus('idle');
+        setError('Certificate generation is taking longer than expected. Please check back later.');
         return;
       }
 
+      // Check if certificate is ready
+      const cert = await checkCertificate();
+      if (cert) {
+        setCertificate(cert);
+        setQueueStatus('idle');
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        return;
+      }
+
+      // Update queue status for UI feedback
+      const status = await checkQueueStatus();
+      setQueueStatus(status === 'completed' ? 'processing' : status); // Completed in queue but no cert yet = still processing
+      if (status === 'failed') {
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        setError('Certificate generation failed. Please try again.');
+      }
+    }, POLL_INTERVAL);
+  }, [checkCertificate, checkQueueStatus]);
+
+  // Enqueue certificate generation
+  const triggerGeneration = useCallback(async () => {
+    if (!member) return;
+    setError(null);
+    setQueueStatus('queued');
+
+    try {
+      if (!session) {
+        setError('You must be logged in.');
+        setQueueStatus('idle');
+        return;
+      }
+
+      // First try direct generation (handles idempotency — returns existing cert instantly)
       const { data, error: fnError } = await supabase.functions.invoke('generate-certificate', {
         body: { member_id: member.id },
       });
 
       if (fnError) {
         console.error('Certificate generation error:', fnError);
+        // If rate-limited, the generation was queued — start polling
+        if (fnError.message?.includes('429') || fnError.message?.includes('busy')) {
+          startPolling();
+          return;
+        }
         setError(fnError.message || 'Failed to generate certificate. Please try again.');
+        setQueueStatus('idle');
+      } else if (data?.status === 'queued' || data?.retry_after) {
+        // Server returned 429 — generation is queued, start polling
+        startPolling();
       } else if (data?.error) {
         setError(data.error);
+        setQueueStatus('idle');
       } else if (data?.certificate) {
         setCertificate(data.certificate);
+        setQueueStatus('idle');
+      } else {
+        // Generation started but hasn't completed yet — poll
+        startPolling();
       }
     } catch (err: any) {
       console.error('Certificate generation error:', err);
       setError(err.message || 'An unexpected error occurred.');
+      setQueueStatus('idle');
+    }
+  }, [member, session, startPolling]);
+
+  // Initial load — check for existing certificate or queue status
+  const fetchCertificate = useCallback(async () => {
+    if (!member) return;
+
+    // Check for existing certificate first
+    const cert = await checkCertificate();
+    if (cert) {
+      setCertificate(cert);
+      setLoading(false);
+      return;
     }
 
-    setGenerating(false);
-  }, [member]);
+    // No certificate — check if there's a pending/processing queue entry
+    const status = await checkQueueStatus();
+    if (status === 'queued' || status === 'processing') {
+      setQueueStatus(status);
+      setLoading(false);
+      startPolling();
+      return;
+    }
+
+    setCertificate(null);
+    setLoading(false);
+  }, [member, checkCertificate, checkQueueStatus, startPolling]);
 
   useEffect(() => {
     fetchCertificate();
@@ -78,12 +197,13 @@ export default function CertificateScreen() {
     if (
       !loading &&
       !certificate &&
-      !generating &&
+      queueStatus === 'idle' &&
+      !error &&
       member?.payment_status === 'paid'
     ) {
       triggerGeneration();
     }
-  }, [loading, certificate, member, generating, triggerGeneration]);
+  }, [loading, certificate, member, queueStatus, error, triggerGeneration]);
 
   const handleDownload = async () => {
     if (!certificate || !member) return;
@@ -131,16 +251,23 @@ export default function CertificateScreen() {
 
   if (loading) return <LoadingScreen />;
 
-  // Generating state
-  if (generating) {
+  // Generation in progress — show queue status
+  if (queueStatus === 'queued' || queueStatus === 'processing') {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50 p-8">
         <ActivityIndicator size="large" color="#1d4ed8" />
         <Text className="mt-4 text-lg font-semibold text-gray-900">
-          Generating Your Certificate...
+          {queueStatus === 'queued'
+            ? 'Certificate Queued...'
+            : 'Generating Your Certificate...'}
         </Text>
         <Text className="mt-2 text-center text-sm text-gray-500">
-          This usually takes a few seconds. Please wait.
+          {queueStatus === 'queued'
+            ? 'Your certificate is in the queue and will be generated shortly.'
+            : 'Your certificate is being generated. This usually takes a few seconds.'}
+        </Text>
+        <Text className="mt-4 text-center text-xs text-gray-400">
+          You can navigate away — your certificate will be ready when you return.
         </Text>
       </View>
     );
@@ -162,7 +289,7 @@ export default function CertificateScreen() {
       >
         {isEligible && (
           <Button
-            title="Generate Certificate Now"
+            title={error ? 'Retry Generation' : 'Generate Certificate Now'}
             onPress={triggerGeneration}
             size="lg"
           />

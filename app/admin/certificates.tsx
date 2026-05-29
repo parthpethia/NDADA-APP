@@ -53,7 +53,7 @@ export default function AdminCertificatesScreen() {
     // Fetch certificates with member info
     let query = supabase
       .from('certificates')
-      .select('*, accounts:member_id(full_name, email, membership_id)')
+      .select('id, status, certificate_id, issued_at, member_id, accounts:member_id(full_name, email, membership_id)')
       .order('issued_at', { ascending: false });
 
     if (filterStatus !== 'all') {

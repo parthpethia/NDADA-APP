@@ -235,12 +235,16 @@ async function setPaymentStatus(
 
   if (!account) throw new Error('Account not found');
 
-  // Certificate generation depends only on payment — trigger when paid
+  // Enqueue certificate generation when paid (non-blocking)
   if (status === 'paid') {
-    console.log(`Triggering certificate generation for member ${accountId}`);
-    await supabase.functions.invoke('generate-certificate', {
-      body: { member_id: accountId }
-    }).catch(err => console.error('Failed to trigger certificate generation:', err));
+    console.log(`Queuing certificate generation for member ${accountId}`);
+    await supabase.from('certificate_generation_queue').upsert(
+      { account_id: accountId, status: 'pending' },
+      { onConflict: 'account_id' }
+    ).then(() => {
+      supabase.functions.invoke('process-certificate-queue', { body: {} })
+        .catch(() => {}); // Fire-and-forget
+    }).catch(err => console.error('Failed to enqueue certificate generation:', err));
   }
 
   await logAudit(supabase, adminId, 'payment_status_set', accountId, `Set payment_status=${status}`);

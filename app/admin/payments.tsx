@@ -45,7 +45,7 @@ export default function AdminPaymentsScreen() {
     // Fetch online payments
     const { data: onlinePayments } = await supabase
       .from('payments')
-      .select('*, accounts(full_name, email)')
+      .select('id, status, amount, currency, provider, razorpay_payment_id, created_at, accounts(full_name, email)')
       .order('created_at', { ascending: false })
       .limit(50);
 

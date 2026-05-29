@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Notification } from '@/types';
+import { useAuth } from '@/lib/auth';
 import {
   fetchNotifications,
   fetchUnreadNotificationCount,
@@ -17,11 +18,12 @@ interface UseNotificationsReturn {
   refresh: () => Promise<void>;
 }
 
+const NotificationContext = createContext<UseNotificationsReturn | null>(null);
+
 /**
- * Hook to manage user notifications
- * Provides fetching, marking as read, and real-time updates
+ * Internal hook to manage user notifications for the provider
  */
-export function useNotifications(userId: string | undefined): UseNotificationsReturn {
+function useNotificationsSource(userId: string | undefined): UseNotificationsReturn {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -62,8 +64,10 @@ export function useNotifications(userId: string | undefined): UseNotificationsRe
   useEffect(() => {
     fetchData();
 
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchData, 30000);
+    if (!userId) return;
+
+    // Poll for new notifications every 120 seconds (2 minutes)
+    const interval = setInterval(fetchData, 120000);
     return () => clearInterval(interval);
   }, [userId]);
 
@@ -111,3 +115,29 @@ export function useNotifications(userId: string | undefined): UseNotificationsRe
     refresh: fetchData,
   };
 }
+
+/**
+ * Provider to wrap the application and coordinate a single notifications subscription/polling instance.
+ */
+export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const value = useNotificationsSource(user?.id);
+  return (
+    <NotificationContext.Provider value={value}>
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+/**
+ * Hook to access the shared notifications state from context.
+ * Can take an optional parameter for backwards compatibility, but ignores it in favor of the shared context.
+ */
+export function useNotifications(userId?: string | undefined): UseNotificationsReturn {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotifications must be used within a NotificationProvider');
+  }
+  return context;
+}
+

@@ -43,12 +43,11 @@ export default function DashboardHome() {
 
   useEffect(() => {
     fetchData();
-  }, [member]);
+  }, [member?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refreshMember();
-    await fetchData();
+    await Promise.all([refreshMember(), fetchData()]);
     setRefreshing(false);
   };
 

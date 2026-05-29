@@ -61,6 +61,9 @@ class ErrorTracker {
   private config: ErrorTrackerConfig;
   private localLogs: ErrorReport[] = [];
   private sentryInitialized = false;
+  private lastReportTime = 0;
+  private reportCount = 0;
+  private readonly MAX_REPORTS_PER_MINUTE = 10;
 
   constructor(config: Partial<ErrorTrackerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -224,6 +227,18 @@ class ErrorTracker {
    * Report to remote service
    */
   private async reportRemote(report: ErrorReport) {
+    const now = Date.now();
+    if (now - this.lastReportTime > 60000) {
+      this.reportCount = 0;
+      this.lastReportTime = now;
+    }
+
+    if (this.reportCount >= this.MAX_REPORTS_PER_MINUTE) {
+      console.warn('[ErrorTracker] Remote error reporting rate limit exceeded. Dropping report.');
+      return;
+    }
+    this.reportCount++;
+
     try {
       // Try to save to Supabase error_logs table if it exists
       const { error } = await supabase.from('error_logs').insert({

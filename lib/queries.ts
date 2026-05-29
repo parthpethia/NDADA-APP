@@ -72,7 +72,7 @@ export async function fetchAccountBasic(
   try {
     const { data, error } = await supabase
       .from('accounts')
-      .select('*')
+      .select('id, user_id, full_name, email, phone, address, district, membership_id, payment_status, approval_status')
       .eq('user_id', userId)
       .single();
 
@@ -96,7 +96,7 @@ export async function fetchAccountPayments(
   try {
     const { data, error } = await supabase
       .from('payments')
-      .select('*')
+      .select('id, member_id, amount, status, payment_method, razorpay_order_id, razorpay_payment_id, created_at')
       .eq('member_id', accountId)
       .order('created_at', { ascending: false });
 
@@ -120,7 +120,7 @@ export async function fetchAccountCertificate(
   try {
     const { data, error } = await supabase
       .from('certificates')
-      .select('*')
+      .select('id, member_id, certificate_id, certificate_url, status, issued_at')
       .eq('member_id', accountId)
       .single();
 
@@ -149,7 +149,7 @@ export async function fetchAdminUser(
   try {
     const { data, error } = await supabase
       .from('admin_users')
-      .select('*')
+      .select('id, user_id, email, role, created_at')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -175,7 +175,7 @@ export async function fetchAccountsList(
   }
 ): Promise<{ data: Account[] | null; error: PostgrestError | null }> {
   try {
-    let query = supabase.from('accounts').select('*').order('created_at', { ascending: false });
+    let query = supabase.from('accounts').select('id, user_id, full_name, email, phone, district, firm_name, license_number, registration_number, membership_id, payment_status, approval_status, created_at').order('created_at', { ascending: false });
 
     if (filter?.approvalStatus) {
       query = query.eq('approval_status', filter.approvalStatus);
@@ -232,7 +232,7 @@ export async function fetchNotifications(
   try {
     const { data, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select('id, user_id, title, message, type, read, action_url, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -257,7 +257,7 @@ export async function fetchUnreadNotificationCount(
   try {
     const { count, error } = await supabase
       .from('notifications')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('read', false);
 
@@ -328,7 +328,7 @@ export async function fetchCertificateQueueJobs(
   try {
     let query = supabase
       .from('certificate_generation_queue')
-      .select('*')
+      .select('id, member_id, status, error_message, created_at, updated_at, processed_at')
       .order('created_at', { ascending: false });
 
     if (status) {

@@ -88,7 +88,7 @@ export default function AdminFirmsScreen() {
   const fetchAccounts = useCallback(async () => {
     let query = supabase
       .from('accounts')
-      .select('*')
+      .select('id, firm_name, full_name, approval_status, firm_type, license_number, registration_number, gst_number, district, created_at, documents_urls, membership_id, email')
       .order(sortBy, { ascending: false });
 
     // Apply status filter
@@ -127,11 +127,6 @@ export default function AdminFirmsScreen() {
     setFilteredAccounts(filtered);
   }, [accounts, searchQuery]);
 
-  useEffect(() => {
-    fetchAccounts();
-    fetchStats();
-  }, [fetchAccounts, fetchStats]);
-
   useFocusEffect(
     useCallback(() => {
       fetchAccounts();
@@ -166,13 +161,20 @@ export default function AdminFirmsScreen() {
 
   const handleBulkApprove = async () => {
     if (selectedIds.size === 0) return;
+    setActionLoading('bulk');
     try {
-      for (const id of selectedIds) {
-        await handleApprove(id);
-      }
+      const ids = Array.from(selectedIds);
+      await Promise.all(
+        ids.map((id) => callAdminAction('approve-account', { account_id: id }))
+      );
       setSelectedIds(new Set());
-    } catch (err) {
-      showAlert('Error', 'Failed to approve some applications');
+      await Promise.all([fetchAccounts(), fetchStats()]);
+      showAlert('Success', `Approved ${ids.length} applications successfully.`);
+    } catch (err: any) {
+      showAlert('Error', err?.message || 'Failed to approve some applications');
+      await Promise.all([fetchAccounts(), fetchStats()]);
+    } finally {
+      setActionLoading(null);
     }
   };
 

@@ -1,5 +1,6 @@
 // Supabase Edge Function: generate-certificate
 // Generates a PDF certificate with QR code, uploads to Storage
+// Optimized: template caching, parallel I/O, concurrency guard
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
@@ -11,6 +12,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Max-Age': '86400',
 };
+
+// ============================================================
+// MODULE-LEVEL CACHE — persists across invocations within the
+// same Edge Function instance. Avoids re-downloading the ~248 KB
+// template JPEG on every certificate generation.
+// ============================================================
+let cachedTemplateBytes: Uint8Array | null = null;
+
+// Maximum concurrent certificate generations allowed
+const MAX_CONCURRENT = 3;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -65,6 +76,26 @@ serve(async (req) => {
       await supabase.from('certificates').delete().eq('id', existingCert.id);
     }
 
+    // ============================================================
+    // CONCURRENCY GUARD — prevent thundering herd
+    // ============================================================
+    const { count: processingCount } = await supabase
+      .from('certificate_generation_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'processing');
+
+    if ((processingCount ?? 0) >= MAX_CONCURRENT) {
+      console.log(`Concurrency limit reached (${processingCount}/${MAX_CONCURRENT}). Returning 429.`);
+      return new Response(JSON.stringify({
+        error: 'Certificate generation is busy. Your certificate will be generated shortly.',
+        retry_after: 10,
+        status: 'queued',
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '10' },
+      });
+    }
+
     // Fetch account details
     const { data: member, error: memberErr } = await supabase
       .from('accounts')
@@ -87,26 +118,39 @@ serve(async (req) => {
       });
     }
 
-    // --- LOAD TEMPLATE FROM SUPABASE STORAGE (before inserting record) ---
-    // Template is stored in the 'templates' bucket as 'certificate-template.jpeg'
-    // This ensures we don't create a broken DB record if the template is missing
-    let templateBytes: Uint8Array;
-    try {
-      const { data: templateData, error: templateErr } = await supabase.storage
-        .from('templates')
-        .download('certificate-template.jpeg');
+    // ============================================================
+    // LOAD TEMPLATE (cached) — only downloads on first invocation
+    // ============================================================
+    if (!cachedTemplateBytes) {
+      console.log('Template cache MISS — downloading from storage...');
+      try {
+        const { data: templateData, error: templateErr } = await supabase.storage
+          .from('templates')
+          .download('certificate-template.jpeg');
 
-      if (templateErr || !templateData) {
-        console.error('Template download error:', templateErr);
-        throw new Error('Certificate template not found in storage.');
+        if (templateErr || !templateData) {
+          console.error('Template download error:', templateErr);
+          throw new Error('Certificate template not found in storage.');
+        }
+
+        cachedTemplateBytes = new Uint8Array(await templateData.arrayBuffer());
+        console.log(`Template cached: ${cachedTemplateBytes.length} bytes`);
+      } catch (e) {
+        console.error('Error loading certificate template:', e);
+        throw new Error('Certificate template not found. Contact admin to upload template.');
       }
-
-      templateBytes = new Uint8Array(await templateData.arrayBuffer());
-      console.log(`Template loaded from storage: ${templateBytes.length} bytes`);
-    } catch (e) {
-      console.error('Error loading certificate template:', e);
-      throw new Error('Certificate template not found. Contact admin to upload template.');
+    } else {
+      console.log('Template cache HIT — using cached copy');
     }
+
+    const templateBytes = cachedTemplateBytes;
+
+    // Mark queue job as processing (if one exists)
+    await supabase
+      .from('certificate_generation_queue')
+      .update({ status: 'processing', processing_started_at: new Date().toISOString() })
+      .eq('account_id', member.id)
+      .eq('status', 'pending');
 
     // Create certificate record — the DB trigger auto-generates certificate_id
     const { data: certRecord, error: certInsertErr } = await supabase
@@ -140,30 +184,26 @@ serve(async (req) => {
 
     const now = new Date();
     const issueDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
-    const issueTimeStr = now.toLocaleTimeString('en-IN', {
-      hour: '2-digit', minute: '2-digit',
-    });
 
-    // Generate QR code as data URL
+    // Generate QR code verification URL
     const verifyUrl = `${appUrl}/verify?id=${certRecord.certificate_id}`;
-    const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 150, margin: 1 });
-    const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), (c) => c.charCodeAt(0));
 
-    // --- TEMPLATE CONFIGURATION ---
-    // Coordinates for text placement on the certificate template
-    // (0,0) is the Bottom-Left corner in pdf-lib
-    // Template is landscape ~1500x1060 (actual dimensions come from the image)
-    // All positions are calibrated to the uploaded certificate-template.jpeg
-
-    // Generate PDF
+    // ============================================================
+    // PARALLEL I/O — embed template, fonts, and QR concurrently
+    // ============================================================
     const pdfDoc = await PDFDocument.create();
-    const templateImage = await pdfDoc.embedJpg(templateBytes);
+
+    const [templateImage, helveticaBold, qrDataUrl] = await Promise.all([
+      pdfDoc.embedJpg(templateBytes),
+      pdfDoc.embedFont(StandardFonts.HelveticaBold),
+      QRCode.toDataURL(verifyUrl, { width: 120, margin: 1 }),
+    ]);
+
     const { width, height } = templateImage.scale(1); // Use original image dimensions
-    
     console.log(`Template dimensions: ${width}x${height}`);
-    
+
     const page = pdfDoc.addPage([width, height]);
-    
+
     // Draw the background template
     page.drawImage(templateImage, {
       x: 0,
@@ -171,9 +211,6 @@ serve(async (req) => {
       width,
       height,
     });
-
-    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     // --- Calculate proportional coordinates based on actual template size ---
     // All percentages derived from analyzing the certificate template image
@@ -241,7 +278,8 @@ serve(async (req) => {
       color: rgb(0.88, 0.05, 0.05), // Beautiful prominent red/crimson color to match reference
     });
 
-    // 5. QR CODE
+    // 5. QR CODE — embed in parallel with other ops above
+    const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(',')[1]), (c) => c.charCodeAt(0));
     const qrSize = Math.round(width * 0.073); // ~110px on a 1500px wide template
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     page.drawImage(qrImage, {
@@ -268,6 +306,16 @@ serve(async (req) => {
       console.error('Storage upload error:', uploadErr);
       // Clean up the certificate record since upload failed
       await supabase.from('certificates').delete().eq('id', certRecord.id);
+      // Mark queue job as failed
+      await supabase
+        .from('certificate_generation_queue')
+        .update({
+          status: 'failed',
+          error_message: `Storage upload failed: ${uploadErr.message}`,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('account_id', member.id)
+        .in('status', ['pending', 'processing']);
       throw uploadErr;
     }
 
@@ -281,12 +329,12 @@ serve(async (req) => {
       .select()
       .single();
 
-    // Also mark queue job as completed if one exists
+    // Mark queue job as completed
     await supabase
       .from('certificate_generation_queue')
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('account_id', member.id)
-      .eq('status', 'pending');
+      .in('status', ['pending', 'processing']);
 
     console.log(`Certificate generation complete for ${member.full_name} (${certRecord.certificate_id})`);
 

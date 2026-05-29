@@ -21,9 +21,9 @@ export default function CashPaymentReviewScreen() {
   const [changingMethod, setChangingMethod] = useState(false);
 
   useEffect(() => {
-    const checkCashPaymentVerification = async () => {
-      if (!member) return;
+    if (!member) return;
 
+    const checkCashPaymentVerification = async () => {
       try {
         const { data } = await supabase
           .from('accounts')
@@ -32,12 +32,9 @@ export default function CashPaymentReviewScreen() {
           .single();
 
         if (data?.cash_payment_verified) {
-          // Transition to verified once, then refresh member context.
-          if (!cashVerified) {
-            setCashVerified(true);
-            await refreshMember();
-          }
-        } else if (cashVerified) {
+          setCashVerified(true);
+          await refreshMember();
+        } else {
           setCashVerified(false);
         }
       } catch (err) {
@@ -49,10 +46,32 @@ export default function CashPaymentReviewScreen() {
 
     checkCashPaymentVerification();
 
-    // Poll for verification every 5 seconds
-    const interval = setInterval(checkCashPaymentVerification, 5000);
-    return () => clearInterval(interval);
-  }, [member?.id, cashVerified, refreshMember]);
+    // Subscribe to changes on this specific row
+    const channel = supabase
+      .channel(`cash-verify-${member.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'accounts',
+          filter: `id=eq.${member.id}`,
+        },
+        async (payload) => {
+          if (payload.new?.cash_payment_verified) {
+            setCashVerified(true);
+            await refreshMember();
+          } else {
+            setCashVerified(false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [member?.id, refreshMember]);
 
   if (!member) return null;
 

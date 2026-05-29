@@ -23,12 +23,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// Columns from 'accounts' actually consumed by the app.
+// Keep this list in sync with the Account type fields you reference in UI.
+const ACCOUNT_SELECT_COLUMNS = [
+  'id', 'user_id',
+  'full_name', 'email', 'phone', 'address', 'district', 'id_proof_url',
+  'firm_name', 'firm_type', 'license_number', 'registration_number',
+  'gst_number', 'firm_address', 'contact_phone', 'contact_email',
+  'firm_pin_code', 'partner_proprietor_name', 'whatsapp_number',
+  'aadhaar_card_number', 'ifms_number',
+  'seed_cotton_license_number', 'seed_cotton_license_expiry', 'sarthi_id_cotton',
+  'seed_general_license_number', 'seed_general_license_expiry', 'sarthi_id_general',
+  'pesticide_license_number', 'pesticide_license_expiry',
+  'fertilizer_license_number', 'fertilizer_license_expiry',
+  'residence_address', 'residence_pin_code',
+  'applicant_photo_url', 'documents_urls',
+  'membership_id', 'payment_status', 'payment_method',
+  'cash_payment_verified', 'cash_payment_verified_by',
+  'cash_payment_verified_at', 'cash_payment_notes',
+  'approval_status', 'account_status', 'rejection_reason',
+  'status_timeline', 'reviewed_by', 'reviewed_at',
+  'created_at', 'updated_at',
+].join(', ');
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [member, setMember] = useState<Account | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // In-flight request deduplication
+  const memberRequestRef = { current: null as Promise<void> | null };
+  const adminRequestRef = { current: null as Promise<void> | null };
 
   // Broader check for invalid/expired session errors from Supabase
   const isInvalidSessionError = (message?: string | null): boolean => {
@@ -76,10 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminUser(null);
   };
 
-  const fetchMember = useCallback(async (userId: string, currentUser?: User | null) => {
+  const fetchMemberCore = useCallback(async (userId: string, currentUser?: User | null) => {
     const { data, error } = await supabase
       .from('accounts')
-      .select('*')
+      .select(ACCOUNT_SELECT_COLUMNS)
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -120,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         contact_phone: '',
         contact_email: '',
       })
-      .select('*')
+      .select(ACCOUNT_SELECT_COLUMNS)
       .single();
 
     if (createError) {
@@ -132,7 +159,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMember(createdAccount);
   }, []);
 
-  const fetchAdminUser = async (userId: string) => {
+  // Deduplicated wrapper: prevents concurrent fetchMember calls
+  const fetchMember = useCallback(async (userId: string, currentUser?: User | null) => {
+    if (memberRequestRef.current) return memberRequestRef.current;
+    const promise = fetchMemberCore(userId, currentUser).finally(() => {
+      memberRequestRef.current = null;
+    });
+    memberRequestRef.current = promise;
+    return promise;
+  }, [fetchMemberCore]);
+
+  const fetchAdminUserCore = async (userId: string) => {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       try {
         // Avoid printing keys; URL is safe and helps detect wrong project/env.
@@ -142,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data, error } = await supabase
       .from('admin_users')
-      .select('*')
+      .select('id, user_id, email, role, created_at')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -169,6 +206,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminUser(data ?? null);
   };
 
+  // Deduplicated wrapper: prevents concurrent fetchAdminUser calls
+  const fetchAdminUser = async (userId: string) => {
+    if (adminRequestRef.current) return adminRequestRef.current;
+    const promise = fetchAdminUserCore(userId).finally(() => {
+      adminRequestRef.current = null;
+    });
+    adminRequestRef.current = promise;
+    return promise;
+  };
+
   const refreshMember = useCallback(async () => {
     if (user) await fetchMember(user.id);
   }, [user, fetchMember]);
@@ -191,6 +238,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Track whether initializeAuth has completed to avoid double-loading
     let initialized = false;
+    // Track whether profile was already loaded by initializeAuth
+    // to skip the duplicate load from onAuthStateChange(INITIAL_SESSION)
+    let profileLoaded = false;
 
     const initializeAuth = async () => {
       try {
@@ -209,7 +259,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         if (currentSession?.user) {
-          await loadUserProfile(currentSession);
+          const ok = await loadUserProfile(currentSession);
+          if (ok) profileLoaded = true;
         }
       } catch (err) {
         console.warn('Auth initialization error:', err);
@@ -237,6 +288,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
+        // Skip profile fetch for INITIAL_SESSION if initializeAuth already loaded it.
+        // This prevents the double-fetch that fires 4 queries instead of 2.
+        if (event === 'INITIAL_SESSION' && profileLoaded) {
+          if (!initialized) {
+            initialized = true;
+            setLoading(false);
+          }
+          return;
+        }
+
         if (newSession?.user) {
           try {
             await Promise.all([
@@ -253,7 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAdminUser(null);
         }
 
-        // If the listener fires before initializeAuth finishes (e.g. INITIAL_SESSION event),
+        // If the listener fires before initializeAuth finishes,
         // make sure we also stop the loading spinner
         if (!initialized) {
           initialized = true;
