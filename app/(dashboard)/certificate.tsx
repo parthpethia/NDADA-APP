@@ -109,9 +109,12 @@ export default function CertificateScreen() {
       if (Platform.OS === 'web') {
         window.open(urlData.signedUrl, '_blank');
       } else {
+        const formattedId = member?.membership_id 
+          ? `NDADA-MAH-NAG-${String(member.membership_id).padStart(4, '0')}` 
+          : certificate.certificate_id;
         const outputFile = new FileSystem.File(
           FileSystem.Paths.document,
-          `${certificate.certificate_id}.pdf`
+          `${formattedId}.pdf`
         );
         const downloadedFile = await FileSystem.File.downloadFileAsync(
           urlData.signedUrl,
@@ -193,7 +196,9 @@ export default function CertificateScreen() {
           <View className="gap-2">
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Certificate ID</Text>
-              <Text className="font-medium text-gray-900">{certificate.certificate_id}</Text>
+              <Text className="font-medium text-gray-900">
+                {member?.membership_id ? `NDADA/MAH/NAG/${String(member.membership_id).padStart(4, '0')}` : certificate.certificate_id}
+              </Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Member</Text>
