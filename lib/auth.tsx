@@ -3,6 +3,7 @@ import { isSupabaseConfigured, supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { Account, AdminUser } from '@/types';
 import { fetchUserProfile, UserProfileResponse } from './queries';
+import { cacheClear } from './queryCache';
 
 interface AuthContextType {
   session: Session | null;
@@ -462,6 +463,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminUser(null);
     // Clear admin cache on sign-out so a different user gets a fresh lookup
     adminCacheRef.current.clear();
+    // Clear query cache to prevent stale data for the next user
+    cacheClear();
   };
 
   const resetPassword = async (email: string) => {

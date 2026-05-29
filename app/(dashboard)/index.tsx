@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { fetchAccountCertificate } from '@/lib/queries';
+import { useDashboardData } from '@/lib/useDashboardData';
 import { Card, CardHeader, StatusBadge, Button, LoadingScreen, EmptyState } from '@/components/ui';
 import { TimelineDisplay } from './timeline';
-import { Certificate } from '@/types';
 import {
   APP_NAME,
   MEMBERSHIP_AMOUNT,
@@ -25,33 +24,18 @@ import {
 } from 'lucide-react-native';
 
 export default function DashboardHome() {
-  const { member, refreshMember, signOut, loading } = useAuth();
-  const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const { member, signOut, loading: authLoading } = useAuth();
+  const { certificate, refresh: refreshDashboard, loading: dashboardLoading } = useDashboardData();
   const [refreshing, setRefreshing] = useState(false);
-
-  const fetchData = async () => {
-    if (!member) return;
-    const { data: cert } = await fetchAccountCertificate(member.id);
-    // Only treat as valid if it has actual URL and certificate_id
-    setCertificate(cert?.certificate_url && cert?.certificate_id ? cert : null);
-  };
-
-  // Refresh member data on mount to pick up changes from form submission
-  useEffect(() => {
-    refreshMember();
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [member?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refreshMember(), fetchData()]);
+    await refreshDashboard();
     setRefreshing(false);
   };
 
-  if (loading) return <LoadingScreen message="Loading dashboard..." />;
+  // Show loading only during initial load (auth + dashboard data)
+  if (authLoading || (dashboardLoading && !member)) return <LoadingScreen message="Loading dashboard..." />;
 
   if (!member) {
     return (
@@ -60,7 +44,7 @@ export default function DashboardHome() {
         message="Your member profile is still being prepared. Pull to refresh or try again in a moment."
       >
         <View className="w-full gap-2">
-          <Button title="Refresh" variant="outline" onPress={() => refreshMember()} />
+          <Button title="Refresh" variant="outline" onPress={() => refreshDashboard()} />
           <Button title="Sign Out" variant="destructive" onPress={() => signOut()} />
         </View>
       </EmptyState>

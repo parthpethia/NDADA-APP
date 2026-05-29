@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { Notification } from '@/types';
 import { useAuth } from '@/lib/auth';
 import {
@@ -16,20 +16,51 @@ interface UseNotificationsReturn {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Seed the unread count from an external source (e.g. dashboard RPC) */
+  seedUnreadCount: (count: number) => void;
 }
 
 const NotificationContext = createContext<UseNotificationsReturn | null>(null);
 
 /**
- * Internal hook to manage user notifications for the provider
+ * Internal hook to manage user notifications for the provider.
+ *
+ * Optimization: The full notification list is loaded lazily — only when
+ * `refresh()` is called (i.e. when the user opens the Notifications screen).
+ * On mount, only the unread count is fetched (a lightweight HEAD query),
+ * and even that is skipped if a seeded count is provided by the dashboard RPC.
  */
 function useNotificationsSource(userId: string | undefined): UseNotificationsReturn {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Track whether the full list has been loaded at least once
+  const [listLoaded, setListLoaded] = useState(false);
 
-  const fetchData = async () => {
+  /**
+   * Fetch only the unread count (lightweight).
+   * Used on mount and by the polling interval.
+   */
+  const fetchCountOnly = useCallback(async () => {
+    if (!userId) {
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const { data } = await fetchUnreadNotificationCount(userId);
+      setUnreadCount(data || 0);
+    } catch (err) {
+      console.warn('fetchUnreadNotificationCount error:', err);
+    }
+  }, [userId]);
+
+  /**
+   * Fetch the full notification list + unread count.
+   * Called when the Notifications screen is opened (via refresh()).
+   */
+  const fetchFullData = useCallback(async () => {
     if (!userId) {
       setNotifications([]);
       setUnreadCount(0);
@@ -52,6 +83,7 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
 
       setNotifications(notificationsResult.data || []);
       setUnreadCount(countResult.data || 0);
+      setListLoaded(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch notifications';
       setError(message);
@@ -59,17 +91,18 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
+  // On mount: only fetch the unread count (not the full list)
   useEffect(() => {
-    fetchData();
+    fetchCountOnly();
 
     if (!userId) return;
 
     // Poll for new notifications every 120 seconds (2 minutes)
-    const interval = setInterval(fetchData, 120000);
+    const interval = setInterval(fetchCountOnly, 120000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, fetchCountOnly]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -105,6 +138,14 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     }
   };
 
+  /**
+   * Seed the unread count from an external source (dashboard RPC).
+   * This avoids the separate fetchUnreadNotificationCount() call on mount.
+   */
+  const seedUnreadCount = useCallback((count: number) => {
+    setUnreadCount(count);
+  }, []);
+
   return {
     notifications,
     unreadCount,
@@ -112,7 +153,8 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     error,
     markAsRead,
     markAllAsRead,
-    refresh: fetchData,
+    refresh: fetchFullData,
+    seedUnreadCount,
   };
 }
 
@@ -140,4 +182,3 @@ export function useNotifications(userId?: string | undefined): UseNotificationsR
   }
   return context;
 }
-

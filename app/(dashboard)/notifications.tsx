@@ -20,6 +20,12 @@ export function NotificationCenter() {
   const { notifications, unreadCount, loading, refresh, markAsRead, markAllAsRead } = useNotifications(user?.id);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Fetch the full notification list when the screen mounts
+  // (the NotificationProvider only loads the unread count eagerly)
+  useEffect(() => {
+    refresh();
+  }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await refresh();
