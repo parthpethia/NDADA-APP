@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { useNotifications } from '@/lib/useNotifications';
@@ -17,7 +17,17 @@ const notificationTypeConfig: Record<NotificationType, { icon: React.ReactNode; 
 
 export function NotificationCenter() {
   const { user, member } = useAuth();
-  const { notifications, unreadCount, loading, refresh, markAsRead, markAllAsRead } = useNotifications(user?.id);
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+    loadMore,
+    hasMore,
+    loadingMore,
+  } = useNotifications(user?.id);
   const [refreshing, setRefreshing] = useState(false);
 
   // Fetch the full notification list when the screen mounts
@@ -116,6 +126,25 @@ export function NotificationCenter() {
               </TouchableOpacity>
             );
           })}
+
+          {/* Load More Button */}
+          {hasMore && (
+            <TouchableOpacity
+              onPress={loadMore}
+              disabled={loadingMore}
+              activeOpacity={0.7}
+              className="mt-2 items-center rounded-xl border border-gray-200 bg-white py-4"
+            >
+              {loadingMore ? (
+                <View className="flex-row items-center gap-2">
+                  <ActivityIndicator size="small" color="#6b7280" />
+                  <Text className="text-sm font-medium text-gray-500">Loading...</Text>
+                </View>
+              ) : (
+                <Text className="text-sm font-medium text-primary-700">Load older notifications</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </ScrollView>

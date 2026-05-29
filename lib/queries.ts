@@ -317,19 +317,29 @@ export async function fetchAccountTimeline(
 }
 
 /**
- * Fetch all notifications for a user
+ * Fetch notifications for a user with cursor-based pagination.
+ * @param userId    - The user's UUID
+ * @param limit     - Number of notifications per page (default 30)
+ * @param beforeDate - ISO timestamp cursor; fetch notifications older than this
  */
 export async function fetchNotifications(
   userId: string,
-  limit: number = 50
+  limit: number = 30,
+  beforeDate?: string
 ): Promise<{ data: Notification[] | null; error: PostgrestError | null }> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('notifications')
       .select('id, user_id, title, message, type, read, action_url, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
+
+    if (beforeDate) {
+      query = query.lt('created_at', beforeDate);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.warn('fetchNotifications error:', error.message);
@@ -343,24 +353,26 @@ export async function fetchNotifications(
 }
 
 /**
- * Fetch unread notification count for a user
+ * Fetch unread notification count for a user.
+ * Reads from the denormalized notification_unread_counts table (O(1) PK lookup)
+ * instead of running COUNT(*) on the notifications table.
  */
 export async function fetchUnreadNotificationCount(
   userId: string
 ): Promise<{ data: number; error: PostgrestError | null }> {
   try {
-    const { count, error } = await supabase
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
+    const { data, error } = await supabase
+      .from('notification_unread_counts')
+      .select('count')
       .eq('user_id', userId)
-      .eq('read', false);
+      .maybeSingle();
 
     if (error) {
       console.warn('fetchUnreadNotificationCount error:', error.message);
       return { data: 0, error };
     }
 
-    return { data: count || 0, error: null };
+    return { data: data?.count || 0, error: null };
   } catch (err: any) {
     return { data: 0, error: toPostgrestError(err, 'Unknown error fetching notification count') };
   }
