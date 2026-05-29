@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setMember(createdAccount);
+    setMember(createdAccount as unknown as Account);
     // New account — definitely not an admin
     adminCacheRef.current.set(userId, null);
     setAdminUser(null);
@@ -212,7 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (accountData) {
-      setMember(accountData);
+      setMember(accountData as unknown as Account);
     } else if (currentUser) {
       // Account creation fallback
       const { data: createdAccount, error: createError } = await supabase
@@ -241,7 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Failed to create account profile:', createError.message, createError.details, createError.hint);
         setMember(null);
       } else {
-        setMember(createdAccount);
+        setMember(createdAccount as unknown as Account);
       }
     } else {
       setMember(null);
@@ -307,7 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (data) {
-      setMember(data);
+      setMember(data as unknown as Account);
     }
   }, [user]);
 

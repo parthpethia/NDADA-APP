@@ -81,7 +81,7 @@ export async function fetchAccountBasic(
       return { data: null, error };
     }
 
-    return { data, error: null };
+    return { data: data as Account, error: null };
   } catch (err: any) {
     return { data: null, error: toPostgrestError(err, 'Unknown error fetching account') };
   }
@@ -105,7 +105,7 @@ export async function fetchAccountPayments(
       return { data: null, error };
     }
 
-    return { data, error: null };
+    return { data: data as unknown as Payment[], error: null };
   } catch (err: any) {
     return { data: null, error: toPostgrestError(err, 'Unknown error fetching payments') };
   }
@@ -286,7 +286,7 @@ export async function fetchAccountsList(
       return { data: null, error };
     }
 
-    return { data, error: null };
+    return { data: data as Account[], error: null };
   } catch (err: any) {
     return { data: null, error: toPostgrestError(err, 'Unknown error fetching accounts list') };
   }
@@ -434,7 +434,7 @@ export async function fetchCertificateQueueJobs(
   try {
     let query = supabase
       .from('certificate_generation_queue')
-      .select('id, member_id, status, error_message, created_at, updated_at, processed_at')
+      .select('id, account_id, status, error_message, created_at, processing_started_at, completed_at')
       .order('created_at', { ascending: false });
 
     if (status) {
@@ -448,7 +448,7 @@ export async function fetchCertificateQueueJobs(
       return { data: null, error };
     }
 
-    return { data, error: null };
+    return { data: data as CertificateQueueJob[], error: null };
   } catch (err: any) {
     return { data: null, error: toPostgrestError(err, 'Unknown error fetching certificate queue') };
   }

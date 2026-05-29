@@ -106,7 +106,7 @@ export default function AdminFirmsScreen() {
     }
 
     const { data } = await query.limit(100);
-    setAccounts(data || []);
+    setAccounts((data || []) as Account[]);
   }, [filterStatus, sortBy, filterDistrict]);
 
   // Filter and search accounts in memory

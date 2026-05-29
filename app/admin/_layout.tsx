@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { Tabs, Redirect, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import { LoadingScreen } from '@/components/ui';
 import {
   LayoutDashboard, Users, Building2, CreditCard,
-  AlertTriangle, FileText, Award,
+  AlertTriangle, FileText, Award, Search,
 } from 'lucide-react-native';
 
 export default function AdminLayout() {
@@ -29,32 +29,41 @@ export default function AdminLayout() {
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: { paddingBottom: 4, height: 56 },
         headerRight: () => (
-          <TouchableOpacity
-            className="mr-3 rounded-md bg-red-600 px-3 py-1.5 active:bg-red-700"
-            disabled={signingOut}
-            onPress={async () => {
-              const ok = await confirm('Logout', 'Are you sure you want to log out?', {
-                confirmText: 'Logout',
-                destructive: true,
-              });
-              if (!ok) return;
+          <View className="flex-row items-center mr-3 gap-2">
+            <TouchableOpacity
+              className="p-1.5 rounded-md bg-blue-800 active:bg-blue-700"
+              onPress={() => router.push('/admin/search')}
+            >
+              <Search size={18} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="rounded-md bg-red-600 px-3 py-1.5 active:bg-red-700"
+              disabled={signingOut}
+              onPress={async () => {
+                const ok = await confirm('Logout', 'Are you sure you want to log out?', {
+                  confirmText: 'Logout',
+                  destructive: true,
+                });
+                if (!ok) return;
 
-              setSigningOut(true);
-              try {
-                await signOut();
-                router.replace('/(auth)/login');
-              } finally {
-                setSigningOut(false);
-              }
-            }}
-          >
-            <Text className="font-semibold text-white">
-              {signingOut ? 'Logging out…' : 'Logout'}
-            </Text>
-          </TouchableOpacity>
+                setSigningOut(true);
+                try {
+                  await signOut();
+                  router.replace('/(auth)/login');
+                } finally {
+                  setSigningOut(false);
+                }
+              }}
+            >
+              <Text className="font-semibold text-white text-xs">
+                {signingOut ? 'Exit…' : 'Logout'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         ),
       }}
     >
+
       <Tabs.Screen
         name="index"
         options={{
@@ -103,6 +112,85 @@ export default function AdminLayout() {
           href: isReviewer ? null : undefined,
         }}
       />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Global Search',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="members/[id]"
+        options={{
+          title: 'Member details',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="queue"
+        options={{
+          title: 'Queue Monitor',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="export"
+        options={{
+          title: 'Export Center',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="revenue"
+        options={{
+          title: 'Revenue Dashboard',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="district"
+        options={{
+          title: 'District Analytics',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="security"
+        options={{
+          title: 'Security Dashboard',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="health"
+        options={{
+          title: 'System Health',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="announcements"
+        options={{
+          title: 'Communications',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="renewals"
+        options={{
+          title: 'Renewals Workflow',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="kpi"
+        options={{
+          title: 'Executive KPIs',
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
+
+
