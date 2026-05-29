@@ -236,6 +236,42 @@ function LicenseCard({
   );
 }
 
+const formatISOToDDMMYYYY = (isoStr: string | null | undefined): string => {
+  if (!isoStr) return '';
+  try {
+    const date = new Date(isoStr);
+    if (isNaN(date.getTime())) return '';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return '';
+  }
+};
+
+const parseDateToISO = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // If already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.split('T')[0];
+  }
+
+  // If DD/MM/YYYY
+  const parts = trimmed.split('/');
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+
+  return trimmed;
+};
+
 /* ================================================================== */
 /*  Main Screen Component                                              */
 /* ================================================================== */
@@ -288,15 +324,15 @@ export default function NewFirmScreen() {
             residence_address: data.residence_address || '',
             residence_pin_code: data.residence_pin_code || '',
             seed_cotton_license_number: data.seed_cotton_license_number || data.license_number || '',
-            seed_cotton_license_expiry: data.seed_cotton_license_expiry || '',
+            seed_cotton_license_expiry: formatISOToDDMMYYYY(data.seed_cotton_license_expiry),
             sarthi_id_cotton: data.sarthi_id_cotton || '',
             seed_general_license_number: data.seed_general_license_number || '',
-            seed_general_license_expiry: data.seed_general_license_expiry || '',
+            seed_general_license_expiry: formatISOToDDMMYYYY(data.seed_general_license_expiry),
             sarthi_id_general: data.sarthi_id_general || '',
             pesticide_license_number: data.pesticide_license_number || '',
-            pesticide_license_expiry: data.pesticide_license_expiry || '',
+            pesticide_license_expiry: formatISOToDDMMYYYY(data.pesticide_license_expiry),
             fertilizer_license_number: data.fertilizer_license_number || '',
-            fertilizer_license_expiry: data.fertilizer_license_expiry || '',
+            fertilizer_license_expiry: formatISOToDDMMYYYY(data.fertilizer_license_expiry),
           }));
         }
       }
@@ -525,15 +561,15 @@ export default function NewFirmScreen() {
       aadhaar_card_number: form.aadhaar_card_number || null,
       ifms_number: registrationNumber,
       seed_cotton_license_number: licenseNumber,
-      seed_cotton_license_expiry: form.seed_cotton_license_expiry || null,
+      seed_cotton_license_expiry: parseDateToISO(form.seed_cotton_license_expiry) || null,
       sarthi_id_cotton: form.sarthi_id_cotton || null,
       seed_general_license_number: form.seed_general_license_number || null,
-      seed_general_license_expiry: form.seed_general_license_expiry || null,
+      seed_general_license_expiry: parseDateToISO(form.seed_general_license_expiry) || null,
       sarthi_id_general: form.sarthi_id_general || null,
       pesticide_license_number: form.pesticide_license_number || null,
-      pesticide_license_expiry: form.pesticide_license_expiry || null,
+      pesticide_license_expiry: parseDateToISO(form.pesticide_license_expiry) || null,
       fertilizer_license_number: form.fertilizer_license_number || null,
-      fertilizer_license_expiry: form.fertilizer_license_expiry || null,
+      fertilizer_license_expiry: parseDateToISO(form.fertilizer_license_expiry) || null,
       residence_address: form.residence_address || null,
       residence_pin_code: form.residence_pin_code || null,
       applicant_photo_url: mergedApplicantPhotoUrl,
@@ -558,13 +594,12 @@ export default function NewFirmScreen() {
     setLoading(false);
 
     if (submitError) {
+      let finalErrorMsg = submitError.message;
       if (submitError.code === '23505' || submitError.message.includes('duplicate')) {
-        setError(
-          'A firm with this license or registration number already exists. If it is your firm, open it from the Firms list and update it (don\'t register it again). If it belongs to someone else, contact admin.'
-        );
-      } else {
-        setError(submitError.message);
+        finalErrorMsg = 'A firm with this license or registration number already exists. If it is your firm, open it from the Firms list and update it (don\'t register it again). If it belongs to someone else, contact admin.';
       }
+      setError(finalErrorMsg);
+      Alert.alert('Submission Error', finalErrorMsg);
       return;
     }
 
@@ -958,6 +993,13 @@ export default function NewFirmScreen() {
           </View>
         </View>
       )}
+
+      {/* Localized Error Banner for quick visibility at step level */}
+      {error ? (
+        <View className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <Text className="text-sm font-medium text-red-700">{error}</Text>
+        </View>
+      ) : null}
 
       {/* --- Navigation Buttons --- */}
       <View className="mt-6">
