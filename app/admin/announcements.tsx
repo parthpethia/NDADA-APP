@@ -27,7 +27,7 @@ export default function AnnouncementCampaignScreen() {
   const [announceTitle, setAnnounceTitle] = useState('');
   const [announceMessage, setAnnounceMessage] = useState('');
   const [announceTarget, setAnnounceTarget] = useState<'all' | 'district'>('all');
-  const [announceDistrict, setAnnounceDistrict] = useState('Amravati');
+  const [announceDistrict, setAnnounceDistrict] = useState('Nagpur');
   const [announceSending, setAnnounceSending] = useState(false);
 
   // Campaign Form States
@@ -214,10 +214,20 @@ export default function AnnouncementCampaignScreen() {
                   <Select
                     value={announceDistrict}
                     options={[
-                      { label: 'Amravati', value: 'Amravati' },
-                      { label: 'Akola', value: 'Akola' },
                       { label: 'Nagpur', value: 'Nagpur' },
-                      { label: 'Yavatmal', value: 'Yavatmal' }
+                      { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
+                      { label: 'Hingna', value: 'Hingna' },
+                      { label: 'Kuhi', value: 'Kuhi' },
+                      { label: 'Kalmeshwar', value: 'Kalmeshwar' },
+                      { label: 'Katol', value: 'Katol' },
+                      { label: 'Narkhed', value: 'Narkhed' },
+                      { label: 'Saoner', value: 'Saoner' },
+                      { label: 'Parshivani', value: 'Parshivani' },
+                      { label: 'Kamthi', value: 'Kamthi' },
+                      { label: 'Ramtek', value: 'Ramtek' },
+                      { label: 'Mouda', value: 'Mouda' },
+                      { label: 'Umred', value: 'Umred' },
+                      { label: 'Bhiwapur', value: 'Bhiwapur' }
                     ]}
                     onValueChange={(val: any) => setAnnounceDistrict(val)}
                   />

@@ -392,10 +392,20 @@ export default function AdminMembersScreen() {
               value={filterDistrict}
               options={[
                 { label: 'All Districts', value: 'all' },
-                { label: 'Amravati', value: 'Amravati' },
-                { label: 'Akola', value: 'Akola' },
                 { label: 'Nagpur', value: 'Nagpur' },
-                { label: 'Yavatmal', value: 'Yavatmal' }
+                { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
+                { label: 'Hingna', value: 'Hingna' },
+                { label: 'Kuhi', value: 'Kuhi' },
+                { label: 'Kalmeshwar', value: 'Kalmeshwar' },
+                { label: 'Katol', value: 'Katol' },
+                { label: 'Narkhed', value: 'Narkhed' },
+                { label: 'Saoner', value: 'Saoner' },
+                { label: 'Parshivani', value: 'Parshivani' },
+                { label: 'Kamthi', value: 'Kamthi' },
+                { label: 'Ramtek', value: 'Ramtek' },
+                { label: 'Mouda', value: 'Mouda' },
+                { label: 'Umred', value: 'Umred' },
+                { label: 'Bhiwapur', value: 'Bhiwapur' }
               ]}
               onValueChange={(val: any) => {
                 setFilterDistrict(val);
