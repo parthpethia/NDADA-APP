@@ -165,6 +165,52 @@ export async function fetchAdminUser(
 }
 
 /**
+ * Unified user profile fetch — single RPC replacing fetchMember + fetchAdminUser.
+ * Returns lightweight account fields + admin status in one database round-trip.
+ */
+export interface UserProfileResponse {
+  account: {
+    id: string;
+    user_id: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    address: string;
+    district: string | null;
+    firm_name: string;
+    license_number: string;
+    membership_id: string;
+    payment_status: string;
+    payment_method?: string;
+    cash_payment_verified?: boolean;
+    approval_status: string;
+    account_status: string;
+    created_at: string;
+    updated_at: string;
+  } | null;
+  admin: AdminUser | null;
+}
+
+export async function fetchUserProfile(
+  userId: string
+): Promise<{ data: UserProfileResponse | null; error: PostgrestError | null }> {
+  try {
+    const { data, error } = await supabase.rpc('get_user_profile', {
+      p_user_id: userId,
+    });
+
+    if (error) {
+      console.warn('fetchUserProfile RPC error:', error.message);
+      return { data: null, error };
+    }
+
+    return { data: data as UserProfileResponse, error: null };
+  } catch (err: any) {
+    return { data: null, error: toPostgrestError(err, 'Unknown error fetching user profile') };
+  }
+}
+
+/**
  * Fetch multiple accounts (for admin dashboard)
  */
 export async function fetchAccountsList(

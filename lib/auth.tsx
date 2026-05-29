@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { Account, AdminUser } from '@/types';
+import { fetchUserProfile, UserProfileResponse } from './queries';
 
 interface AuthContextType {
   session: Session | null;
@@ -23,8 +24,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Columns from 'accounts' actually consumed by the app.
-// Keep this list in sync with the Account type fields you reference in UI.
+// Full column list — only used by refreshMember/loadFullProfile
+// to backfill the complete Account type after initial lightweight load.
 const ACCOUNT_SELECT_COLUMNS = [
   'id', 'user_id',
   'full_name', 'email', 'phone', 'address', 'district', 'id_proof_url',
@@ -54,8 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // In-flight request deduplication
-  const memberRequestRef = { current: null as Promise<void> | null };
-  const adminRequestRef = { current: null as Promise<void> | null };
+  const profileRequestRef = useRef<Promise<void> | null>(null);
+
+  // Admin status cache: avoids re-querying admin_users for known non-admins.
+  // Key: user_id, Value: AdminUser | null. Cleared on sign-out.
+  const adminCacheRef = useRef<Map<string, AdminUser | null>>(new Map());
 
   // Broader check for invalid/expired session errors from Supabase
   const isInvalidSessionError = (message?: string | null): boolean => {
@@ -103,31 +107,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminUser(null);
   };
 
-  const fetchMemberCore = useCallback(async (userId: string, currentUser?: User | null) => {
-    const { data, error } = await supabase
-      .from('accounts')
-      .select(ACCOUNT_SELECT_COLUMNS)
-      .eq('user_id', userId)
-      .maybeSingle();
+  /**
+   * Core profile loader — single RPC call replaces fetchMember + fetchAdminUser.
+   *
+   * Flow:
+   * 1. Call get_user_profile() RPC → returns lightweight account + admin in one trip.
+   * 2. If account exists, merge into member state (keeping any existing full-profile
+   *    fields from a prior loadFullProfile call).
+   * 3. If admin is returned, cache it. If null, cache that too (so we skip next time).
+   * 4. If no account exists and currentUser is provided, fall back to account creation.
+   */
+  const loadUserProfileCore = useCallback(async (userId: string, currentUser?: User | null) => {
+    // Try the unified RPC first
+    const { data: profile, error: rpcError } = await fetchUserProfile(userId);
 
-    if (data) {
-      setMember(data);
+    if (rpcError) {
+      if (isInvalidSessionError(rpcError.message)) {
+        throw new Error(`Auth error during profile fetch: ${rpcError.message}`);
+      }
+      console.warn('get_user_profile RPC failed, falling back to separate queries:', rpcError.message);
+      // Fall back to legacy separate queries if RPC doesn't exist yet
+      // (e.g., migration not yet applied)
+      await loadUserProfileLegacy(userId, currentUser);
       return;
     }
 
-    if (error) {
-      console.warn('Failed to fetch account profile:', error.message);
-      // If this is an auth error, the session is bad — don't try to create account
-      if (isInvalidSessionError(error.message)) {
-        throw new Error(`Auth error during fetch: ${error.message}`);
-      }
+    if (profile?.account) {
+      // Merge lightweight fields into the Account type.
+      // Existing full-profile fields (from a prior refreshMember) are preserved
+      // by spreading the current member first.
+      setMember(prev => ({
+        ...(prev && prev.user_id === userId ? prev : {} as Account),
+        ...profile.account,
+      } as Account));
+
+      // Cache admin status
+      const cachedAdmin = profile.admin ?? null;
+      adminCacheRef.current.set(userId, cachedAdmin);
+      setAdminUser(cachedAdmin);
+      return;
     }
 
+    // No account found — try to create one if we have user metadata
     if (!currentUser) {
       setMember(null);
+      setAdminUser(null);
       return;
     }
 
+    // Account auto-creation fallback (same logic as before)
     const { data: createdAccount, error: createError } = await supabase
       .from('accounts')
       .insert({
@@ -153,80 +181,139 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (createError) {
       console.error('Failed to create account profile:', createError.message, createError.details, createError.hint);
       setMember(null);
+      setAdminUser(null);
       return;
     }
 
     setMember(createdAccount);
+    // New account — definitely not an admin
+    adminCacheRef.current.set(userId, null);
+    setAdminUser(null);
   }, []);
 
-  // Deduplicated wrapper: prevents concurrent fetchMember calls
-  const fetchMember = useCallback(async (userId: string, currentUser?: User | null) => {
-    if (memberRequestRef.current) return memberRequestRef.current;
-    const promise = fetchMemberCore(userId, currentUser).finally(() => {
-      memberRequestRef.current = null;
-    });
-    memberRequestRef.current = promise;
-    return promise;
-  }, [fetchMemberCore]);
+  /**
+   * Legacy fallback: separate queries for when the RPC migration isn't deployed yet.
+   * This ensures zero downtime during the migration rollout.
+   */
+  const loadUserProfileLegacy = async (userId: string, currentUser?: User | null) => {
+    // Fetch account
+    const { data: accountData, error: accountError } = await supabase
+      .from('accounts')
+      .select(ACCOUNT_SELECT_COLUMNS)
+      .eq('user_id', userId)
+      .maybeSingle();
 
-  const fetchAdminUserCore = async (userId: string) => {
+    if (accountError) {
+      if (isInvalidSessionError(accountError.message)) {
+        throw new Error(`Auth error during fetch: ${accountError.message}`);
+      }
+      console.warn('Failed to fetch account profile:', accountError.message);
+    }
+
+    if (accountData) {
+      setMember(accountData);
+    } else if (currentUser) {
+      // Account creation fallback
+      const { data: createdAccount, error: createError } = await supabase
+        .from('accounts')
+        .insert({
+          user_id: userId,
+          full_name:
+            String(currentUser.user_metadata?.full_name || '').trim() ||
+            String(currentUser.email || '').split('@')[0] ||
+            'Member',
+          email: String(currentUser.email || '').trim() || 'unknown@example.com',
+          phone: String(currentUser.user_metadata?.phone || '').trim() || '',
+          address: String(currentUser.user_metadata?.address || '').trim(),
+          district: String(currentUser.user_metadata?.district || '').trim(),
+          firm_name: '',
+          license_number: '',
+          registration_number: '',
+          firm_address: '',
+          contact_phone: '',
+          contact_email: '',
+        })
+        .select(ACCOUNT_SELECT_COLUMNS)
+        .single();
+
+      if (createError) {
+        console.error('Failed to create account profile:', createError.message, createError.details, createError.hint);
+        setMember(null);
+      } else {
+        setMember(createdAccount);
+      }
+    } else {
+      setMember(null);
+    }
+
+    // Check admin cache first
+    if (adminCacheRef.current.has(userId)) {
+      setAdminUser(adminCacheRef.current.get(userId) ?? null);
+      return;
+    }
+
+    // Fetch admin status
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       try {
-        // Avoid printing keys; URL is safe and helps detect wrong project/env.
         console.log('Auth: fetching admin user for', userId, 'from', (supabase as any)?.supabaseUrl);
       } catch {}
     }
 
-    const { data, error } = await supabase
+    const { data: adminData, error: adminError } = await supabase
       .from('admin_users')
       .select('id, user_id, email, role, created_at')
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (error) {
-      console.warn(
-        'Failed to fetch admin user:',
-        {
-          message: error.message,
-          details: (error as any)?.details,
-          hint: (error as any)?.hint,
-          code: (error as any)?.code,
-        }
-      );
-      // If this is an auth error, propagate it
-      if (isInvalidSessionError(error.message)) {
-        throw new Error(`Auth error during admin fetch: ${error.message}`);
+    if (adminError) {
+      if (isInvalidSessionError(adminError.message)) {
+        throw new Error(`Auth error during admin fetch: ${adminError.message}`);
       }
+      console.warn('Failed to fetch admin user:', adminError.message);
     }
+
+    const resolvedAdmin = adminData ?? null;
+    adminCacheRef.current.set(userId, resolvedAdmin);
+    setAdminUser(resolvedAdmin);
 
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.log('Auth: admin user lookup result', data ?? null);
+      console.log('Auth: admin user lookup result', resolvedAdmin);
     }
-
-    setAdminUser(data ?? null);
   };
 
-  // Deduplicated wrapper: prevents concurrent fetchAdminUser calls
-  const fetchAdminUser = async (userId: string) => {
-    if (adminRequestRef.current) return adminRequestRef.current;
-    const promise = fetchAdminUserCore(userId).finally(() => {
-      adminRequestRef.current = null;
+  // Deduplicated wrapper: prevents concurrent profile load calls
+  const loadUserProfile = useCallback(async (userId: string, currentUser?: User | null) => {
+    if (profileRequestRef.current) return profileRequestRef.current;
+    const promise = loadUserProfileCore(userId, currentUser).finally(() => {
+      profileRequestRef.current = null;
     });
-    adminRequestRef.current = promise;
+    profileRequestRef.current = promise;
     return promise;
-  };
+  }, [loadUserProfileCore]);
 
+  // refreshMember: re-fetches the FULL account (all 47 columns) from the database.
+  // This is used after profile edits, form submissions, payment updates, etc.
   const refreshMember = useCallback(async () => {
-    if (user) await fetchMember(user.id);
-  }, [user, fetchMember]);
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('accounts')
+      .select(ACCOUNT_SELECT_COLUMNS)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('refreshMember error:', error.message);
+      return;
+    }
+    if (data) {
+      setMember(data);
+    }
+  }, [user]);
 
   // Helper: load user profile data with error recovery
-  const loadUserProfile = async (currentSession: Session): Promise<boolean> => {
+  const loadProfile = async (currentSession: Session): Promise<boolean> => {
     try {
-      await Promise.all([
-        fetchMember(currentSession.user.id, currentSession.user),
-        fetchAdminUser(currentSession.user.id),
-      ]);
+      await loadUserProfile(currentSession.user.id, currentSession.user);
       return true;
     } catch (err) {
       console.warn('Auth: profile fetch failed, clearing invalid session:', err);
@@ -259,7 +346,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         if (currentSession?.user) {
-          const ok = await loadUserProfile(currentSession);
+          const ok = await loadProfile(currentSession);
           if (ok) profileLoaded = true;
         }
       } catch (err) {
@@ -300,10 +387,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (newSession?.user) {
           try {
-            await Promise.all([
-              fetchMember(newSession.user.id, newSession.user),
-              fetchAdminUser(newSession.user.id),
-            ]);
+            await loadUserProfile(newSession.user.id, newSession.user);
           } catch (err) {
             console.warn('Auth: onAuthStateChange profile fetch failed:', err);
             // If profile loading fails due to auth error, clear session
@@ -376,6 +460,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setMember(null);
     setAdminUser(null);
+    // Clear admin cache on sign-out so a different user gets a fresh lookup
+    adminCacheRef.current.clear();
   };
 
   const resetPassword = async (email: string) => {
