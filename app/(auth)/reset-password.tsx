@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Link, useLocalSearchParams, router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Button, Input } from '@/components/ui';
 import { APP_NAME } from '@/constants';
@@ -12,18 +12,26 @@ export default function ResetPasswordScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  // Guard against the effect running twice (React Strict Mode / fast refresh)
+  const initRef = useRef(false);
 
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
     // Since detectSessionInUrl is false in our Supabase config, we must
     // manually extract the recovery tokens from the URL hash fragment.
     // Supabase reset links redirect to:
     //   /reset-password#access_token=...&refresh_token=...&type=recovery
+    //
+    // IMPORTANT: We intentionally do NOT register a second onAuthStateChange
+    // listener here — the AuthProvider already has one, and having two
+    // competing listeners causes GoTrue lock contention (the "lock not
+    // released within 5000ms" + AbortError seen in the console).
     const handleRecoveryFromHash = async () => {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         const hash = window.location.hash.substring(1); // remove leading '#'
-        console.log('ResetPassword: hash fragment is:', hash);
         if (!hash) {
-          console.log('ResetPassword: no hash fragment found');
           return false;
         }
 
@@ -31,46 +39,32 @@ export default function ResetPasswordScreen() {
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         const type = params.get('type');
-        console.log('ResetPassword: extracted params:', { accessToken: accessToken ? 'exists' : 'null', refreshToken: refreshToken ? 'exists' : 'null', type });
 
         if (accessToken && refreshToken && type === 'recovery') {
-          console.log('ResetPassword: attempting to setSession...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
           if (sessionError) {
-            console.error('ResetPassword: setSession failed:', sessionError);
             setError(`Failed to verify reset link: ${sessionError.message}`);
             return false;
           }
 
-          console.log('ResetPassword: setSession succeeded, updating history and setting sessionReady');
-          // Clean up the hash from the URL
+          // Clean up the hash from the URL so it's not reused on refresh
           window.history.replaceState(null, '', window.location.pathname);
           setSessionReady(true);
           return true;
-        } else {
-          console.log('ResetPassword: params did not match recovery criteria');
         }
       }
       return false;
     };
 
-    // Listen for PASSWORD_RECOVERY event as a fallback
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'PASSWORD_RECOVERY') {
-          setSessionReady(true);
-        }
-      }
-    );
-
     // Try to extract tokens from hash first
     handleRecoveryFromHash().then((handled) => {
       if (!handled) {
-        // Fallback: check if there's already a valid session
+        // Fallback: the user may have already been redirected and has a
+        // valid recovery session (e.g. page refresh after initial load).
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session) {
             setSessionReady(true);
@@ -78,19 +72,18 @@ export default function ResetPasswordScreen() {
         });
       }
     });
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, []);
 
   const handleUpdatePassword = async () => {
+    // Prevent double-submission
+    if (loading) return;
+
     if (!password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
     if (password !== confirmPassword) {
@@ -101,16 +94,26 @@ export default function ResetPasswordScreen() {
     setLoading(true);
     setError('');
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      password,
-    });
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
 
-    if (updateError) {
-      setError(updateError.message);
-    } else {
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+
+      // Sign out the recovery session so the user can sign in cleanly
+      // with their new password. Without this, the _layout.tsx auth guard
+      // would redirect them away from the login page immediately.
+      await supabase.auth.signOut({ scope: 'local' });
       setSuccess(true);
+    } catch (e) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (success) {
@@ -202,7 +205,7 @@ export default function ResetPasswordScreen() {
               title="Reset Password"
               onPress={handleUpdatePassword}
               loading={loading}
-              disabled={!sessionReady}
+              disabled={!sessionReady || loading}
               className="mt-2"
             />
           </View>

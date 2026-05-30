@@ -386,6 +386,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // During password recovery, the reset-password page calls setSession()
+        // with the recovery tokens. Loading the full user profile here is
+        // unnecessary and can trigger auth errors that cascade into
+        // clearInvalidSession() → signOut(), stealing the GoTrue lock and
+        // producing the "lock not released" + AbortError in the console.
+        if (event === 'PASSWORD_RECOVERY') {
+          return;
+        }
+
         if (newSession?.user) {
           try {
             await loadUserProfile(newSession.user.id, newSession.user);
