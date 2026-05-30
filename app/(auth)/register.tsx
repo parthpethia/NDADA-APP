@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { Button, Input } from '@/components/ui';
@@ -87,7 +87,12 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View className="mx-auto w-full max-w-md">
-          <View className="mb-8 items-center">
+          <View className="mb-6 items-center">
+            <Image
+              source={require('@/assets/logo-ndada.png')}
+              style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 12 }}
+              resizeMode="contain"
+            />
             <Text className="text-3xl font-bold text-primary-800">{APP_NAME}</Text>
             <Text className="mt-1 text-center text-gray-500">
               Join as a member, pay once, and receive your certificate after approval.

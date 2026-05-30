@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View, Image } from 'react-native';
 import { Tabs, Redirect, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
@@ -28,6 +28,13 @@ export default function AdminLayout() {
         tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: { paddingBottom: 4, height: 56 },
+        headerLeft: () => (
+          <Image
+            source={require('@/assets/logo-ndada.png')}
+            style={{ width: 28, height: 28, marginLeft: 16, borderRadius: 14, backgroundColor: '#fff' }}
+            resizeMode="contain"
+          />
+        ),
         headerRight: () => (
           <View className="flex-row items-center mr-3 gap-2">
             <TouchableOpacity

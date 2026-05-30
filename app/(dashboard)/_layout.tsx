@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/ui';
 import { LayoutDashboard, Building2, Award, User } from 'lucide-react-native';
 import { NotificationBell } from './notifications';
+import { Image } from 'react-native';
 
 export default function DashboardLayout() {
   const { session, loading, adminUser } = useAuth();
@@ -20,6 +21,13 @@ export default function DashboardLayout() {
         tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: { paddingBottom: 4, height: 56 },
+        headerLeft: () => (
+          <Image
+            source={require('@/assets/logo-ndada.png')}
+            style={{ width: 28, height: 28, marginLeft: 16, borderRadius: 14, backgroundColor: '#fff' }}
+            resizeMode="contain"
+          />
+        ),
       }}
     >
       <Tabs.Screen

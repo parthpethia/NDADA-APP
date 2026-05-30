@@ -10,7 +10,9 @@ import {
   useWindowDimensions,
   TextInput,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import Head from 'expo-router/head';
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/constants';
@@ -91,6 +93,10 @@ export default function LoginScreen() {
       className="flex-1"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <Head>
+        <title>NDADA - Nagpur District Agro Dealers Association</title>
+        <link rel="icon" type="image/png" href="/assets/logo-ndada.png" />
+      </Head>
       <ScrollView
         className="flex-1 bg-white"
         keyboardShouldPersistTaps="handled"
@@ -129,7 +135,16 @@ export default function LoginScreen() {
             }}
           />
 
-          <View className="relative px-6 pt-14 pb-8 items-center">
+          <View className="relative px-6 pt-12 pb-8 items-center">
+            {/* Logo */}
+            <View className="mb-4 bg-white rounded-full p-1.5 border-2 border-primary-400/30 shadow-lg">
+              <Image
+                source={require('@/assets/logo-ndada.png')}
+                style={{ width: 84, height: 84, borderRadius: 42 }}
+                resizeMode="contain"
+              />
+            </View>
+
             {/* Badge */}
             <View
               className="mb-5 rounded-full px-5 py-2 flex-row items-center gap-2"
