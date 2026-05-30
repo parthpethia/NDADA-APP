@@ -3,7 +3,7 @@ import { View, ActivityIndicator, Text } from 'react-native';
 export function LoadingScreen({ message }: { message?: string }) {
   return (
     <View className="flex-1 items-center justify-center bg-white">
-      <ActivityIndicator size="large" color="#1d4ed8" />
+      <ActivityIndicator size="large" color="#15803d" />
       {message && <Text className="mt-3 text-gray-500">{message}</Text>}
     </View>
   );

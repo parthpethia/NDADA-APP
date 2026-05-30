@@ -75,7 +75,7 @@ export default function SecurityDashboardScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Scanning system security logs...</Text>
       </View>
     );
@@ -152,12 +152,12 @@ export default function SecurityDashboardScreen() {
         </View>
 
         {/* Audit actions card */}
-        <Card className="mb-4 bg-blue-900/5 border border-blue-100">
+        <Card className="mb-4 bg-primary-900/5 border border-primary-100">
           <View className="flex-row items-center justify-between">
-            <Text className="text-xs font-bold text-blue-950 uppercase tracking-wider">Admin Actions (Today)</Text>
-            <Shield size={16} color="#1e3a8a" />
+            <Text className="text-xs font-bold text-primary-950 uppercase tracking-wider">Admin Actions (Today)</Text>
+            <Shield size={16} color="#15803d" />
           </View>
-          <Text className="text-3xl font-extrabold text-blue-900 mt-1">{metrics.admin_actions_today}</Text>
+          <Text className="text-3xl font-extrabold text-primary-900 mt-1">{metrics.admin_actions_today}</Text>
         </Card>
 
         {/* Recent logs registry */}

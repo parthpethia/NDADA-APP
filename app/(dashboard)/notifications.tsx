@@ -9,7 +9,7 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import { Notification, NotificationType } from '@/types';
 
 const notificationTypeConfig: Record<NotificationType, { icon: React.ReactNode; color: string; bgColor: string }> = {
-  payment: { icon: <FileText size={20} color="#2563eb" />, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  payment: { icon: <FileText size={20} color="#16a34a" />, color: 'text-green-600', bgColor: 'bg-green-50' },
   approval: { icon: <CheckCircle size={20} color="#16a34a" />, color: 'text-green-600', bgColor: 'bg-green-50' },
   certificate: { icon: <AlertCircle size={20} color="#f59e0b" />, color: 'text-amber-600', bgColor: 'bg-amber-50' },
   system: { icon: <Bell size={20} color="#6b7280" />, color: 'text-gray-600', bgColor: 'bg-gray-50' },
@@ -97,7 +97,7 @@ export function NotificationCenter() {
               >
                 <Card
                   className={`overflow-hidden border-l-4 ${
-                    notification.read ? 'bg-white' : 'bg-blue-50 border-l-blue-500'
+                    notification.read ? 'bg-white' : 'bg-primary-50 border-l-primary-500'
                   }`}
                 >
                   <View className="flex-row gap-3">
@@ -113,7 +113,7 @@ export function NotificationCenter() {
                           {notification.title}
                         </Text>
                         {!notification.read && (
-                          <View className="ml-2 h-2 w-2 rounded-full bg-blue-500" />
+                          <View className="ml-2 h-2 w-2 rounded-full bg-primary-500" />
                         )}
                       </View>
                       <Text className="mt-1 text-sm text-gray-600" numberOfLines={2}>

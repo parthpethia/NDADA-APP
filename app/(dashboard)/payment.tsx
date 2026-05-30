@@ -136,7 +136,7 @@ export default function PaymentScreen() {
           member_id: member.id,
           membership_id: member.membership_id,
         },
-        theme: { color: '#1d4ed8' },
+        theme: { color: '#15803d' },
         timeout: 600,
       };
 
@@ -299,10 +299,10 @@ export default function PaymentScreen() {
               </>
             ) : member.payment_status === 'processing' ? (
               <>
-                <View className="mb-3 rounded-full bg-blue-100 p-4">
-                  <Clock size={48} color="#2563eb" />
+                <View className="mb-3 rounded-full bg-primary-100 p-4">
+                  <Clock size={48} color="#16a34a" />
                 </View>
-                <Text className="text-xl font-bold text-blue-700">Verifying Payment</Text>
+                <Text className="text-xl font-bold text-primary-700">Verifying Payment</Text>
                 <Text className="mt-1 text-center text-sm text-gray-500">
                   We're confirming your payment. This usually takes a few seconds.
                 </Text>
@@ -378,13 +378,13 @@ export default function PaymentScreen() {
           </View>
         </Card>
 
-        <Card className="mb-4 border-blue-100 bg-blue-50">
+        <Card className="mb-4 border-primary-100 bg-primary-50">
           <CardHeader title="After Payment" subtitle="What happens next" />
           <View className="gap-2">
-            <Text className="text-sm text-blue-800">1. Your payment is confirmed securely.</Text>
-            <Text className="text-sm text-blue-800">2. Your firm application moves into review.</Text>
-            <Text className="text-sm text-blue-800">3. Your certificate becomes available after approval.</Text>
-            <Text className="pt-1 text-xs text-blue-700">
+            <Text className="text-sm text-primary-800">1. Your payment is confirmed securely.</Text>
+            <Text className="text-sm text-primary-800">2. Your firm application moves into review.</Text>
+            <Text className="text-sm text-primary-800">3. Your certificate becomes available after approval.</Text>
+            <Text className="pt-1 text-xs text-primary-700">
               Need help? Contact {MEMBERSHIP_SUPPORT_EMAIL}.
             </Text>
           </View>

@@ -31,9 +31,9 @@ export function TimelineDisplay({ timeline }: { timeline: StatusTimeline | null 
     {
       key: 'payment_verified',
       label: 'Payment Verified',
-      icon: <CheckCircle2 size={24} color="#2563eb" />,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      icon: <CheckCircle2 size={24} color="#16a34a" />,
+      color: 'text-primary-600',
+      bgColor: 'bg-primary-100',
       getMetadata: (event) => {
         const date = event.timestamp ? formatDistanceToNow(parseISO(event.timestamp), { addSuffix: true }) : 'Unknown';
         return `Verified ${date}`;

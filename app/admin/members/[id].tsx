@@ -256,7 +256,7 @@ export default function Member360Screen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Compiling Member 360°...</Text>
       </View>
     );
@@ -275,7 +275,7 @@ export default function Member360Screen() {
   return (
     <View className="flex-1 bg-gray-50">
       {/* Dynamic Header */}
-      <View className="bg-blue-900 px-4 pb-4 pt-3">
+      <View className="bg-primary-900 px-4 pb-4 pt-3">
         <TouchableOpacity className="mb-2 flex-row items-center" onPress={() => router.back()}>
           <ArrowLeft size={16} color="#fff" />
           <Text className="ml-2 font-medium text-white">Back to Portal</Text>
@@ -284,7 +284,7 @@ export default function Member360Screen() {
         <View className="flex-row items-start justify-between">
           <View className="flex-1 pr-2">
             <Text className="text-xl font-bold text-white">{member.full_name}</Text>
-            <Text className="text-sm font-semibold text-blue-200">{member.membership_id}</Text>
+            <Text className="text-sm font-semibold text-primary-200">{member.membership_id}</Text>
           </View>
           <View className="items-end gap-1">
             <StatusBadge status={member.account_status} />
@@ -302,13 +302,13 @@ export default function Member360Screen() {
           <TouchableOpacity
             key={tab}
             className={`flex-1 items-center py-3 border-b-2 ${
-              activeTab === tab ? 'border-blue-900' : 'border-transparent'
+              activeTab === tab ? 'border-primary-900' : 'border-transparent'
             }`}
             onPress={() => setActiveTab(tab)}
           >
             <Text
               className={`text-xs font-semibold uppercase ${
-                activeTab === tab ? 'text-blue-900' : 'text-gray-400'
+                activeTab === tab ? 'text-primary-900' : 'text-gray-400'
               }`}
             >
               {tab}
@@ -323,9 +323,9 @@ export default function Member360Screen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {actionLoading && (
-          <View className="mb-4 flex-row items-center justify-center rounded-lg bg-blue-50 p-3">
-            <ActivityIndicator size="small" color="#1e3a8a" />
-            <Text className="ml-3 font-semibold text-blue-800">Processing Admin Action...</Text>
+          <View className="mb-4 flex-row items-center justify-center rounded-lg bg-primary-50 p-3">
+            <ActivityIndicator size="small" color="#15803d" />
+            <Text className="ml-3 font-semibold text-primary-800">Processing Admin Action...</Text>
           </View>
         )}
 
@@ -334,8 +334,8 @@ export default function Member360Screen() {
           <View className="gap-4">
             
             {/* Quick Actions Panel */}
-            <Card className="border border-blue-100 bg-blue-50/50">
-              <Text className="mb-2 text-sm font-bold uppercase tracking-wider text-blue-800">SUPPORT QUICK ACTIONS</Text>
+            <Card className="border border-primary-100 bg-primary-50/50">
+              <Text className="mb-2 text-sm font-bold uppercase tracking-wider text-primary-800">SUPPORT QUICK ACTIONS</Text>
               <View className="flex-row flex-wrap gap-2">
                 {member.approval_status === 'pending' && member.payment_status === 'paid' && (
                   <>
@@ -436,7 +436,7 @@ export default function Member360Screen() {
             {/* Core Member Details card */}
             <Card>
               <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
-                <User size={18} color="#1e3a8a" />
+                <User size={18} color="#15803d" />
                 <Text className="text-base font-bold text-gray-900">Member Credentials</Text>
               </View>
               <View className="gap-2">
@@ -470,7 +470,7 @@ export default function Member360Screen() {
             {/* Support Diagnostics metrics card */}
             <Card>
               <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
-                <Clock size={18} color="#1e3a8a" />
+                <Clock size={18} color="#15803d" />
                 <Text className="text-base font-bold text-gray-900">Activity Diagnostics</Text>
               </View>
               <View className="gap-2">
@@ -496,7 +496,7 @@ export default function Member360Screen() {
             {/* Firm Registry Details Card */}
             <Card>
               <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
-                <Building2 size={18} color="#1e3a8a" />
+                <Building2 size={18} color="#15803d" />
                 <Text className="text-base font-bold text-gray-900">Firm Registry Details</Text>
               </View>
               {member.firm_name ? (
@@ -539,8 +539,8 @@ export default function Member360Screen() {
                           className="flex-row items-center py-1.5 px-3 mb-1 bg-gray-50 border border-gray-200 rounded-md"
                           onPress={() => Linking.openURL(url)}
                         >
-                          <FileText size={14} color="#1e3a8a" />
-                          <Text className="ml-2 text-xs font-semibold text-blue-900 flex-1 truncate">Document #{index+1}</Text>
+                          <FileText size={14} color="#15803d" />
+                          <Text className="ml-2 text-xs font-semibold text-primary-900 flex-1 truncate">Document #{index+1}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -557,7 +557,7 @@ export default function Member360Screen() {
         {activeTab === 'payments' && (
           <View className="gap-3">
             {payments.map((pay) => (
-              <Card key={pay.id} className="border-l-4 border-l-blue-900">
+              <Card key={pay.id} className="border-l-4 border-l-primary-900">
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-sm font-bold text-gray-900">₹{pay.amount.toFixed(2)}</Text>
                   <StatusBadge status={pay.status} />
@@ -635,10 +635,10 @@ export default function Member360Screen() {
                 <View className="pl-2 border-l border-gray-300 gap-6">
                   {Object.entries(member.status_timeline).map(([key, details]: [string, any]) => (
                     <View key={key} className="relative pl-6">
-                      <View className="absolute left-[-13] top-[2] w-6 h-6 rounded-full bg-blue-900 items-center justify-center border border-white">
+                      <View className="absolute left-[-13] top-[2] w-6 h-6 rounded-full bg-primary-900 items-center justify-center border border-white">
                         <Clock size={12} color="#fff" />
                       </View>
-                      <Text className="text-xs font-bold uppercase tracking-wider text-blue-900">{key.replace('_', ' ')}</Text>
+                      <Text className="text-xs font-bold uppercase tracking-wider text-primary-900">{key.replace('_', ' ')}</Text>
                       <Text className="text-xs text-gray-500">{formatDateTime(details.timestamp)}</Text>
                       {details.reason && (
                         <Text className="mt-1 text-xs text-red-600 italic bg-red-50 p-1.5 rounded-md">Reason: {details.reason}</Text>
@@ -675,7 +675,7 @@ export default function Member360Screen() {
                   />
                 </View>
                 <TouchableOpacity 
-                  className="bg-blue-900 rounded-lg p-2 items-center justify-center h-10 w-10"
+                  className="bg-primary-900 rounded-lg p-2 items-center justify-center h-10 w-10"
                   onPress={handleAddNote}
                   disabled={actionLoading}
                 >
@@ -742,7 +742,7 @@ export default function Member360Screen() {
               <Card key={log.id} className="py-2.5">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 pr-2">
-                    <Text className="text-xs font-bold text-blue-900 uppercase">{log.action.replace('_', ' ')}</Text>
+                    <Text className="text-xs font-bold text-primary-900 uppercase">{log.action.replace('_', ' ')}</Text>
                     {log.details && (
                       <Text className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{log.details}</Text>
                     )}

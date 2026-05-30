@@ -161,16 +161,16 @@ export default function CashPaymentReviewScreen() {
           </Card>
 
           {/* Next Steps */}
-          <Card className="mb-4 border-blue-100 bg-blue-50">
+          <Card className="mb-4 border-primary-100 bg-primary-50">
             <CardHeader title="Next Steps" />
             <View className="gap-2">
-              <Text className="text-sm text-blue-800">
+              <Text className="text-sm text-primary-800">
                 Your payment has been verified and confirmed!
               </Text>
-              <Text className="text-sm text-blue-800">
+              <Text className="text-sm text-primary-800">
                 You can now proceed to view your certificate and access all membership benefits.
               </Text>
-              <Text className="pt-1 text-xs text-blue-700">
+              <Text className="pt-1 text-xs text-primary-700">
                 Need help? Contact {MEMBERSHIP_SUPPORT_EMAIL}.
               </Text>
             </View>
@@ -257,19 +257,19 @@ export default function CashPaymentReviewScreen() {
         </Card>
 
         {/* Next Steps */}
-        <Card className="mb-4 border-blue-100 bg-blue-50">
+        <Card className="mb-4 border-primary-100 bg-primary-50">
           <CardHeader title="Next Steps" />
           <View className="gap-2">
-            <Text className="text-sm text-blue-800">
+            <Text className="text-sm text-primary-800">
               <Text className="font-semibold">1. Arrange Payment:</Text> Contact the admin to arrange cash payment.
             </Text>
-            <Text className="text-sm text-blue-800">
+            <Text className="text-sm text-primary-800">
               <Text className="font-semibold">2. Wait for Confirmation:</Text> Once you pay, the admin will verify the payment.
             </Text>
-            <Text className="text-sm text-blue-800">
+            <Text className="text-sm text-primary-800">
               <Text className="font-semibold">3. Proceed:</Text> After verification, you can access your certificate.
             </Text>
-            <Text className="pt-1 text-xs text-blue-700">
+            <Text className="pt-1 text-xs text-primary-700">
               Need help? Contact {MEMBERSHIP_SUPPORT_EMAIL}.
             </Text>
           </View>

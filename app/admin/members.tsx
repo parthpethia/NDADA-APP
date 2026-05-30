@@ -333,7 +333,7 @@ export default function AdminMembersScreen() {
           
           <TouchableOpacity
             className={`p-2.5 rounded-lg border ${
-              showSaveFilterForm ? 'bg-blue-900 border-blue-900' : 'bg-white border-gray-300'
+              showSaveFilterForm ? 'bg-primary-900 border-primary-900' : 'bg-white border-gray-300'
             }`}
             onPress={() => setShowSaveFilterForm(!showSaveFilterForm)}
           >
@@ -342,7 +342,7 @@ export default function AdminMembersScreen() {
 
           <TouchableOpacity
             className={`px-3 py-2.5 rounded-lg border ${
-              bulkMode ? 'bg-blue-900 border-blue-900' : 'bg-white border-gray-300'
+              bulkMode ? 'bg-primary-900 border-primary-900' : 'bg-white border-gray-300'
             }`}
             onPress={() => {
               setBulkMode(!bulkMode);
@@ -418,7 +418,7 @@ export default function AdminMembersScreen() {
 
       {/* Bookmarker Presets Collapsible Form */}
       {showSaveFilterForm && (
-        <Card className="m-4 mb-2 border border-blue-100">
+        <Card className="m-4 mb-2 border border-primary-100">
           <Text className="mb-2 text-xs font-bold text-gray-800 uppercase tracking-wider">Save Current View Filter</Text>
           
           <View className="gap-2">
@@ -493,33 +493,33 @@ export default function AdminMembersScreen() {
           {/* Default Preset Pills */}
           <TouchableOpacity
             className={`px-3 py-1.5 rounded-full border ${
-              activeFilterId === 'all' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+              activeFilterId === 'all' ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200'
             }`}
             onPress={() => applyFilterPreset('all', {})}
           >
-            <Text className={`text-xs font-bold ${activeFilterId === 'all' ? 'text-blue-800' : 'text-gray-600'}`}>
+            <Text className={`text-xs font-bold ${activeFilterId === 'all' ? 'text-primary-800' : 'text-gray-600'}`}>
               All Members
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`px-3 py-1.5 rounded-full border ${
-              activeFilterId === 'pending_reviews' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+              activeFilterId === 'pending_reviews' ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200'
             }`}
             onPress={() => applyFilterPreset('pending_reviews', { approval_status: 'pending' })}
           >
-            <Text className={`text-xs font-bold ${activeFilterId === 'pending_reviews' ? 'text-blue-800' : 'text-gray-600'}`}>
+            <Text className={`text-xs font-bold ${activeFilterId === 'pending_reviews' ? 'text-primary-800' : 'text-gray-600'}`}>
               Pending Reviews
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             className={`px-3 py-1.5 rounded-full border ${
-              activeFilterId === 'cash_backlog' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+              activeFilterId === 'cash_backlog' ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200'
             }`}
             onPress={() => applyFilterPreset('cash_backlog', { payment_status: 'pending' })}
           >
-            <Text className={`text-xs font-bold ${activeFilterId === 'cash_backlog' ? 'text-blue-800' : 'text-gray-600'}`}>
+            <Text className={`text-xs font-bold ${activeFilterId === 'cash_backlog' ? 'text-primary-800' : 'text-gray-600'}`}>
               Cash Backlog
             </Text>
           </TouchableOpacity>
@@ -529,12 +529,12 @@ export default function AdminMembersScreen() {
             <View key={f.id} className="flex-row items-center gap-1">
               <TouchableOpacity
                 className={`px-3 py-1.5 rounded-full border flex-row items-center gap-1.5 ${
-                  activeFilterId === f.id ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+                  activeFilterId === f.id ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200'
                 }`}
                 onPress={() => applyFilterPreset(f.id, f.filters)}
               >
-                <Bookmark size={10} color={activeFilterId === f.id ? '#1e3a8a' : '#4b5563'} />
-                <Text className={`text-xs font-bold ${activeFilterId === f.id ? 'text-blue-800' : 'text-gray-600'}`}>
+                <Bookmark size={10} color={activeFilterId === f.id ? '#15803d' : '#4b5563'} />
+                <Text className={`text-xs font-bold ${activeFilterId === f.id ? 'text-primary-800' : 'text-gray-600'}`}>
                   {f.name}
                 </Text>
                 {f.is_shared && (
@@ -615,7 +615,7 @@ export default function AdminMembersScreen() {
               {bulkMode && (
                 <TouchableOpacity 
                   className={`w-5 h-5 rounded border mr-2 items-center justify-center ${
-                    selectedIds.includes(m.id) ? 'bg-blue-900 border-blue-900' : 'bg-white border-gray-300'
+                    selectedIds.includes(m.id) ? 'bg-primary-900 border-primary-900' : 'bg-white border-gray-300'
                   }`}
                   onPress={() => {
                     setSelectedIds(prev => 
@@ -731,10 +731,10 @@ export default function AdminMembersScreen() {
       {bulkMode && selectedIds.length > 0 && (
         <View className="bg-white border-t border-gray-200 p-4 shadow-lg gap-2">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-xs font-extrabold text-blue-900 uppercase">
+            <Text className="text-xs font-extrabold text-primary-900 uppercase">
               {selectedIds.length} Members Selected
             </Text>
-            {bulkProcessing && <ActivityIndicator size="small" color="#1e3a8a" />}
+            {bulkProcessing && <ActivityIndicator size="small" color="#15803d" />}
           </View>
 
           <View className="flex-row flex-wrap gap-2">

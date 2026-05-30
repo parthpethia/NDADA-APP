@@ -22,16 +22,16 @@ export default function AdminLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: '#1e3a8a' },
+        headerStyle: { backgroundColor: '#14532d' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '600' },
-        tabBarActiveTintColor: '#1e3a8a',
+        tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: { paddingBottom: 4, height: 56 },
         headerRight: () => (
           <View className="flex-row items-center mr-3 gap-2">
             <TouchableOpacity
-              className="p-1.5 rounded-md bg-blue-800 active:bg-blue-700"
+              className="p-1.5 rounded-md bg-primary-800 active:bg-primary-700"
               onPress={() => router.push('/admin/search')}
             >
               <Search size={18} color="#fff" />

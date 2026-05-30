@@ -53,7 +53,7 @@ export default function SystemHealthScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Scanning server telemetry...</Text>
       </View>
     );
@@ -77,10 +77,10 @@ export default function SystemHealthScreen() {
         <Text className="mb-4 text-xl font-bold text-gray-900">System Diagnostics & Telemetry</Text>
 
         {/* Database Size Card */}
-        <Card className="mb-4 border-l-4 border-l-blue-900">
+        <Card className="mb-4 border-l-4 border-l-primary-900">
           <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
-            <Database size={16} color="#1e3a8a" />
-            <Text className="text-xs font-bold text-blue-900 uppercase">Database Sizing</Text>
+            <Database size={16} color="#15803d" />
+            <Text className="text-xs font-bold text-primary-900 uppercase">Database Sizing</Text>
           </View>
           <View className="gap-1">
             <Text className="text-[10px] uppercase font-bold text-gray-400">public.accounts relation size</Text>

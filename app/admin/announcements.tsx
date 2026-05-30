@@ -149,7 +149,7 @@ export default function AnnouncementCampaignScreen() {
   if (loading && recentCampaigns.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Opening Communication Center...</Text>
       </View>
     );
@@ -164,10 +164,10 @@ export default function AnnouncementCampaignScreen() {
         <Text className="mb-4 text-xl font-bold text-gray-900">Communication & Campaigns</Text>
 
         {/* 1. Global Announcement Broadcaster */}
-        <Card className="mb-4 border border-blue-50">
+        <Card className="mb-4 border border-primary-50">
           <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
-            <Megaphone size={16} color="#1e3a8a" />
-            <Text className="text-sm font-bold text-blue-900 uppercase">Broadcast General Announcement</Text>
+            <Megaphone size={16} color="#15803d" />
+            <Text className="text-sm font-bold text-primary-900 uppercase">Broadcast General Announcement</Text>
           </View>
 
           <View className="gap-3">
@@ -236,7 +236,7 @@ export default function AnnouncementCampaignScreen() {
             </View>
 
             {announceSending ? (
-              <ActivityIndicator size="small" color="#1e3a8a" className="py-2" />
+              <ActivityIndicator size="small" color="#15803d" className="py-2" />
             ) : (
               <Button
                 title="Broadcast Announcement"
@@ -288,7 +288,7 @@ export default function AnnouncementCampaignScreen() {
                 </Text>
               </View>
               {previewing ? (
-                <ActivityIndicator size="small" color="#1e3a8a" />
+                <ActivityIndicator size="small" color="#15803d" />
               ) : (
                 <Button
                   title="Check Count"

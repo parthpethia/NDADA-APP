@@ -14,10 +14,10 @@ export default function DashboardLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: '#1e40af' },
+        headerStyle: { backgroundColor: '#166534' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '600' },
-        tabBarActiveTintColor: '#1d4ed8',
+        tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: { paddingBottom: 4, height: 56 },
       }}

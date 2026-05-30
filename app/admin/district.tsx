@@ -53,7 +53,7 @@ export default function DistrictAnalyticsScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Mapping regional data registries...</Text>
       </View>
     );
@@ -96,11 +96,11 @@ export default function DistrictAnalyticsScreen() {
             <Card key={districtName} className="mb-4">
               <View className="flex-row justify-between items-start border-b border-gray-100 pb-2 mb-3">
                 <View className="flex-row items-center gap-2">
-                  <Map size={16} color="#1e3a8a" />
+                  <Map size={16} color="#15803d" />
                   <Text className="text-base font-bold text-gray-900">{districtName}</Text>
                 </View>
-                <View className="bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
-                  <Text className="text-[10px] font-bold text-blue-900 uppercase">Share: {densityShare}%</Text>
+                <View className="bg-primary-50 px-2.5 py-1 rounded-full border border-primary-100">
+                  <Text className="text-[10px] font-bold text-primary-900 uppercase">Share: {densityShare}%</Text>
                 </View>
               </View>
 

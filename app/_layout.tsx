@@ -10,7 +10,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <NotificationProvider>
-          <StatusBar style="dark" />
+          <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
@@ -20,7 +20,7 @@ export default function RootLayout() {
               options={{
                 headerShown: true,
                 title: 'Register in NDADA',
-                headerStyle: { backgroundColor: '#1e40af' },
+                headerStyle: { backgroundColor: '#166534' },
                 headerTintColor: '#fff',
                 headerTitleStyle: { fontWeight: '600' },
                 presentation: 'card',
@@ -31,7 +31,7 @@ export default function RootLayout() {
               options={{
                 headerShown: true,
                 title: 'Cart',
-                headerStyle: { backgroundColor: '#1e40af' },
+                headerStyle: { backgroundColor: '#166534' },
                 headerTintColor: '#fff',
                 headerTitleStyle: { fontWeight: '600' },
                 presentation: 'card',

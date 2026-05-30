@@ -103,7 +103,7 @@ export default function DashboardHome() {
         <Card className="mb-5 overflow-hidden border-primary-200 bg-primary-50">
           <View className="items-center py-4">
             <View className="mb-3 rounded-full bg-primary-100 p-4">
-              <Building2 size={40} color="#1d4ed8" />
+              <Building2 size={40} color="#15803d" />
             </View>
             <Text className="mb-1 text-xl font-bold text-primary-900">
               Apply for {APP_NAME} membership
@@ -216,8 +216,8 @@ export default function DashboardHome() {
       <View className="flex-row flex-wrap gap-3">
         <Card className="min-w-[160px] flex-1">
           <View className="flex-row items-center gap-3">
-            <View className="rounded-lg bg-blue-100 p-2">
-              <Building2 size={20} color="#1d4ed8" />
+            <View className="rounded-lg bg-primary-100 p-2">
+              <Building2 size={20} color="#15803d" />
             </View>
             <View>
               <Text className="text-2xl font-bold text-gray-900">{hasFirm ? 1 : 0}</Text>

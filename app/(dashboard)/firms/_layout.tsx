@@ -4,7 +4,7 @@ export default function FirmsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: '#1e40af' },
+        headerStyle: { backgroundColor: '#166534' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '600' },
       }}

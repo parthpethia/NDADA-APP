@@ -45,7 +45,7 @@ export default function AdminDashboard() {
   };
 
   const widgets = [
-    { label: 'Total Members', value: stats.total_members, icon: Users, color: '#1d4ed8', bg: 'bg-blue-100' },
+    { label: 'Total Members', value: stats.total_members, icon: Users, color: '#15803d', bg: 'bg-primary-100' },
     { label: 'Total Firms', value: stats.total_firms, icon: Building2, color: '#7c3aed', bg: 'bg-purple-100' },
     { label: 'Payments Done', value: stats.payments_completed, icon: CreditCard, color: '#15803d', bg: 'bg-green-100' },
     { label: 'Certificates', value: stats.certificates_issued, icon: Award, color: '#0891b2', bg: 'bg-cyan-100' },
@@ -112,8 +112,8 @@ export default function AdminDashboard() {
           className="flex-1 bg-white border border-gray-200 p-4 rounded-xl items-center gap-2 shadow-sm"
           onPress={() => router.push('/admin/queue')}
         >
-          <View className="p-3 bg-blue-50 rounded-full">
-            <Award size={22} color="#1e3a8a" />
+          <View className="p-3 bg-primary-50 rounded-full">
+            <Award size={22} color="#15803d" />
           </View>
           <Text className="font-bold text-gray-900 text-sm">Cert Queue</Text>
           <Text className="text-[10px] text-gray-400 text-center">Monitor pipeline jobs</Text>

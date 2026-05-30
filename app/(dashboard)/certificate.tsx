@@ -255,7 +255,7 @@ export default function CertificateScreen() {
   if (queueStatus === 'queued' || queueStatus === 'processing') {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50 p-8">
-        <ActivityIndicator size="large" color="#1d4ed8" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-4 text-lg font-semibold text-gray-900">
           {queueStatus === 'queued'
             ? 'Certificate Queued...'
@@ -304,7 +304,7 @@ export default function CertificateScreen() {
         <Card className="mb-4">
           <View className="items-center py-6">
             <View className="mb-4 rounded-full bg-primary-100 p-4">
-              <Award size={48} color="#1d4ed8" />
+              <Award size={48} color="#15803d" />
             </View>
             <Text className="text-xl font-bold text-gray-900">
               Certificate of Membership

@@ -45,7 +45,7 @@ export default function RevenueDashboardScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Analyzing Ledger metrics...</Text>
       </View>
     );
@@ -84,10 +84,10 @@ export default function RevenueDashboardScreen() {
           </Card>
 
           <View className="flex-row gap-3">
-            <Card className="flex-1 bg-white p-3.5 border-l-4 border-l-blue-600">
+            <Card className="flex-1 bg-white p-3.5 border-l-4 border-l-primary-600">
               <View className="flex-row justify-between items-center mb-1">
                 <Text className="text-[9px] uppercase font-bold text-gray-400">This Month</Text>
-                <Calendar size={14} color="#2563eb" />
+                <Calendar size={14} color="#16a34a" />
               </View>
               <Text className="text-lg font-extrabold text-gray-900">₹{metrics.revenue_month.toLocaleString('en-IN')}</Text>
             </Card>
@@ -106,8 +106,8 @@ export default function RevenueDashboardScreen() {
         <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Payment Method Split</Text>
         <Card className="mb-4">
           <View className="flex-row justify-between items-center border-b border-gray-100 pb-2 mb-3">
-            <CreditCard size={16} color="#1e3a8a" />
-            <Text className="text-[10px] uppercase font-bold text-blue-900">Breakdown Metrics</Text>
+            <CreditCard size={16} color="#15803d" />
+            <Text className="text-[10px] uppercase font-bold text-primary-900">Breakdown Metrics</Text>
           </View>
 
           <View className="gap-3">
@@ -117,7 +117,7 @@ export default function RevenueDashboardScreen() {
                 <Text className="text-xs font-bold text-gray-900">₹{metrics.online_revenue.toLocaleString('en-IN')} ({onlinePct}%)</Text>
               </View>
               <View className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <View className="h-2 bg-blue-600 rounded-full" style={{ width: `${onlinePct}%` as any }} />
+                <View className="h-2 bg-primary-600 rounded-full" style={{ width: `${onlinePct}%` as any }} />
               </View>
             </View>
 

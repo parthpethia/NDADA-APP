@@ -195,7 +195,7 @@ export default function RenewalsWorkflowScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Loading Renewals workflow...</Text>
       </View>
     );
@@ -243,25 +243,25 @@ export default function RenewalsWorkflowScreen() {
 
           <TouchableOpacity 
             className={`flex-1 min-w-[45%] p-3 rounded-xl border shadow-sm ${
-              selectedBucket === '61_90' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'
+              selectedBucket === '61_90' ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-100'
             }`}
             onPress={() => setSelectedBucket('61_90')}
           >
-            <Text className="text-[10px] uppercase font-bold text-blue-600 mb-1">Expiring (61-90 Days)</Text>
+            <Text className="text-[10px] uppercase font-bold text-primary-600 mb-1">Expiring (61-90 Days)</Text>
             <Text className="text-xl font-extrabold text-gray-900">{counts['61_90_days']}</Text>
           </TouchableOpacity>
         </View>
 
         {/* 2. Bulk Reminders triggering */}
         {membersList.length > 0 && (
-          <Card className="mb-4 border border-blue-50">
+          <Card className="mb-4 border border-primary-50">
             <View className="flex-row items-center justify-between">
               <View>
                 <Text className="text-xs font-bold text-gray-800">Regional Reminders</Text>
                 <Text className="text-[10px] text-gray-400 mt-0.5">Send bulk reminders to this bucket</Text>
               </View>
               {actionLoading === 'bulk-remind' ? (
-                <ActivityIndicator size="small" color="#1e3a8a" />
+                <ActivityIndicator size="small" color="#15803d" />
               ) : (
                 <Button
                   title="Bulk Remind"
@@ -280,7 +280,7 @@ export default function RenewalsWorkflowScreen() {
         </Text>
 
         {listLoading ? (
-          <ActivityIndicator size="small" color="#1e3a8a" className="py-12" />
+          <ActivityIndicator size="small" color="#15803d" className="py-12" />
         ) : (
           <View className="gap-3">
             {membersList.map((m) => {
@@ -319,7 +319,7 @@ export default function RenewalsWorkflowScreen() {
 
                   {/* Operational actions */}
                   {actionLoading === m.id ? (
-                    <ActivityIndicator size="small" color="#1e3a8a" />
+                    <ActivityIndicator size="small" color="#15803d" />
                   ) : (
                     <View className="flex-row flex-wrap gap-2 border-t border-gray-100/50 pt-2.5">
                       <Button

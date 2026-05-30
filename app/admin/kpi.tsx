@@ -62,7 +62,7 @@ export default function ExecutiveKPIDashboardScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Loading Executive aggregates...</Text>
       </View>
     );
@@ -114,9 +114,9 @@ export default function ExecutiveKPIDashboardScreen() {
           <Card className="flex-1 min-w-[45%] bg-white p-3 border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
               <Text className="text-[10px] uppercase font-bold text-gray-400">Outstanding Invoices</Text>
-              <DollarSign size={14} color="#2563eb" />
+              <DollarSign size={14} color="#16a34a" />
             </View>
-            <Text className="text-lg font-extrabold text-blue-600">₹{kpis.outstanding_invoices_rupees.toLocaleString('en-IN')}</Text>
+            <Text className="text-lg font-extrabold text-primary-600">₹{kpis.outstanding_invoices_rupees.toLocaleString('en-IN')}</Text>
             <Text className="text-[9px] text-gray-400 mt-1">Uncollected pending fee receivables.</Text>
           </Card>
 
@@ -135,8 +135,8 @@ export default function ExecutiveKPIDashboardScreen() {
         <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Regional Yield Densities</Text>
         <Card className="mb-4">
           <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
-            <Map size={16} color="#1e3a8a" />
-            <Text className="text-xs font-bold text-blue-900 uppercase">District rankings by density</Text>
+            <Map size={16} color="#15803d" />
+            <Text className="text-xs font-bold text-primary-900 uppercase">District rankings by density</Text>
           </View>
 
           <View className="gap-2.5">

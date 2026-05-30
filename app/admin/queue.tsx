@@ -124,7 +124,7 @@ export default function CertificateQueueScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+        <ActivityIndicator size="large" color="#15803d" />
         <Text className="mt-3 text-gray-500 font-medium">Scanning Pipeline...</Text>
       </View>
     );
@@ -172,9 +172,9 @@ export default function CertificateQueueScreen() {
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
               <Text className="text-[10px] uppercase font-bold text-gray-400">Pending Queue</Text>
-              <Activity size={14} color="#3b82f6" />
+              <Activity size={14} color="#16a34a" />
             </View>
-            <Text className="text-lg font-extrabold text-blue-600">{pendingCount}</Text>
+            <Text className="text-lg font-extrabold text-primary-600">{pendingCount}</Text>
           </View>
 
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
@@ -258,7 +258,7 @@ export default function CertificateQueueScreen() {
 
               {/* Actions panel */}
               {actionLoading === job.id ? (
-                <ActivityIndicator size="small" color="#1e3a8a" />
+                <ActivityIndicator size="small" color="#15803d" />
               ) : (
                 <View className="flex-row flex-wrap gap-2 border-t border-gray-100/50 pt-2.5">
                   {job.status === 'failed' && (

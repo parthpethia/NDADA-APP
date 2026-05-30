@@ -149,7 +149,7 @@ export default function CartScreen() {
           member_id: member.id,
           membership_id: member.membership_id,
         },
-        theme: { color: '#1d4ed8' },
+        theme: { color: '#15803d' },
         timeout: 600,
       };
 
@@ -287,8 +287,8 @@ export default function CartScreen() {
       <View className="mx-auto w-full max-w-lg">
         {/* Success Notice */}
         {params.success === 'true' && (
-          <View className="mb-4 rounded-lg bg-blue-50 p-3">
-            <Text className="text-sm text-blue-700">
+          <View className="mb-4 rounded-lg bg-primary-50 p-3">
+            <Text className="text-sm text-primary-700">
               Payment completed. Updating your payment status…
             </Text>
           </View>
@@ -306,7 +306,7 @@ export default function CartScreen() {
         {/* Cart Header */}
         <View className="mb-5 flex-row items-center gap-3">
           <View className="rounded-full bg-primary-100 p-2">
-            <ShoppingCart size={24} color="#1d4ed8" />
+            <ShoppingCart size={24} color="#15803d" />
           </View>
           <View>
             <Text className="text-xl font-bold text-gray-900">Your Cart</Text>
@@ -344,7 +344,7 @@ export default function CartScreen() {
             <View className="flex-row items-center justify-between rounded-lg bg-gray-50 p-3">
               <View className="flex-row items-center gap-3">
                 <View className="rounded-lg bg-primary-100 p-2">
-                  <Award size={20} color="#1d4ed8" />
+                  <Award size={20} color="#15803d" />
                 </View>
                 <View>
                   <Text className="font-medium text-gray-900">{APP_NAME} Membership</Text>

@@ -58,16 +58,16 @@ export default function AdminSearchScreen() {
   return (
     <View className="flex-1 bg-gray-50">
       {/* Search Header */}
-      <View className="bg-blue-900 px-4 pb-4 pt-3 flex-row items-center gap-3">
+      <View className="bg-primary-900 px-4 pb-4 pt-3 flex-row items-center gap-3">
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeft size={22} color="#fff" />
         </TouchableOpacity>
         <View className="flex-1 flex-row items-center rounded-lg bg-white/10 px-3 py-1 border border-white/20">
-          <SearchIcon size={18} color="#93c5fd" />
+          <SearchIcon size={18} color="#86efac" />
           <TextInput
             className="ml-2 flex-1 py-1.5 text-base text-white"
             placeholder="Search membership, email, phone, certificates..."
-            placeholderTextColor="#93c5fd"
+            placeholderTextColor="#86efac"
             autoFocus
             value={query}
             onChangeText={handleSearch}
@@ -78,7 +78,7 @@ export default function AdminSearchScreen() {
       <ScrollView className="flex-1" contentContainerClassName="p-4 pb-12">
         {loading && (
           <View className="py-12 items-center justify-center">
-            <ActivityIndicator size="large" color="#1e3a8a" />
+            <ActivityIndicator size="large" color="#15803d" />
             <Text className="mt-3 text-sm text-gray-500 font-medium">Scanning registries...</Text>
           </View>
         )}
@@ -101,9 +101,9 @@ export default function AdminSearchScreen() {
                   <Card className="border border-gray-100 hover:border-gray-200">
                     <View className="flex-row items-center gap-3">
                       <View className={`p-2 rounded-lg ${
-                        res.type === 'member' ? 'bg-blue-50' : res.type === 'firm' ? 'bg-indigo-50' : 'bg-green-50'
+                        res.type === 'member' ? 'bg-primary-50' : res.type === 'firm' ? 'bg-indigo-50' : 'bg-green-50'
                       }`}>
-                        {res.type === 'member' && <User size={18} color="#1e3a8a" />}
+                        {res.type === 'member' && <User size={18} color="#15803d" />}
                         {res.type === 'firm' && <Building2 size={18} color="#4f46e5" />}
                         {res.type === 'certificate' && <Award size={18} color="#16a34a" />}
                       </View>
