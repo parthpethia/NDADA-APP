@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, AppState } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -46,30 +46,69 @@ export default function CashPaymentReviewScreen() {
 
     checkCashPaymentVerification();
 
-    // Subscribe to changes on this specific row
-    const channel = supabase
-      .channel(`cash-verify-${member.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'accounts',
-          filter: `id=eq.${member.id}`,
-        },
-        async (payload) => {
-          if (payload.new?.cash_payment_verified) {
-            setCashVerified(true);
-            await refreshMember();
-          } else {
-            setCashVerified(false);
-          }
-        }
-      )
-      .subscribe();
+    let channel: any = null;
 
+    const subscribe = () => {
+      if (channel) return;
+
+      // Ensure global realtime client is connected
+      supabase.realtime.connect();
+
+      channel = supabase
+        .channel(`cash-verify-${member.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'accounts',
+            filter: `id=eq.${member.id}`,
+          },
+          async (payload) => {
+            if (payload.new?.cash_payment_verified) {
+              setCashVerified(true);
+              await refreshMember();
+            } else {
+              setCashVerified(false);
+            }
+          }
+        );
+
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Subscribed to cash-verify-${member.id}`);
+        }
+      });
+    };
+
+    const unsubscribe = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+        console.log(`Unsubscribed from cash-verify-${member.id}`);
+      }
+    };
+
+    // Set up subscription if app is active on mount
+    if (AppState.currentState === 'active') {
+      subscribe();
+    }
+
+    // AppState change listener
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      console.log(`Cash verification AppState changed to: ${nextAppState}`);
+      if (nextAppState === 'active') {
+        checkCashPaymentVerification();
+        subscribe();
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        unsubscribe();
+      }
+    });
+
+    // Cleanup: remove channel and listener on unmount
     return () => {
-      supabase.removeChannel(channel);
+      subscription.remove();
+      unsubscribe();
     };
   }, [member?.id, refreshMember]);
 

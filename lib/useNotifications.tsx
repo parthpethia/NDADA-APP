@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { Notification } from '@/types';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -149,68 +150,111 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
 
   // ─── Realtime subscription ─────────────────────────────────
   // Single channel per user session. Replaces the 120s polling interval.
+  // App active -> subscribe, App backgrounded -> unsubscribe, App closed -> disconnect.
   useEffect(() => {
     // Fetch initial unread count on mount
     fetchCountOnly();
 
     if (!userId) return;
 
-    const channel = supabase
-      .channel(`notifications:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          // A new notification arrived — increment unread count
-          const newNotification = payload.new as Notification;
-          if (newNotification && !newNotification.read) {
-            setUnreadCount((prev) => prev + 1);
-          }
+    let channel: any = null;
 
-          // If the full list has been loaded (user has opened Notifications screen),
-          // prepend the new notification to the list for instant feedback.
-          if (listLoadedRef.current && newNotification) {
-            setNotifications((prev) => [newNotification, ...prev]);
+    const subscribe = () => {
+      if (channel) return;
+
+      // Ensure global realtime client is connected
+      supabase.realtime.connect();
+
+      channel = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            // A new notification arrived — increment unread count
+            const newNotification = payload.new as Notification;
+            if (newNotification && !newNotification.read) {
+              setUnreadCount((prev) => prev + 1);
+            }
+
+            // If the full list has been loaded (user has opened Notifications screen),
+            // prepend the new notification to the list for instant feedback.
+            if (listLoadedRef.current && newNotification) {
+              setNotifications((prev) => [newNotification, ...prev]);
+            }
           }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            const updated = payload.new as Notification;
+            const old = payload.old as Partial<Notification>;
+
+            // If read status changed (e.g. marked read from another device), sync locally
+            if (old.read === false && updated.read === true) {
+              setUnreadCount((prev) => Math.max(0, prev - 1));
+            } else if (old.read === true && updated.read === false) {
+              setUnreadCount((prev) => prev + 1);
+            }
+
+            // Update the notification in the local list
+            if (listLoadedRef.current) {
+              setNotifications((prev) =>
+                prev.map((n) => (n.id === updated.id ? updated : n))
+              );
+            }
+          }
+        );
+
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Subscribed to notifications:${userId}`);
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const updated = payload.new as Notification;
-          const old = payload.old as Partial<Notification>;
+      });
+    };
 
-          // If read status changed (e.g. marked read from another device), sync locally
-          if (old.read === false && updated.read === true) {
-            setUnreadCount((prev) => Math.max(0, prev - 1));
-          } else if (old.read === true && updated.read === false) {
-            setUnreadCount((prev) => prev + 1);
-          }
+    const unsubscribe = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+        console.log(`Unsubscribed from notifications:${userId}`);
+      }
+    };
 
-          // Update the notification in the local list
-          if (listLoadedRef.current) {
-            setNotifications((prev) =>
-              prev.map((n) => (n.id === updated.id ? updated : n))
-            );
-          }
-        }
-      )
-      .subscribe();
+    // Set up subscription if app is active on mount
+    if (AppState.currentState === 'active') {
+      subscribe();
+    }
 
-    // Cleanup: remove channel on unmount or userId change (sign-out)
+    // AppState change listener
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      console.log(`Notifications AppState changed to: ${nextAppState}`);
+      if (nextAppState === 'active') {
+        // Catch up on any notifications missed while backgrounded
+        fetchCountOnly();
+        subscribe();
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        unsubscribe();
+      }
+    });
+
+    // Cleanup: remove channel/listeners on unmount or userId change, and disconnect websocket
     return () => {
-      supabase.removeChannel(channel);
+      subscription.remove();
+      unsubscribe();
+      supabase.realtime.disconnect();
+      console.log('Realtime client disconnected on notifications unmount');
     };
   }, [userId, fetchCountOnly]);
 

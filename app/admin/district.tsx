@@ -3,6 +3,7 @@ import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Alert, TextI
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui';
 import { Map, Users, CreditCard, Award, Filter, AlertTriangle } from 'lucide-react-native';
+import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/queryCache';
 
 interface DistrictMetric {
   district: string;
@@ -19,12 +20,23 @@ export default function DistrictAnalyticsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchDistrictData = useCallback(async () => {
+  const fetchDistrictData = useCallback(async (forceRefetch = false) => {
+    if (!forceRefetch) {
+      const cached = cacheGet<DistrictMetric[]>('admin:district_analytics', 300_000);
+      if (cached) {
+        setDistrictData(cached);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('get_district_analytics');
       if (error) throw error;
-      setDistrictData((data || []) as DistrictMetric[]);
+      const metricsList = (data || []) as DistrictMetric[];
+      setDistrictData(metricsList);
+      cacheSet('admin:district_analytics', metricsList);
     } catch (err: any) {
       Alert.alert('Metrics Error', err.message || 'Failed to fetch district analytics');
     } finally {
@@ -38,7 +50,8 @@ export default function DistrictAnalyticsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDistrictData();
+    cacheInvalidate('admin:district_analytics');
+    await fetchDistrictData(true);
     setRefreshing(false);
   };
 

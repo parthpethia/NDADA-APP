@@ -290,8 +290,17 @@ serve(async (req) => {
     });
 
     // Generate PDF bytes
-    const pdfBytes = await pdfDoc.save();
-    console.log(`PDF generated: ${pdfBytes.length} bytes`);
+    const pdfBytesStandard = await pdfDoc.save();
+    const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
+    const savings = pdfBytesStandard.length - pdfBytes.length;
+    const savingsPercent = ((pdfBytesStandard.length - pdfBytes.length) / pdfBytesStandard.length) * 100;
+    
+    console.log(
+      `[Certificate Optimization] PDF generated:\n` +
+      `- Standard Size: ${pdfBytesStandard.length} bytes\n` +
+      `- Optimized Size: ${pdfBytes.length} bytes\n` +
+      `- Savings: ${savings} bytes (${savingsPercent.toFixed(2)}%)`
+    );
 
     // Upload to Supabase Storage
     const storagePath = `${member.id}.pdf`;

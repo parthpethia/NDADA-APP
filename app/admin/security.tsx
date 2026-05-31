@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, Select } from '@/components/ui';
 import { Shield, ShieldAlert, Key, CreditCard, Award, Filter } from 'lucide-react-native';
 import { formatDateTime } from '@/lib/utils';
+import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/queryCache';
 
 interface SecurityMetrics {
   failed_logins: number;
@@ -30,26 +31,48 @@ export default function SecurityDashboardScreen() {
   const [daysBack, setDaysBack] = useState('30');
   const [logFilter, setLogFilter] = useState('all');
 
-  const fetchSecurityData = useCallback(async () => {
+  const fetchSecurityData = useCallback(async (forceRefetch = false) => {
+    const days = parseInt(daysBack, 10) || 30;
+    const metricsKey = `admin:security_metrics:${days}`;
+    const logsKey = 'admin:security_logs';
+
+    const cachedMetrics = forceRefetch ? undefined : cacheGet<SecurityMetrics>(metricsKey, 300_000);
+    const cachedLogs = forceRefetch ? undefined : cacheGet<SecurityLog[]>(logsKey, 300_000);
+
+    if (cachedMetrics && cachedLogs) {
+      setMetrics(cachedMetrics);
+      setLogs(cachedLogs);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Fetch Metrics from RPC
-      const days = parseInt(daysBack, 10) || 30;
-      const { data: metricsData, error: metricsErr } = await supabase.rpc('get_security_metrics', {
-        p_days_back: days,
-      });
-      if (metricsErr) throw metricsErr;
-      setMetrics(metricsData as SecurityMetrics);
+      let finalMetrics = cachedMetrics;
+      if (!finalMetrics) {
+        const { data: metricsData, error: metricsErr } = await supabase.rpc('get_security_metrics', {
+          p_days_back: days,
+        });
+        if (metricsErr) throw metricsErr;
+        finalMetrics = metricsData as SecurityMetrics;
+        cacheSet(metricsKey, finalMetrics);
+      }
+      setMetrics(finalMetrics);
 
       // 2. Fetch Recent Security Events / Audit Logs fallback list
-      const { data: logData, error: logErr } = await supabase
-        .from('security_events')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(30);
-
-      if (logErr) throw logErr;
-      setLogs((logData || []) as SecurityLog[]);
+      let finalLogs = cachedLogs;
+      if (!finalLogs) {
+        const { data: logData, error: logErr } = await supabase
+          .from('security_events')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(30);
+        if (logErr) throw logErr;
+        finalLogs = (logData || []) as SecurityLog[];
+        cacheSet(logsKey, finalLogs);
+      }
+      setLogs(finalLogs);
     } catch (err: any) {
       Alert.alert('Metrics Error', err.message || 'Failed to fetch security analytics');
     } finally {
@@ -63,7 +86,10 @@ export default function SecurityDashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchSecurityData();
+    const days = parseInt(daysBack, 10) || 30;
+    cacheInvalidate(`admin:security_metrics:${days}`);
+    cacheInvalidate('admin:security_logs');
+    await fetchSecurityData(true);
     setRefreshing(false);
   };
 

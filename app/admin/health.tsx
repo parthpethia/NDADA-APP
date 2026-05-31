@@ -3,6 +3,7 @@ import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Alert } from
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui';
 import { Activity, Database, Server, Clock, AlertTriangle } from 'lucide-react-native';
+import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/queryCache';
 
 interface SystemHealthMetrics {
   db_connections: number;
@@ -15,7 +16,16 @@ export default function SystemHealthScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchHealthMetrics = useCallback(async () => {
+  const fetchHealthMetrics = useCallback(async (forceRefetch = false) => {
+    if (!forceRefetch) {
+      const cached = cacheGet<SystemHealthMetrics>('admin:system_health', 300_000);
+      if (cached) {
+        setMetrics(cached);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('get_system_health');
@@ -24,6 +34,7 @@ export default function SystemHealthScreen() {
       // Parse database result (exclude realtime sockets to comply with "no placeholder/estimated values" rule)
       const healthData = data as SystemHealthMetrics;
       setMetrics(healthData);
+      cacheSet('admin:system_health', healthData);
     } catch (err: any) {
       Alert.alert('Diagnostics Error', err.message || 'Failed to fetch database diagnostics');
     } finally {
@@ -37,7 +48,8 @@ export default function SystemHealthScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchHealthMetrics();
+    cacheInvalidate('admin:system_health');
+    await fetchHealthMetrics(true);
     setRefreshing(false);
   };
 

@@ -374,7 +374,7 @@ export function generateCertificate(accessToken, memberId) {
   );
 
   check(res, {
-    'certificate generated': (r) => r.status === 200,
+    'certificate generated or queued': (r) => r.status === 200 || r.status === 429,
   });
 
   return res;

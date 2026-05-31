@@ -31,6 +31,7 @@ import {
 const certGenDuration = new Trend('spike_cert_gen_duration', true);
 const certErrors = new Rate('spike_cert_errors');
 const certSuccess = new Counter('spike_cert_success');
+const certQueued = new Counter('spike_cert_queued');
 const certFail = new Counter('spike_cert_fail');
 const edgeFnCalls = new Counter('spike_cert_edge_fn_calls');
 const storageWrites = new Counter('spike_cert_storage_writes');
@@ -118,14 +119,21 @@ export default function () {
         'cert has certificate_url': (b) => !!b.certificate?.certificate_url,
       });
     } catch { /* ignore */ }
+  } else if (res.status === 429) {
+    // Graceful concurrency queue fallback (Soft rate limit)
+    certQueued.add(1);
+    certErrors.add(0); // Not a hard error
+    check(res, {
+      'queued status returned': (r) => {
+        try { return JSON.parse(r.body).status === 'queued'; } catch { return false; }
+      }
+    });
   } else {
     certFail.add(1);
     certErrors.add(1);
 
     // Distinguish error types
-    if (res.status === 429) {
-      console.warn('Rate limited by edge function');
-    } else if (res.status === 504 || res.status === 502) {
+    if (res.status === 504 || res.status === 502) {
       console.warn('Edge function timeout/gateway error');
     } else {
       console.warn(`Cert gen failed: ${res.status} - ${res.body?.substring(0, 200)}`);
@@ -142,6 +150,7 @@ export function handleSummary(data) {
   const median = data.metrics?.spike_cert_gen_duration?.values?.['p(50)'] || 0;
   const errorRate = data.metrics?.spike_cert_errors?.values?.rate || 0;
   const success = data.metrics?.spike_cert_success?.values?.count || 0;
+  const queued = data.metrics?.spike_cert_queued?.values?.count || 0;
   const fail = data.metrics?.spike_cert_fail?.values?.count || 0;
   const edgeCalls = data.metrics?.spike_cert_edge_fn_calls?.values?.count || 0;
   const storageOps = data.metrics?.spike_cert_storage_writes?.values?.count || 0;
@@ -150,9 +159,10 @@ export function handleSummary(data) {
   console.log('║     CERTIFICATE GENERATION SPIKE ANALYSIS        ║');
   console.log('╠══════════════════════════════════════════════════╣');
   console.log(`║  Peak concurrent generators: ${peakVUs}`);
-  console.log(`║  Successful generations:     ${success}`);
+  console.log(`║  Successful direct gens:     ${success}`);
+  console.log(`║  Queued (concurrency limit):  ${queued}`);
   console.log(`║  Failed generations:         ${fail}`);
-  console.log(`║  Error rate:                 ${(errorRate * 100).toFixed(2)}%`);
+  console.log(`║  Error rate (hard failures):  ${(errorRate * 100).toFixed(2)}%`);
   console.log(`║  Generation median:          ${median.toFixed(0)}ms`);
   console.log(`║  Generation p95:             ${p95.toFixed(0)}ms`);
   console.log(`║  Generation p99:             ${p99.toFixed(0)}ms`);

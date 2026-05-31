@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui';
 import { formatDateTime } from '@/lib/utils';
 import { BarChart2, TrendingUp, DollarSign, Clock, ShieldCheck, Map } from 'lucide-react-native';
+import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/queryCache';
 
 interface ExecutiveKPIs {
   conversion_rate_pct: number;
@@ -24,19 +25,46 @@ export default function ExecutiveKPIDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchKPIData = useCallback(async () => {
+  const fetchKPIData = useCallback(async (forceRefetch = false) => {
+    const cachedKPI = forceRefetch ? undefined : cacheGet<ExecutiveKPIs>('admin:executive_kpis', 300_000);
+    const cachedDistRaw = forceRefetch ? undefined : cacheGet<any[]>('admin:district_analytics', 300_000);
+
+    if (cachedKPI && cachedDistRaw) {
+      setKpis(cachedKPI);
+      setDistrictYields(
+        cachedDistRaw.map((d) => ({
+          district: d.district || 'Unspecified',
+          members_count: Number(d.members_count),
+          revenue: Number(d.revenue),
+        }))
+      );
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Fetch Executive KPIs
-      const { data: kpiData, error: kpiErr } = await supabase.rpc('get_executive_kpis');
-      if (kpiErr) throw kpiErr;
-      setKpis(kpiData as ExecutiveKPIs);
+      let finalKPIs = cachedKPI;
+      if (!finalKPIs) {
+        const { data: kpiData, error: kpiErr } = await supabase.rpc('get_executive_kpis');
+        if (kpiErr) throw kpiErr;
+        finalKPIs = kpiData as ExecutiveKPIs;
+        cacheSet('admin:executive_kpis', finalKPIs);
+      }
+      setKpis(finalKPIs);
 
-      // 2. Fetch District Yields for regional revenue densities
-      const { data: distData, error: distErr } = await supabase.rpc('get_district_analytics');
-      if (distErr) throw distErr;
+      // 2. Fetch District Yields
+      let finalDistRaw = cachedDistRaw;
+      if (!finalDistRaw) {
+        const { data: distData, error: distErr } = await supabase.rpc('get_district_analytics');
+        if (distErr) throw distErr;
+        finalDistRaw = (distData || []) as any[];
+        cacheSet('admin:district_analytics', finalDistRaw);
+      }
+      const distList = finalDistRaw || [];
       setDistrictYields(
-        ((distData || []) as any[]).map((d) => ({
+        distList.map((d: any) => ({
           district: d.district || 'Unspecified',
           members_count: Number(d.members_count),
           revenue: Number(d.revenue),
@@ -55,7 +83,9 @@ export default function ExecutiveKPIDashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchKPIData();
+    cacheInvalidate('admin:executive_kpis');
+    cacheInvalidate('admin:district_analytics');
+    await fetchKPIData(true);
     setRefreshing(false);
   };
 

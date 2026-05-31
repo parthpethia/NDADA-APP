@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { validateAndOptimizeFile } from '@/lib/storageOptimization';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useAccountForm } from '@/lib/useAccountForm';
@@ -343,6 +345,7 @@ export default function NewFirmScreen() {
   const [documents, setDocuments] = useState<{ name: string; uri: string }[]>([]);
   const [applicantPhoto, setApplicantPhoto] = useState<{ name: string; uri: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('');
   const [error, setError] = useState('');
   const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -500,44 +503,68 @@ export default function NewFirmScreen() {
     }
 
     setLoading(true);
+    setLoadingStatus('Preparing uploads...');
     setError('');
     setMissingRequiredFields([]);
-
-    const documentUrls: string[] = [];
-    for (const doc of documents) {
-      try {
-        const filePath = `${member.id}/${Date.now()}_${doc.name}`;
-        const response = await fetch(doc.uri);
-        const blob = await response.blob();
-
-        const { data } = await supabase.storage
-          .from(STORAGE_BUCKETS.documents)
-          .upload(filePath, blob, { contentType: blob.type });
-
-        if (data) documentUrls.push(data.path);
-      } catch (err) {
-        console.error('Upload error:', err);
-      }
-    }
 
     let applicantPhotoUrl: string | null = null;
     if (applicantPhoto) {
       try {
-        const filePath = `${member.id}/photo_${Date.now()}_${applicantPhoto.name}`;
-        const response = await fetch(applicantPhoto.uri);
-        const blob = await response.blob();
+        setLoadingStatus('Processing photograph...');
+        const optResult = await validateAndOptimizeFile(applicantPhoto, true);
+        
+        setLoadingStatus('Uploading photograph...');
+        const filePath = `${member.id}/photo_${Date.now()}_${optResult.name}`;
 
-        const { data } = await supabase.storage
+        const { data, error: uploadErr } = await supabase.storage
           .from(STORAGE_BUCKETS.documents)
-          .upload(filePath, blob, { contentType: blob.type });
+          .upload(filePath, optResult.blob, { contentType: optResult.blob.type });
+
+        if (uploadErr) throw uploadErr;
 
         if (data?.path) {
           applicantPhotoUrl = data.path;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Photo upload error:', err);
+        setLoading(false);
+        setLoadingStatus('');
+        const errorMsg = err.message || 'An error occurred during photograph upload.';
+        setError(errorMsg);
+        Alert.alert('Upload Error', errorMsg);
+        return;
       }
     }
+
+    const documentUrls: string[] = [];
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i];
+      try {
+        setLoadingStatus(`Optimizing document ${i + 1} of ${documents.length}...`);
+        const optResult = await validateAndOptimizeFile(doc, false);
+
+        setLoadingStatus(`Uploading document ${i + 1} of ${documents.length}...`);
+        const filePath = `${member.id}/${Date.now()}_${optResult.name}`;
+
+        const { data, error: uploadErr } = await supabase.storage
+          .from(STORAGE_BUCKETS.documents)
+          .upload(filePath, optResult.blob, { contentType: optResult.blob.type });
+
+        if (uploadErr) throw uploadErr;
+
+        if (data) documentUrls.push(data.path);
+      } catch (err: any) {
+        console.error('Upload error:', err);
+        setLoading(false);
+        setLoadingStatus('');
+        const errorMsg = err.message || `An error occurred while uploading "${doc.name}".`;
+        setError(errorMsg);
+        Alert.alert('Upload Error', errorMsg);
+        return;
+      }
+    }
+
+    setLoadingStatus('Submitting registration...');
 
     const mergedDocumentsUrls = existingAccount
       ? Array.from(new Set([...(existingAccount.documents_urls || []), ...documentUrls]))
@@ -592,6 +619,7 @@ export default function NewFirmScreen() {
         });
 
     setLoading(false);
+    setLoadingStatus('');
 
     if (submitError) {
       let finalErrorMsg = submitError.message;
@@ -1003,6 +1031,12 @@ export default function NewFirmScreen() {
 
       {/* --- Navigation Buttons --- */}
       <View className="mt-6">
+        {loading && loadingStatus ? (
+          <View className="mb-4 flex-row items-center justify-center rounded-xl bg-primary-50 px-4 py-3 border border-primary-100">
+            <ActivityIndicator size="small" color="#1d4ed8" style={{ marginRight: 10 }} />
+            <Text className="text-sm font-medium text-primary-800">{loadingStatus}</Text>
+          </View>
+        ) : null}
         <View className="flex-row gap-3">
           {activeSection > 0 && (
             <Button title="Back" variant="outline" onPress={goPrev} className="flex-1 rounded-xl" />

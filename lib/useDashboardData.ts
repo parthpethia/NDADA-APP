@@ -5,7 +5,7 @@
  * dashboard visit with a single `get_dashboard_data` RPC call.
  *
  * Features:
- * - 60-second in-memory cache (prevents re-fetch on tab switch / re-mount)
+ * - 120-second in-memory cache (prevents re-fetch on tab switch / re-mount)
  * - Graceful fallback to separate queries if the RPC isn't deployed yet
  * - Pull-to-refresh invalidates cache before re-fetching
  * - Returns { account, certificate, unreadCount, loading, refresh }
@@ -50,7 +50,7 @@ export function useDashboardData(): DashboardData {
     // Check cache first (unless explicitly skipped, e.g. pull-to-refresh)
     const key = cacheKey(CACHE_NS, userId);
     if (!skipCache) {
-      const cached = cacheGet<DashboardDataResponse>(key);
+      const cached = cacheGet<DashboardDataResponse>(key, 120_000);
       if (cached) {
         setCertificate(cached.certificate);
         setUnreadCount(cached.unread_notification_count);

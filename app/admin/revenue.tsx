@@ -3,6 +3,7 @@ import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Alert } from
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui';
 import { CreditCard, Calendar, ArrowUpRight, TrendingUp, AlertTriangle } from 'lucide-react-native';
+import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/queryCache';
 
 interface FinancialMetrics {
   revenue_today: number;
@@ -19,12 +20,22 @@ export default function RevenueDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchRevenueMetrics = useCallback(async () => {
+  const fetchRevenueMetrics = useCallback(async (forceRefetch = false) => {
+    if (!forceRefetch) {
+      const cached = cacheGet<FinancialMetrics>('admin:revenue_metrics', 300_000);
+      if (cached) {
+        setMetrics(cached);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('get_financial_metrics');
       if (error) throw error;
       setMetrics(data as FinancialMetrics);
+      cacheSet('admin:revenue_metrics', data);
     } catch (err: any) {
       Alert.alert('Metrics Error', err.message || 'Failed to fetch financial metrics');
     } finally {
@@ -38,7 +49,8 @@ export default function RevenueDashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchRevenueMetrics();
+    cacheInvalidate('admin:revenue_metrics');
+    await fetchRevenueMetrics(true);
     setRefreshing(false);
   };
 
