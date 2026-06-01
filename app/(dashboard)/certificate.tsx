@@ -164,7 +164,10 @@ export default function CertificateScreen() {
 
   // Initial load — check for existing certificate or queue status
   const fetchCertificate = useCallback(async () => {
-    if (!member) return;
+    if (!member) {
+      setLoading(false);
+      return;
+    }
 
     // Check for existing certificate first
     const cert = await checkCertificate();

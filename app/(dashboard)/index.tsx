@@ -24,14 +24,34 @@ import {
 } from 'lucide-react-native';
 
 export default function DashboardHome() {
-  const { member, signOut, loading: authLoading } = useAuth();
+  const { member, signOut, refreshMember, loading: authLoading } = useAuth();
   const { certificate, refresh: refreshDashboard, loading: dashboardLoading } = useDashboardData();
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshingProfile, setRefreshingProfile] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await refreshDashboard();
     setRefreshing(false);
+  };
+
+  const handleRefreshProfile = async () => {
+    setRefreshingProfile(true);
+    try {
+      await refreshMember();
+    } finally {
+      setRefreshingProfile(false);
+    }
+  };
+
+  const handleEmptyStateSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   // Show loading only during initial load (auth + dashboard data)
@@ -44,8 +64,20 @@ export default function DashboardHome() {
         message="Your member profile is still being prepared. Pull to refresh or try again in a moment."
       >
         <View className="w-full gap-2">
-          <Button title="Refresh" variant="outline" onPress={() => refreshDashboard()} />
-          <Button title="Sign Out" variant="destructive" onPress={() => signOut()} />
+          <Button
+            title="Refresh"
+            variant="outline"
+            loading={refreshingProfile}
+            disabled={signingOut}
+            onPress={handleRefreshProfile}
+          />
+          <Button
+            title="Sign Out"
+            variant="destructive"
+            loading={signingOut}
+            disabled={refreshingProfile}
+            onPress={handleEmptyStateSignOut}
+          />
         </View>
       </EmptyState>
     );

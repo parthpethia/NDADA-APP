@@ -296,20 +296,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // This is used after profile edits, form submissions, payment updates, etc.
   const refreshMember = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from('accounts')
-      .select(ACCOUNT_SELECT_COLUMNS)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select(ACCOUNT_SELECT_COLUMNS)
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-    if (error) {
-      console.warn('refreshMember error:', error.message);
-      return;
+      if (error) {
+        console.warn('refreshMember error:', error.message);
+        return;
+      }
+      if (data) {
+        setMember(data as unknown as Account);
+      } else {
+        console.log('refreshMember: profile not found, attempting auto-creation/reload fallback');
+        await loadUserProfile(user.id, user);
+      }
+    } catch (err) {
+      console.warn('refreshMember error:', err);
     }
-    if (data) {
-      setMember(data as unknown as Account);
-    }
-  }, [user]);
+  }, [user, loadUserProfile]);
 
   // Helper: load user profile data with error recovery
   const loadProfile = async (currentSession: Session): Promise<boolean> => {
@@ -478,13 +485,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setMember(null);
-    setAdminUser(null);
-    // Clear admin cache on sign-out so a different user gets a fresh lookup
-    adminCacheRef.current.clear();
-    // Clear query cache to prevent stale data for the next user
-    cacheClear();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn('Auth: signOut error, forcing local signout:', error);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {}
+    } finally {
+      setSession(null);
+      setUser(null);
+      setMember(null);
+      setAdminUser(null);
+      // Clear admin cache on sign-out so a different user gets a fresh lookup
+      adminCacheRef.current.clear();
+      // Clear query cache to prevent stale data for the next user
+      cacheClear();
+    }
   };
 
   const resetPassword = async (email: string) => {

@@ -17,6 +17,8 @@ export default function ProfileScreen() {
   });
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshingProfile, setRefreshingProfile] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (!member || editing) return;
@@ -26,6 +28,24 @@ export default function ProfileScreen() {
       address: member.address,
     });
   }, [member, editing]);
+
+  const handleEmptyStateRefresh = async () => {
+    setRefreshingProfile(true);
+    try {
+      await refreshMember();
+    } finally {
+      setRefreshingProfile(false);
+    }
+  };
+
+  const handleEmptyStateSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   if (loading) return <LoadingScreen message="Loading profile..." />;
 
@@ -39,12 +59,16 @@ export default function ProfileScreen() {
           <Button
             title="Refresh"
             variant="outline"
-            onPress={() => refreshMember()}
+            loading={refreshingProfile}
+            disabled={signingOut}
+            onPress={handleEmptyStateRefresh}
           />
           <Button
             title="Sign Out"
             variant="destructive"
-            onPress={() => signOut()}
+            loading={signingOut}
+            disabled={refreshingProfile}
+            onPress={handleEmptyStateSignOut}
           />
         </View>
       </EmptyState>
