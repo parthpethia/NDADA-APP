@@ -14,6 +14,7 @@ export default function ResetPasswordScreen() {
   const [sessionReady, setSessionReady] = useState(false);
   // Guard against the effect running twice (React Strict Mode / fast refresh)
   const initRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (initRef.current) return;
@@ -65,13 +66,40 @@ export default function ResetPasswordScreen() {
       if (!handled) {
         // Fallback: the user may have already been redirected and has a
         // valid recovery session (e.g. page refresh after initial load).
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        // Poll briefly because the AuthProvider's onAuthStateChange may
+        // still be processing the session concurrently.
+        const checkSession = async () => {
+          const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             setSessionReady(true);
+            return true;
+          }
+          return false;
+        };
+
+        checkSession().then((found) => {
+          if (!found) {
+            // Retry once more after a short delay — the AuthProvider's
+            // initializeAuth may still be establishing the session.
+            const retryTimer = setTimeout(async () => {
+              const ok = await checkSession();
+              if (!ok) {
+                setError(
+                  'Unable to verify your reset link. Please click the link in your email again, or request a new reset link.'
+                );
+              }
+            }, 3000);
+            retryTimerRef.current = retryTimer;
           }
         });
       }
     });
+
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+      }
+    };
   }, []);
 
   const handleUpdatePassword = async () => {

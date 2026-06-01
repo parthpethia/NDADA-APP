@@ -181,7 +181,7 @@ serve(async (req) => {
         break;
 
       // Export Center actions
-      case 'generate-export':
+      case 'generate-export': {
         if (params.type === 'members') {
           await verifyPermission('manage_members');
         } else if (params.type === 'payments') {
@@ -193,8 +193,39 @@ serve(async (req) => {
         } else {
           throw new Error(`Unsupported export type: ${params.type}`);
         }
+
+        // Rate limit: 2 requests / 60 seconds
+        const { data: limitResult, error: limitErr } = await supabase.rpc('check_rate_limit', {
+          p_user_id: user.id,
+          p_action_type: 'export',
+          p_max_requests: 2,
+          p_window_seconds: 60
+        });
+
+        if (limitErr) {
+          console.error('Export rate limit check failed:', limitErr.message);
+        } else if (limitResult && typeof limitResult === 'object') {
+          const { allowed, retry_after } = limitResult as { allowed: boolean; retry_after: number };
+          if (!allowed) {
+            console.log(`Rate limit exceeded for user ${user.id} on export generation. Retry after ${retry_after}s`);
+            return new Response(JSON.stringify({
+              error: `Rate limit exceeded: You can only generate 2 exports per minute. Please try again in ${retry_after} seconds.`,
+              retry_after,
+              status: 'rate_limited',
+            }), {
+              status: 429,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+                'Retry-After': String(retry_after)
+              }
+            });
+          }
+        }
+
         result = await generateBackgroundExport(supabase, params, adminUser.id);
         break;
+      }
       case 'cleanup-exports':
         await verifyPermission('view_audit_logs');
         result = await cleanupExpiredExportsAPI(supabase, adminUser.id);
@@ -213,10 +244,41 @@ serve(async (req) => {
         await verifyPermission('manage_members');
         result = await previewCampaign(supabase, params);
         break;
-      case 'send-campaign':
+      case 'send-campaign': {
         await verifyPermission('manage_members');
+
+        // Rate limit: 1 request / 300 seconds (5 minutes)
+        const { data: limitResult, error: limitErr } = await supabase.rpc('check_rate_limit', {
+          p_user_id: user.id,
+          p_action_type: 'campaign',
+          p_max_requests: 1,
+          p_window_seconds: 300
+        });
+
+        if (limitErr) {
+          console.error('Campaign rate limit check failed:', limitErr.message);
+        } else if (limitResult && typeof limitResult === 'object') {
+          const { allowed, retry_after } = limitResult as { allowed: boolean; retry_after: number };
+          if (!allowed) {
+            console.log(`Rate limit exceeded for user ${user.id} on campaign dispatch. Retry after ${retry_after}s`);
+            return new Response(JSON.stringify({
+              error: `Rate limit exceeded: You can only send 1 notification campaign every 5 minutes. Please try again in ${retry_after} seconds.`,
+              retry_after,
+              status: 'rate_limited',
+            }), {
+              status: 429,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+                'Retry-After': String(retry_after)
+              }
+            });
+          }
+        }
+
         result = await sendNotificationCampaign(supabase, params, adminUser.id);
         break;
+      }
 
       // Saved Filters Actions
       case 'save-filter':

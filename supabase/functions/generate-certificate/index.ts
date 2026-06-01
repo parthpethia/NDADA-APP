@@ -77,6 +77,62 @@ serve(async (req) => {
     }
 
     // ============================================================
+    // PER-USER RATE LIMIT GUARD (3 requests / 60 seconds)
+    // ============================================================
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.replace('Bearer ', '');
+    const isServiceRole = token === supabaseServiceKey;
+
+    let userId: string | null = null;
+    if (!isServiceRole && token) {
+      const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+      if (!authErr && user) {
+        userId = user.id;
+      }
+    }
+
+    if (!userId && member_id) {
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('user_id')
+        .eq('id', member_id)
+        .maybeSingle();
+      if (acc) {
+        userId = acc.user_id;
+      }
+    }
+
+    if (!isServiceRole && userId) {
+      const { data: rateLimitResult, error: rpcErr } = await supabase.rpc('check_rate_limit', {
+        p_user_id: userId,
+        p_action_type: 'certificate',
+        p_max_requests: 3,
+        p_window_seconds: 60
+      });
+
+      if (rpcErr) {
+        console.error('Rate limit check failed:', rpcErr.message);
+      } else if (rateLimitResult && typeof rateLimitResult === 'object') {
+        const { allowed, retry_after } = rateLimitResult as { allowed: boolean; retry_after: number };
+        if (!allowed) {
+          console.log(`Rate limit exceeded for user ${userId} on certificate generation. Retry after ${retry_after}s`);
+          return new Response(JSON.stringify({
+            error: `Rate limit exceeded: You can only generate 3 certificates per minute. Please try again in ${retry_after} seconds.`,
+            retry_after,
+            status: 'rate_limited',
+          }), {
+            status: 429,
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'Retry-After': String(retry_after)
+            },
+          });
+        }
+      }
+    }
+
+    // ============================================================
     // CONCURRENCY GUARD — prevent thundering herd
     // ============================================================
     const { count: processingCount } = await supabase
