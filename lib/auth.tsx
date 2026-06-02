@@ -394,22 +394,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // During password recovery, the reset-password page calls setSession()
-        // with the recovery tokens. Loading the full user profile here is
-        // unnecessary and can trigger auth errors that cascade into
-        // clearInvalidSession() → signOut(), stealing the GoTrue lock and
-        // producing the "lock not released" + AbortError in the console.
+        // with the recovery tokens, and then updateUser() which triggers USER_UPDATED.
+        // Loading the full user profile here is unnecessary and can trigger auth errors
+        // that cascade into clearInvalidSession() → signOut(), stealing the GoTrue lock
+        // and producing the "lock not released" + AbortError / deadlock in the console.
         //
-        // Supabase may fire PASSWORD_RECOVERY and/or SIGNED_IN for the same
-        // setSession() call depending on the version. Skip profile loading
-        // for both when we're on the reset-password page.
-        if (event === 'PASSWORD_RECOVERY') {
-          return;
-        }
-        if (
-          event === 'SIGNED_IN' &&
+        // Therefore, we skip profile loading for ALL auth events while on the reset-password page.
+        const isResetPasswordPage =
           typeof window !== 'undefined' &&
-          window.location.pathname.includes('reset-password')
-        ) {
+          window.location.pathname.includes('reset-password');
+
+        if (event === 'PASSWORD_RECOVERY' || isResetPasswordPage) {
+          if (!newSession?.user) {
+            setMember(null);
+            setAdminUser(null);
+          }
+          if (!initialized) {
+            initialized = true;
+            setLoading(false);
+          }
           return;
         }
 
