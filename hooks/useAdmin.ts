@@ -1,10 +1,11 @@
+import { useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
 export function useAdmin() {
   const { session, adminUser } = useAuth();
 
-  const callAdminAction = async (action: string, params: Record<string, any> = {}) => {
+  const callAdminAction = useCallback(async (action: string, params: Record<string, any> = {}) => {
     if (!session) {
       console.error('❌ Not authenticated - no session');
       throw new Error('Not authenticated');
@@ -66,7 +67,7 @@ export function useAdmin() {
 
     console.log('✅ Admin action success:', data);
     return data;
-  };
+  }, [session]);
 
   return {
     isAdmin: !!adminUser,

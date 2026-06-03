@@ -46,7 +46,7 @@ export default function AdminMembersScreen() {
   const fetchMembers = useCallback(async () => {
     let query = supabase
       .from('accounts')
-      .select('id, full_name, membership_id, account_status, email, phone, approval_status, payment_status, created_at')
+      .select('id, full_name, membership_id, account_status, email, phone, approval_status, payment_status, district, created_at')
       .order('created_at', { ascending: false });
 
     if (search.trim()) {

@@ -461,9 +461,41 @@ export default function Member360Screen() {
                   <Text className="text-xs font-semibold text-gray-900">{member.district || 'Unassigned'}</Text>
                 </View>
                 <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-500 font-medium">Aadhaar Card Number</Text>
+                  <Text className="text-xs font-semibold text-gray-900">{member.aadhaar_card_number || 'N/A'}</Text>
+                </View>
+                <View className="flex-row justify-between">
+                  <Text className="text-xs text-gray-500 font-medium">WhatsApp Number</Text>
+                  <Text className="text-xs font-semibold text-gray-900">{member.whatsapp_number || 'N/A'}</Text>
+                </View>
+                <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-500 font-medium">Joined Date</Text>
                   <Text className="text-xs font-semibold text-gray-900">{formatDate(member.created_at)}</Text>
                 </View>
+                {member.applicant_photo_url && (
+                  <View className="mt-2 border-t border-gray-100 pt-3">
+                    <Text className="text-xs font-bold text-gray-500 mb-2">APPLICANT PHOTO</Text>
+                    <TouchableOpacity
+                      className="flex-row items-center py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md"
+                      onPress={() => Linking.openURL(member.applicant_photo_url!)}
+                    >
+                      <FileText size={14} color="#15803d" />
+                      <Text className="ml-2 text-xs font-semibold text-primary-900">View Applicant Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {member.id_proof_url && (
+                  <View className={`${member.applicant_photo_url ? '' : 'mt-2 border-t border-gray-100 pt-3'}`}>
+                    {!member.applicant_photo_url && <Text className="text-xs font-bold text-gray-500 mb-2">IDENTITY DOCUMENT</Text>}
+                    <TouchableOpacity
+                      className="flex-row items-center py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md"
+                      onPress={() => Linking.openURL(member.id_proof_url!)}
+                    >
+                      <FileText size={14} color="#15803d" />
+                      <Text className="ml-2 text-xs font-semibold text-primary-900">View ID Proof</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </Card>
 
@@ -493,6 +525,26 @@ export default function Member360Screen() {
               </View>
             </Card>
 
+            {/* Residential Details Card */}
+            {(member.residence_address || member.residence_pin_code) && (
+              <Card>
+                <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
+                  <User size={18} color="#15803d" />
+                  <Text className="text-base font-bold text-gray-900">Residential Details</Text>
+                </View>
+                <View className="gap-2">
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Residence Address</Text>
+                    <Text className="text-xs font-semibold text-gray-900 max-w-[200] text-right">{member.residence_address || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Residence PIN Code</Text>
+                    <Text className="text-xs font-semibold text-gray-900">{member.residence_pin_code || 'N/A'}</Text>
+                  </View>
+                </View>
+              </Card>
+            )}
+
             {/* Firm Registry Details Card */}
             <Card>
               <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
@@ -510,24 +562,44 @@ export default function Member360Screen() {
                     <Text className="text-xs font-semibold text-gray-900 uppercase">{member.firm_type}</Text>
                   </View>
                   <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Partner / Proprietor Name</Text>
+                    <Text className="text-xs font-semibold text-gray-900">{member.partner_proprietor_name || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
                     <Text className="text-xs text-gray-500 font-medium">License / Registry ID</Text>
                     <Text className="text-xs font-semibold text-gray-900">{member.license_number || 'N/A'}</Text>
                   </View>
                   <View className="flex-row justify-between">
-                    <Text className="text-xs text-gray-500 font-medium">Registry Number</Text>
+                    <Text className="text-xs text-gray-500 font-medium">Registration Number</Text>
                     <Text className="text-xs font-semibold text-gray-900">{member.registration_number || 'N/A'}</Text>
                   </View>
                   <View className="flex-row justify-between">
-                    <Text className="text-xs text-gray-500 font-medium">GSTIN ID Number</Text>
+                    <Text className="text-xs text-gray-500 font-medium">GSTIN Number</Text>
                     <Text className="text-xs font-semibold text-gray-900">{member.gst_number || 'N/A'}</Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text className="text-xs text-gray-500 font-medium">WhatsApp Contact</Text>
-                    <Text className="text-xs font-semibold text-gray-900">{member.whatsapp_number || 'N/A'}</Text>
                   </View>
                   <View className="flex-row justify-between">
                     <Text className="text-xs text-gray-500 font-medium">IFMS Number</Text>
                     <Text className="text-xs font-semibold text-gray-900">{member.ifms_number || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Firm Address</Text>
+                    <Text className="text-xs font-semibold text-gray-900 max-w-[200] text-right">{member.firm_address || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Firm PIN Code</Text>
+                    <Text className="text-xs font-semibold text-gray-900">{member.firm_pin_code || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Contact Phone</Text>
+                    <Text className="text-xs font-semibold text-gray-900">{member.contact_phone || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">Contact Email</Text>
+                    <Text className="text-xs font-semibold text-gray-900">{member.contact_email || 'N/A'}</Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-xs text-gray-500 font-medium">WhatsApp Contact</Text>
+                    <Text className="text-xs font-semibold text-gray-900">{member.whatsapp_number || 'N/A'}</Text>
                   </View>
                   
                   {member.documents_urls && member.documents_urls.length > 0 && (
@@ -549,6 +621,83 @@ export default function Member360Screen() {
               ) : (
                 <Text className="text-xs text-gray-400 py-2">No firm registry details provided yet.</Text>
               )}
+            </Card>
+
+            {/* License Details Card */}
+            <Card>
+              <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
+                <Award size={18} color="#15803d" />
+                <Text className="text-base font-bold text-gray-900">License Details</Text>
+              </View>
+              <View className="gap-3">
+                {/* Seed Cotton License */}
+                <View className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <Text className="text-[10px] font-bold text-gray-400 uppercase mb-2">Seed Cotton License</Text>
+                  <View className="gap-1.5">
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">License Number</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.seed_cotton_license_number || 'N/A'}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">Expiry Date</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.seed_cotton_license_expiry ? formatDate(member.seed_cotton_license_expiry) : 'N/A'}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">Sarthi ID (Cotton)</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.sarthi_id_cotton || 'N/A'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Seed General License */}
+                <View className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <Text className="text-[10px] font-bold text-gray-400 uppercase mb-2">Seed General License</Text>
+                  <View className="gap-1.5">
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">License Number</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.seed_general_license_number || 'N/A'}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">Expiry Date</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.seed_general_license_expiry ? formatDate(member.seed_general_license_expiry) : 'N/A'}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">Sarthi ID (General)</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.sarthi_id_general || 'N/A'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Pesticide License */}
+                <View className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <Text className="text-[10px] font-bold text-gray-400 uppercase mb-2">Pesticide License</Text>
+                  <View className="gap-1.5">
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">License Number</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.pesticide_license_number || 'N/A'}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">Expiry Date</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.pesticide_license_expiry ? formatDate(member.pesticide_license_expiry) : 'N/A'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Fertilizer License */}
+                <View className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <Text className="text-[10px] font-bold text-gray-400 uppercase mb-2">Fertilizer License</Text>
+                  <View className="gap-1.5">
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">License Number</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.fertilizer_license_number || 'N/A'}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-gray-500 font-medium">Expiry Date</Text>
+                      <Text className="text-xs font-semibold text-gray-900">{member.fertilizer_license_expiry ? formatDate(member.fertilizer_license_expiry) : 'N/A'}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
             </Card>
           </View>
         )}

@@ -43,11 +43,18 @@ export default function AdminPaymentsScreen() {
 
   const fetchPayments = async () => {
     // Fetch online payments
-    const { data: onlinePayments } = await supabase
+    const { data: onlinePayments, error: onlineError } = await supabase
       .from('payments')
-      .select('id, status, amount, currency, provider, razorpay_payment_id, created_at, accounts(full_name, email)')
+      .select('id, status, amount, currency, provider, razorpay_payment_id, created_at, member_id, accounts!member_id(full_name, email)')
       .order('created_at', { ascending: false })
       .limit(50);
+
+    if (onlineError) {
+      console.error('❌ Online payments fetch error:', onlineError);
+      showMessage('Fetch Error', 'Failed to load online payments: ' + onlineError.message);
+    } else {
+      console.log(`💳 Online payments fetched: ${(onlinePayments || []).length} records`);
+    }
 
     setPayments(
       (onlinePayments || []).map((p: any) => ({
@@ -59,12 +66,19 @@ export default function AdminPaymentsScreen() {
     );
 
     // Fetch cash payment requests
-    const { data: cashPaymentAccounts } = await supabase
+    const { data: cashPaymentAccounts, error: cashError } = await supabase
       .from('accounts')
       .select('id, full_name, email, membership_id, payment_method, cash_payment_verified, created_at, updated_at')
       .eq('payment_method', 'cash')
       .order('updated_at', { ascending: false })
       .limit(50);
+
+    if (cashError) {
+      console.error('❌ Cash payments fetch error:', cashError);
+      showMessage('Fetch Error', 'Failed to load cash payments: ' + cashError.message);
+    } else {
+      console.log(`💵 Cash payments fetched: ${(cashPaymentAccounts || []).length} records`);
+    }
 
     setCashPayments(
       (cashPaymentAccounts || []).map((a: any) => ({
@@ -209,7 +223,7 @@ export default function AdminPaymentsScreen() {
                 <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-500">Amount</Text>
                   <Text className="text-xs font-medium text-gray-700">
-                    {formatCurrency(p.amount / 100, p.currency.toUpperCase())}
+                    {formatCurrency(p.amount / 100, (p.currency || 'INR').toUpperCase())}
                   </Text>
                 </View>
 

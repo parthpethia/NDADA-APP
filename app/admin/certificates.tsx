@@ -9,6 +9,7 @@ import { formatDateTime } from '@/lib/utils';
 import { Award, Search, Trash2, RefreshCw, Download } from 'lucide-react-native';
 
 interface CertificateWithMember extends Certificate {
+  certificate_url: string;
   member_name: string;
   member_email: string;
   membership_id: string;
@@ -53,14 +54,23 @@ export default function AdminCertificatesScreen() {
     // Fetch certificates with member info
     let query = supabase
       .from('certificates')
-      .select('id, status, certificate_id, issued_at, member_id, accounts:member_id(full_name, email, membership_id)')
+      .select('id, status, certificate_id, certificate_url, issued_at, member_id, accounts:member_id(full_name, email, membership_id)')
       .order('issued_at', { ascending: false });
 
     if (filterStatus !== 'all') {
       query = query.eq('status', filterStatus);
     }
 
-    const { data } = await query.limit(100);
+    const { data, error } = await query.limit(100);
+
+    if (error) {
+      console.error('❌ Certificates fetch error:', error);
+      showAlert('Fetch Error', 'Failed to load certificates: ' + error.message);
+      setCertificates([]);
+      return;
+    }
+
+    console.log(`📋 Certificates fetched: ${(data || []).length} records`);
 
     let mapped = (data || []).map((c: any) => ({
       ...c,

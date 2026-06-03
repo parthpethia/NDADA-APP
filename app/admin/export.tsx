@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, Alert, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, StatusBadge, Select } from '@/components/ui';
@@ -54,6 +54,7 @@ export default function ExportCenterScreen() {
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [triggerLoading, setTriggerLoading] = useState(false);
+  const initializedRef = useRef(false);
 
   const fetchExportData = useCallback(async () => {
     setLoading(true);
@@ -82,6 +83,8 @@ export default function ExportCenterScreen() {
   }, [callAdminAction]);
 
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
     const initialize = async () => {
       await runSelfHealingCleanup();
       await fetchExportData();
