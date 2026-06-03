@@ -301,12 +301,16 @@ export default function AdminFirmsScreen() {
   const handleSaveEdit = async (accountId: string) => {
     setSaveLoading(true);
     try {
-      // Only send changed fields — keep empty strings as-is since some
-      // columns (registration_number, license_number) are NOT NULL with DEFAULT ''
+      // Timestamp/date columns must receive null (not '') when empty,
+      // but NOT NULL text columns (registration_number, license_number, etc.) must keep ''.
+      const TIMESTAMP_FIELDS = new Set([
+        'seed_cotton_license_expiry', 'seed_general_license_expiry',
+        'pesticide_license_expiry', 'fertilizer_license_expiry',
+      ]);
       const updatePayload: Record<string, any> = {};
       for (const [key, value] of Object.entries(editData)) {
         if (value !== undefined && value !== null) {
-          updatePayload[key] = value;
+          updatePayload[key] = (value === '' && TIMESTAMP_FIELDS.has(key)) ? null : value;
         }
       }
 
