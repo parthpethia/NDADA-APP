@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge } from '@/components/ui';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getFunctionsErrorMessage } from '@/lib/utils';
 import {
   MEMBERSHIP_AMOUNT,
   MEMBERSHIP_PLAN_NAME,
@@ -105,7 +105,8 @@ export default function PaymentScreen() {
 
       if (orderError) {
         console.error('❌ Order creation failed:', orderError);
-        throw new Error(orderError.message || 'Failed to create order');
+        const errMsg = await getFunctionsErrorMessage(orderError);
+        throw new Error(errMsg);
       }
 
       if (!orderData?.id) {
@@ -197,7 +198,10 @@ export default function PaymentScreen() {
         },
       });
 
-      if (error) throw new Error(error.message || 'Verification failed');
+      if (error) {
+        const errMsg = await getFunctionsErrorMessage(error);
+        throw new Error(errMsg);
+      }
 
       if (!data?.verified) {
         Alert.alert(

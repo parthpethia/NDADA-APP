@@ -476,6 +476,11 @@ export default function NewFirmScreen() {
   const handleSubmit = async () => {
     if (!member) return;
 
+    setLoading(true);
+    setLoadingStatus('Preparing uploads...');
+    setError('');
+    setMissingRequiredFields([]);
+
     const missingFields = requiredFields.filter((field) => !String(form[field] || '').trim());
     if (missingFields.length > 0) {
       const firstMissingSection = missingFields.reduce(
@@ -485,27 +490,31 @@ export default function NewFirmScreen() {
       setMissingRequiredFields(missingFields as string[]);
       setActiveSection(firstMissingSection);
       setError('Please fill in all required fields (firm, contact, IFMS, and seed cotton license details).');
+      setLoading(false);
+      setLoadingStatus('');
       return;
     }
 
     const licenseNumber = String(form.seed_cotton_license_number || '').trim();
     const registrationNumber = String(form.ifms_number || '').trim();
 
-    let existingAccountId: string | null = null;
-    const { data: existingAccount } = await supabase
-      .from('accounts')
-      .select('id, documents_urls, applicant_photo_url')
-      .eq('id', member.id)
-      .single();
+    // Fetch existing account files to merge (safely using user_id)
+    let existingAccount: { documents_urls?: string[] | null; applicant_photo_url?: string | null } | null = null;
+    try {
+      const { data, error: selectError } = await supabase
+        .from('accounts')
+        .select('documents_urls, applicant_photo_url')
+        .eq('user_id', member.user_id)
+        .maybeSingle();
 
-    if (existingAccount?.id) {
-      existingAccountId = existingAccount.id;
+      if (selectError) {
+        console.warn('Failed to fetch existing account documents:', selectError.message);
+      } else {
+        existingAccount = data;
+      }
+    } catch (e) {
+      console.warn('Error fetching existing account:', e);
     }
-
-    setLoading(true);
-    setLoadingStatus('Preparing uploads...');
-    setError('');
-    setMissingRequiredFields([]);
 
     let applicantPhotoUrl: string | null = null;
     if (applicantPhoto) {
@@ -601,22 +610,17 @@ export default function NewFirmScreen() {
       residence_pin_code: form.residence_pin_code || null,
       applicant_photo_url: mergedApplicantPhotoUrl,
       documents_urls: mergedDocumentsUrls,
+      approval_status: 'pending' as const,
+      rejection_reason: null,
+      reviewed_by: null,
+      reviewed_at: null,
     };
 
-    const { error: submitError } = existingAccountId
-      ? await supabase
-          .from('accounts')
-          .update({
-            ...basePayload,
-            approval_status: 'pending',
-            rejection_reason: null,
-            reviewed_by: null,
-            reviewed_at: null,
-          })
-          .eq('id', existingAccountId)
-      : await supabase.from('accounts').insert({
-          ...basePayload,
-        });
+    // Always update by user_id since normal user accounts are auto-created on auth signup
+    const { error: submitError } = await supabase
+      .from('accounts')
+      .update(basePayload)
+      .eq('user_id', member.user_id);
 
     setLoading(false);
     setLoadingStatus('');
@@ -631,10 +635,20 @@ export default function NewFirmScreen() {
       return;
     }
 
-    // Clear draft after successful submission
-    await deleteDraft();
-    // Refresh member so dashboard picks up the new firm data
-    await refreshMember();
+    try {
+      // Clear draft after successful submission
+      await deleteDraft();
+    } catch (e) {
+      console.warn('Failed to clear draft:', e);
+    }
+
+    try {
+      // Refresh member so dashboard picks up the new firm data
+      await refreshMember();
+    } catch (e) {
+      console.warn('Failed to refresh member profile:', e);
+    }
+
     // Navigate forward appropriately
     if (edit === 'true') {
       router.replace('/(dashboard)/firms');

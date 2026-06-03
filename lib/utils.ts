@@ -33,3 +33,30 @@ export function formatDateTime(date: string) {
 export function isWeb() {
   return Platform.OS === 'web';
 }
+
+/**
+ * Extracts a descriptive error message from a Supabase Edge Function invocation error.
+ * A 5xx or 4xx response from Edge Functions is thrown as a FunctionsHttpError with a generic message,
+ * but the response body contains the actual error description.
+ */
+export async function getFunctionsErrorMessage(error: any): Promise<string> {
+  if (!error) return 'An unknown error occurred';
+
+  if (error.context && typeof error.context.json === 'function') {
+    try {
+      // Use clone() to avoid draining the original response body stream
+      const body = await error.context.clone().json();
+      return body.error || body.message || error.message;
+    } catch {
+      try {
+        const text = await error.context.clone().text();
+        return text || error.message;
+      } catch {
+        // Fallback
+      }
+    }
+  }
+
+  return error.message || String(error);
+}
+

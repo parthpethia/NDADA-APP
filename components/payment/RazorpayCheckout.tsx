@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Button, Card, CardHeader } from '@/components/ui';
 import * as WebBrowser from 'expo-web-browser';
 import { Linking } from 'react-native';
+import { getFunctionsErrorMessage } from '@/lib/utils';
 
 // Razorpay types
 interface RazorpayOrderResponse {
@@ -82,7 +83,8 @@ export function RazorpayCheckout() {
 
       if (error) {
         console.error('❌ Order creation failed:', error);
-        Alert.alert('Error', 'Failed to create order. Please try again.');
+        const errMsg = await getFunctionsErrorMessage(error);
+        Alert.alert('Error', errMsg);
         return;
       }
 
@@ -244,7 +246,8 @@ export function RazorpayCheckout() {
 
       if (error) {
         console.error('❌ Verification failed:', error);
-        throw new Error(error.message || 'Verification failed');
+        const errMsg = await getFunctionsErrorMessage(error);
+        throw new Error(errMsg);
       }
 
       if (!data) {
