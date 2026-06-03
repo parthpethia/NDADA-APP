@@ -23,6 +23,34 @@ let cachedTemplateBytes: Uint8Array | null = null;
 // Maximum concurrent certificate generations allowed
 const MAX_CONCURRENT = 3;
 
+// Converts a Uint8Array to base64 encoding without Deno version dependencies or memory stack limits
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+  const l = bytes.length;
+  for (let i = 2; i < l; i += 3) {
+    result += chars[bytes[i - 2] >> 2];
+    result += chars[((bytes[i - 2] & 3) << 4) | (bytes[i - 1] >> 4)];
+    result += chars[((bytes[i - 1] & 15) << 2) | (bytes[i] >> 6)];
+    result += chars[bytes[i] & 63];
+  }
+  const mod = l % 3;
+  if (mod === 2) {
+    const b0 = bytes[l - 2];
+    const b1 = bytes[l - 1];
+    result += chars[b0 >> 2];
+    result += chars[((b0 & 3) << 4) | (b1 >> 4)];
+    result += chars[(b1 & 15) << 2];
+    result += '=';
+  } else if (mod === 1) {
+    const b0 = bytes[l - 1];
+    result += chars[b0 >> 2];
+    result += chars[(b0 & 3) << 4];
+    result += '==';
+  }
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -402,6 +430,102 @@ serve(async (req) => {
       .in('status', ['pending', 'processing']);
 
     console.log(`Certificate generation complete for ${member.full_name} (${certRecord.certificate_id})`);
+
+    // ============================================================
+    // POST-GENERATION EMAIL FLOW (ISOLATED)
+    // ============================================================
+    try {
+      // 1. Generate secure signed URL for the certificate (valid for 7 days = 604800 seconds)
+      console.log(`Generating signed download URL for ${storagePath}...`);
+      const { data: signedUrlData, error: signedUrlErr } = await supabase.storage
+        .from('certificates')
+        .createSignedUrl(storagePath, 604800);
+
+      if (signedUrlErr || !signedUrlData) {
+        throw new Error(signedUrlErr?.message || 'Failed to generate signed download URL');
+      }
+
+      const signedUrl = signedUrlData.signedUrl;
+
+      // 2. Check if certificate PDF size is under 1 MB for attachment
+      const pdfSize = pdfBytes.length;
+      const shouldAttach = pdfSize < 1024 * 1024;
+      console.log(`PDF size: ${pdfSize} bytes. Should attach: ${shouldAttach}`);
+
+      let pdfBase64 = '';
+      if (shouldAttach) {
+        pdfBase64 = uint8ArrayToBase64(pdfBytes);
+      }
+
+      // 3. Send email with exponential backoff retries
+      let retryCount = 0;
+      const maxRetries = 3;
+      let delay = 1000;
+      let emailSuccess = false;
+      let lastError = '';
+
+      console.log(`Attempting to send congratulations email to ${member.email}...`);
+
+      while (retryCount < maxRetries && !emailSuccess) {
+        try {
+          const { data: emailData, error: emailErr } = await supabase.functions.invoke('send-email', {
+            body: {
+              to: member.email,
+              template_name: 'certificate_issued',
+              data: {
+                name: member.full_name,
+                membership_id: member.membership_id,
+                download_url: signedUrl,
+              },
+              ...(shouldAttach ? {
+                attachments: [
+                  {
+                    content: pdfBase64,
+                    filename: `NDADA_Certificate_${member.membership_id}.pdf`,
+                  }
+                ]
+              } : {})
+            }
+          });
+
+          if (emailErr || emailData?.error) {
+            throw new Error(emailErr?.message || emailData?.error || 'Unknown email function error');
+          }
+
+          emailSuccess = true;
+          console.log(`Email successfully sent to ${member.email} on attempt ${retryCount + 1}`);
+        } catch (retryErr) {
+          retryCount++;
+          lastError = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          console.error(`Email send attempt ${retryCount} failed: ${lastError}`);
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2;
+          }
+        }
+      }
+
+      // 4. Write audit log event as a system actor
+      console.log(`Recording system audit event: ${emailSuccess ? 'certificate_email_sent' : 'certificate_email_failed'}...`);
+      const { error: auditErr } = await supabase.from('audit_logs').insert({
+        admin_id: null,
+        actor_type: 'system',
+        actor_identifier: 'generate-certificate',
+        action: emailSuccess ? 'certificate_email_sent' : 'certificate_email_failed',
+        target_user: member.user_id, // points to auth.users.id
+        details: emailSuccess
+          ? `Certificate email sent to ${member.email} with signed URL. (Attached PDF: ${shouldAttach})`
+          : `Failed to send certificate email to ${member.email} after ${maxRetries} attempts. Last error: ${lastError}`,
+      });
+
+      if (auditErr) {
+        console.error('Failed to insert email audit log:', auditErr);
+      }
+
+    } catch (emailFlowErr) {
+      // Completely isolated so certificate generation doesn't fail
+      console.error('Critical failure in post-generation email flow:', emailFlowErr);
+    }
 
     return new Response(
       JSON.stringify({ certificate: finalCert || { ...certRecord, certificate_url: storagePath } }),

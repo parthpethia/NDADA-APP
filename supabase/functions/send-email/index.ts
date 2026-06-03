@@ -64,28 +64,39 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
   }),
 
   certificate_issued: (data) => ({
-    subject: '📜 Your Certificate is Ready - NDADA Membership',
+    subject: '🎉 Congratulations! Your NDADA Membership Certificate is Ready',
     html: `
       <!DOCTYPE html>
       <html>
-        <body style="font-family: Arial, sans-serif;">
-          <h1>Certificate Ready 📜</h1>
+        <body style="font-family: Arial, sans-serif; color: #333333; line-height: 1.6;">
+          <h2 style="color: #4F46E5;">Congratulations! 🎉</h2>
           <p>Dear ${data.name},</p>
-          <p>Your official NDADA membership certificate is ready for download.</p>
+          <p>We are pleased to inform you that your official NDADA membership certificate has been successfully generated.</p>
           <p><strong>Membership ID:</strong> ${data.membership_id}</p>
-          <p>Use this certificate for government schemes and official applications.</p>
-          <p><a href="https://ndada-app.com/dashboard/certificate">Download Now</a></p>
+          <p>You can securely download your certificate using the button below (valid for the next 7 days):</p>
+          <p style="margin: 24px 0;">
+            <a href="${data.download_url}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+              Download Certificate
+            </a>
+          </p>
+          <p style="font-size: 12px; color: #6B7280;">If the button above does not work, copy and paste this link into your browser:<br/>
+          <a href="${data.download_url}" style="color: #4F46E5;">${data.download_url}</a></p>
+          <p>You can also log in to your dashboard at any time to view and download your certificate.</p>
+          <br/>
+          <p>Best regards,</p>
+          <p><strong>NDADA Team</strong></p>
         </body>
       </html>
     `,
-    text: `Certificate Ready\n\nDear ${data.name},\nYour certificate is ready for download.\nMembership ID: ${data.membership_id}\nDownload: https://ndada-app.com/dashboard/certificate`,
+    text: `Congratulations!\n\nDear ${data.name},\nWe are pleased to inform you that your official NDADA membership certificate has been successfully generated.\n\nMembership ID: ${data.membership_id}\n\nYou can securely download your certificate using the link below (valid for the next 7 days):\n${data.download_url}\n\nBest regards,\nNDADA Team`,
   }),
 };
 
 async function sendEmail(
   to: string,
   templateName: string,
-  data: Record<string, any>
+  data: Record<string, any>,
+  attachments?: Array<{ content: string; filename: string; contentType?: string }>
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   if (!emailTemplates[templateName]) {
     return { success: false, error: `Template "${templateName}" not found` };
@@ -106,6 +117,7 @@ async function sendEmail(
         subject: template.subject,
         html: template.html,
         text: template.text,
+        ...(attachments ? { attachments } : {}),
       }),
     });
 
@@ -132,7 +144,7 @@ serve(async (req) => {
 
   try {
     const payload = await req.json() as any;
-    const { to, template_name: templateName, data } = payload;
+    const { to, template_name: templateName, data, attachments } = payload;
 
     if (!to || !templateName || !data) {
       return new Response(
@@ -141,7 +153,7 @@ serve(async (req) => {
       );
     }
 
-    const result = await sendEmail(to, templateName, data);
+    const result = await sendEmail(to, templateName, data, attachments);
 
     return new Response(
       JSON.stringify(result),
