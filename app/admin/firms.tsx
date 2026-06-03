@@ -301,11 +301,12 @@ export default function AdminFirmsScreen() {
   const handleSaveEdit = async (accountId: string) => {
     setSaveLoading(true);
     try {
-      // Only send changed fields
+      // Only send changed fields — keep empty strings as-is since some
+      // columns (registration_number, license_number) are NOT NULL with DEFAULT ''
       const updatePayload: Record<string, any> = {};
       for (const [key, value] of Object.entries(editData)) {
         if (value !== undefined && value !== null) {
-          updatePayload[key] = value === '' ? null : value;
+          updatePayload[key] = value;
         }
       }
 
