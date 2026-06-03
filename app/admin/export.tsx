@@ -245,7 +245,7 @@ export default function ExportCenterScreen() {
                 <View className="flex-row justify-between items-start mb-2">
                   <View className="flex-1 pr-2">
                     <Text className="text-sm font-bold text-gray-900 uppercase">
-                      {job.export_type.replace('_', ' ')} export
+                      {job.export_type.replace(/_/g, ' ')} export
                     </Text>
                     <Text className="text-[10px] text-gray-400 font-mono mt-0.5">
                       Job ID: {job.id.slice(0, 18)}...

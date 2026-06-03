@@ -162,10 +162,10 @@ export default function AdminFirmsScreen() {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (a) =>
-          a.membership_id.toLowerCase().includes(q) ||
-          a.email?.toLowerCase().includes(q) ||
-          a.firm_name.toLowerCase().includes(q) ||
-          a.full_name.toLowerCase().includes(q) ||
+          (a.membership_id || '').toLowerCase().includes(q) ||
+          (a.email || '').toLowerCase().includes(q) ||
+          (a.firm_name || '').toLowerCase().includes(q) ||
+          (a.full_name || '').toLowerCase().includes(q) ||
           (a.license_number || '').toLowerCase().includes(q) ||
           (a.registration_number || '').toLowerCase().includes(q)
       );
@@ -521,7 +521,7 @@ export default function AdminFirmsScreen() {
                       <View className="mt-2 gap-1">
                         <View className="flex-row justify-between">
                           <Text className="text-xs text-gray-500">Type</Text>
-                          <Text className="text-xs capitalize text-gray-700">{account.firm_type.replace('_', ' ')}</Text>
+                          <Text className="text-xs capitalize text-gray-700">{(account.firm_type || '').replace(/_/g, ' ')}</Text>
                         </View>
                         <View className="flex-row justify-between">
                           <Text className="text-xs text-gray-500">License #</Text>
@@ -589,7 +589,7 @@ export default function AdminFirmsScreen() {
                             </View>
                           </View>
                         ) : (
-                          <EditableField label="Firm Type" value={account.firm_type.replace('_', ' ')} fieldKey="firm_type" editMode={false} editData={editData} onEditChange={handleEditChange} />
+                          <EditableField label="Firm Type" value={(account.firm_type || '').replace(/_/g, ' ')} fieldKey="firm_type" editMode={false} editData={editData} onEditChange={handleEditChange} />
                         )}
                         <EditableField label="Partner/Proprietor" value={account.partner_proprietor_name || ''} fieldKey="partner_proprietor_name" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="License Number" value={account.license_number} fieldKey="license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />

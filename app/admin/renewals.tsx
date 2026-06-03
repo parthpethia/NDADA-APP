@@ -284,7 +284,10 @@ export default function RenewalsWorkflowScreen() {
         ) : (
           <View className="gap-3">
             {membersList.map((m) => {
-              const issuedAt = new Date(m.certificates.issued_at);
+              // Supabase !inner join returns an array; safely access the first certificate
+              const cert = Array.isArray(m.certificates) ? m.certificates[0] : m.certificates;
+              if (!cert) return null;
+              const issuedAt = new Date(cert.issued_at);
               const daysAgo = Math.floor((new Date().getTime() - issuedAt.getTime()) / (1000 * 60 * 60 * 24));
               const remainingDays = 365 - daysAgo;
 
@@ -295,13 +298,13 @@ export default function RenewalsWorkflowScreen() {
                       <Text className="text-sm font-bold text-gray-900">{m.full_name}</Text>
                       <Text className="text-[10px] text-gray-500 font-mono mt-0.5">{m.membership_id}</Text>
                     </View>
-                    <StatusBadge status={m.certificates.status === 'valid' && remainingDays < 0 ? 'expired' : 'active'} />
+                    <StatusBadge status={cert.status === 'valid' && remainingDays < 0 ? 'expired' : 'active'} />
                   </View>
 
                   <View className="bg-gray-50 p-2 rounded-lg border border-gray-100 mb-3 gap-1">
                     <View className="flex-row justify-between">
                       <Text className="text-[10px] text-gray-400 font-medium">Issued Date</Text>
-                      <Text className="text-[10px] text-gray-600 font-semibold">{formatDate(m.certificates.issued_at)}</Text>
+                      <Text className="text-[10px] text-gray-600 font-semibold">{formatDate(cert.issued_at)}</Text>
                     </View>
                     <View className="flex-row justify-between">
                       <Text className="text-[10px] text-gray-400 font-medium">Expiration status</Text>
@@ -312,7 +315,7 @@ export default function RenewalsWorkflowScreen() {
                     <View className="flex-row justify-between">
                       <Text className="text-[10px] text-gray-400 font-medium">Last Reminded</Text>
                       <Text className="text-[10px] text-gray-600 font-semibold">
-                        {m.certificates.last_renewal_reminder_at ? formatDateTime(m.certificates.last_renewal_reminder_at) : 'Never'}
+                        {cert.last_renewal_reminder_at ? formatDateTime(cert.last_renewal_reminder_at) : 'Never'}
                       </Text>
                     </View>
                   </View>

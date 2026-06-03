@@ -20,8 +20,9 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchStats = async () => {
-    const [accounts, payments, certs, pending] = await Promise.all([
+    const [accounts, firms, payments, certs, pending] = await Promise.all([
       supabase.from('accounts').select('id', { count: 'exact', head: true }),
+      supabase.from('accounts').select('id', { count: 'exact', head: true }).neq('firm_name', ''),
       supabase.from('payments').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
       supabase.from('certificates').select('id', { count: 'exact', head: true }),
       supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending'),
@@ -29,7 +30,7 @@ export default function AdminDashboard() {
 
     setStats({
       total_members: accounts.count || 0,
-      total_firms: accounts.count || 0,  // One account = one firm now
+      total_firms: firms.count || 0,
       payments_completed: payments.count || 0,
       certificates_issued: certs.count || 0,
       pending_reviews: pending.count || 0,

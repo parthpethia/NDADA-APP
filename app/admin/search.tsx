@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -30,9 +30,9 @@ export default function AdminSearchScreen() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSearch = async (text: string) => {
-    setQuery(text);
+  const executeSearch = async (text: string) => {
     if (!text.trim()) {
       setResults([]);
       setSearched(false);
@@ -53,6 +53,17 @@ export default function AdminSearchScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = (text: string) => {
+    setQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!text.trim()) {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => executeSearch(text), 400);
   };
 
   return (

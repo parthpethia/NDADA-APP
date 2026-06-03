@@ -187,7 +187,7 @@ export default function CertificateQueueScreen() {
 
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Failures Today</Text>
+              <Text className="text-[10px] uppercase font-bold text-gray-400">Total Failures</Text>
               <AlertTriangle size={14} color="#ef4444" />
             </View>
             <Text className="text-lg font-extrabold text-red-500">{failedCount}</Text>

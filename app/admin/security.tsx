@@ -208,7 +208,7 @@ export default function SecurityDashboardScreen() {
               <View className="flex-row justify-between items-start mb-2">
                 <View className="flex-1 pr-2">
                   <Text className="text-xs font-bold text-gray-900 uppercase">
-                    {l.event_type.replace('_', ' ')}
+                    {l.event_type.replace(/_/g, ' ')}
                   </Text>
                   <Text className="text-[10px] font-semibold text-gray-500 mt-0.5">
                     IP: {l.ip_address || 'Unspecified'} | Caller UUID: {l.user_id?.slice(0, 18) || 'anonymous'}

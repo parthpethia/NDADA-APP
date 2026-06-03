@@ -181,22 +181,26 @@ export default function AdminMembersScreen() {
     try {
       const payload: Record<string, any> = { account_ids: selectedIds };
       if (action === 'bulk-reject') {
-        Alert.prompt('Bulk Rejection Reason', 'Provide feedback to rejected candidates:', [
-          { text: 'Cancel', onPress: () => setBulkProcessing(false) },
-          { text: 'Reject', onPress: async (reason?: string) => {
-              try {
-                await callAdminAction('bulk-reject', { account_ids: selectedIds, reason: reason || 'Requirements not met' });
-                Alert.alert('Success', `Bulk action "${label}" completed.`);
-                setSelectedIds([]);
-                await fetchMembers();
-              } catch (err: any) {
-                Alert.alert('Bulk Operation Failed', err.message);
-              } finally {
-                setBulkProcessing(false);
-              }
-            }
+        // Alert.prompt is iOS-only; use cross-platform approach
+        let reason = 'Requirements not met';
+        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+          const input = window.prompt('Bulk Rejection Reason:\nProvide feedback to rejected candidates:', reason);
+          if (input === null) {
+            setBulkProcessing(false);
+            return;
           }
-        ]);
+          reason = input || reason;
+        }
+        try {
+          await callAdminAction('bulk-reject', { account_ids: selectedIds, reason });
+          Alert.alert('Success', `Bulk action "${label}" completed.`);
+          setSelectedIds([]);
+          await fetchMembers();
+        } catch (err: any) {
+          Alert.alert('Bulk Operation Failed', err.message);
+        } finally {
+          setBulkProcessing(false);
+        }
         return;
       } else if (action === 'bulk-assign-reviewer') {
         if (bulkReviewerId === 'unassigned') {
@@ -707,6 +711,7 @@ export default function AdminMembersScreen() {
                 variant="outline"
                 size="sm"
                 onPress={() => handleAction('revoke-certificate', m.id, 'revoke the certificate')}
+                loading={actionLoading === m.id}
               />
 
               {role === 'super_admin' && (

@@ -350,15 +350,14 @@ export default function Member360Screen() {
                       variant="destructive"
                       size="sm"
                       onPress={() => {
-                        Alert.prompt('Rejection Reason', 'Provide rejection feedback to applicant:', [
-                          { text: 'Cancel' },
-                          { 
-                            text: 'Reject', 
-                            onPress: (reason?: string) => {
-                              handleQuickAction('reject-account', { reason: reason || 'Requirements not met' }, 'reject this application');
-                            }
-                          }
-                        ]);
+                        // Alert.prompt is iOS-only; use cross-platform approach
+                        let reason = 'Requirements not met';
+                        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+                          const input = window.prompt('Rejection Reason:\nProvide rejection feedback to applicant:', reason);
+                          if (input === null) return;
+                          reason = input || reason;
+                        }
+                        handleQuickAction('reject-account', { reason }, 'reject this application');
                       }}
                     />
                   </>
@@ -708,7 +707,7 @@ export default function Member360Screen() {
             {payments.map((pay) => (
               <Card key={pay.id} className="border-l-4 border-l-primary-900">
                 <View className="flex-row justify-between mb-2">
-                  <Text className="text-sm font-bold text-gray-900">₹{pay.amount.toFixed(2)}</Text>
+                  <Text className="text-sm font-bold text-gray-900">₹{(pay.amount / 100).toFixed(2)}</Text>
                   <StatusBadge status={pay.status} />
                 </View>
                 <View className="gap-1 border-t border-gray-50 pt-2">

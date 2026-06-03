@@ -53,6 +53,10 @@ export function StatusBadge({ status }: { status: string }) {
     deleted: { label: 'Deleted', variant: 'error' },
     valid: { label: 'Valid', variant: 'success' },
     revoked: { label: 'Revoked', variant: 'error' },
+    expired: { label: 'Expired', variant: 'error' },
+    processing: { label: 'Processing', variant: 'info' },
+    completed: { label: 'Completed', variant: 'success' },
+    pending_review: { label: 'Pending Review', variant: 'warning' },
   };
   const entry = map[status] || { label: status, variant: 'default' as BadgeVariant };
   return <Badge label={entry.label} variant={entry.variant} />;
