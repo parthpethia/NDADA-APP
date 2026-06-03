@@ -49,6 +49,12 @@ const createSupabaseClient = () =>
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        // Bypass navigator.locks on web to prevent tab-close/background deadlocks
+        ...(Platform.OS === 'web' && {
+          lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
+            return await fn();
+          },
+        }),
       },
     }
   );

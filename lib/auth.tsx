@@ -79,21 +79,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const clearInvalidSession = async () => {
-    // Clear the invalid session from Supabase client
+    // Clear the invalid session from Supabase client.
+    // Wrap in a timeout so we don't hang if signOut itself deadlocks.
     try {
-      await supabase.auth.signOut({ scope: 'local' });
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('signOut timed out')), 3000)),
+      ]);
     } catch (signOutError) {
       // Silently fail - we're in recovery mode
     }
 
-    // Also manually clear storage to ensure token is gone
+    // Manually clear Supabase session keys from storage.
+    // Only target keys with the 'sb-' prefix to avoid wiping unrelated data.
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.removeItem('sb-auth-token');
-        localStorage.removeItem('sb-refresh-token');
-        // Clear any Supabase session keys
         Object.keys(localStorage).forEach(key => {
-          if (key.includes('supabase') || key.includes('auth')) {
+          if (key.startsWith('sb-')) {
             localStorage.removeItem(key);
           }
         });
@@ -339,7 +341,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initializeAuth = async () => {
       try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        // Wrap getSession in a timeout — if the SDK's internal token refresh
+        // hangs (e.g. stale refresh token + lock contention), fail fast rather
+        // than leaving the user on the loading screen.
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('getSession timed out')), 5000)
+          ),
+        ]);
+        const { data: { session: currentSession }, error } = sessionResult;
 
         if (error) {
           if (isInvalidSessionError(error.message)) {
@@ -379,7 +390,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 10_000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
+        // Run state updates synchronously so the UI updates immediately
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
@@ -416,25 +428,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (newSession?.user) {
-          try {
-            await loadUserProfile(newSession.user.id, newSession.user);
-          } catch (err) {
-            console.warn('Auth: onAuthStateChange profile fetch failed:', err);
-            // If profile loading fails due to auth error, clear session
-            await clearInvalidSession();
+        // Wrap the async/Supabase calls in a setTimeout to avoid running them
+        // inside the onAuthStateChange execution context which holds GoTrue locks.
+        setTimeout(async () => {
+          if (newSession?.user) {
+            try {
+              await loadUserProfile(newSession.user.id, newSession.user);
+            } catch (err) {
+              console.warn('Auth: onAuthStateChange profile fetch failed:', err);
+              // If profile loading fails due to auth error, clear session
+              await clearInvalidSession();
+            }
+          } else {
+            setMember(null);
+            setAdminUser(null);
           }
-        } else {
-          setMember(null);
-          setAdminUser(null);
-        }
 
-        // If the listener fires before initializeAuth finishes,
-        // make sure we also stop the loading spinner
-        if (!initialized) {
-          initialized = true;
-          setLoading(false);
-        }
+          // If the listener fires before initializeAuth finishes,
+          // make sure we also stop the loading spinner
+          if (!initialized) {
+            initialized = true;
+            setLoading(false);
+          }
+        }, 0);
       }
     );
 
