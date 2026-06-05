@@ -1,0 +1,3 @@
+export const MEMBERSHIP_FEE = 300;
+export const MEMBERSHIP_FEE_CURRENCY = 'INR';
+export const MEMBERSHIP_FEE_PAISE = MEMBERSHIP_FEE * 100;

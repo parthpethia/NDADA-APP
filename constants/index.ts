@@ -1,6 +1,8 @@
 export const APP_NAME = 'NDADA';
-export const MEMBERSHIP_AMOUNT = 300;
-export const MEMBERSHIP_CURRENCY = 'INR';
+import { MEMBERSHIP_FEE, MEMBERSHIP_FEE_CURRENCY } from './payment';
+export * from './payment';
+export const MEMBERSHIP_AMOUNT = MEMBERSHIP_FEE;
+export const MEMBERSHIP_CURRENCY = MEMBERSHIP_FEE_CURRENCY;
 export const MEMBERSHIP_PLAN_NAME = 'Registration Fee';
 export const MEMBERSHIP_VALIDITY_LABEL = 'One-time';
 export const MEMBERSHIP_SUPPORT_EMAIL = 'support@ndada.org';
