@@ -232,9 +232,7 @@ export default function CertificateScreen() {
       if (Platform.OS === 'web') {
         window.open(urlData.signedUrl, '_blank');
       } else {
-        const formattedId = member?.membership_id 
-          ? `NDADA-MAH-NAG-${String(member.membership_id).padStart(4, '0')}` 
-          : certificate.certificate_id;
+        const formattedId = certificate.certificate_id.replace(/\//g, '-');
         const outputFile = new FileSystem.File(
           FileSystem.Paths.document,
           `${formattedId}.pdf`
@@ -327,7 +325,7 @@ export default function CertificateScreen() {
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Certificate ID</Text>
               <Text className="font-medium text-gray-900">
-                {member?.membership_id ? `NDADA/MAH/NAG/${String(member.membership_id).padStart(4, '0')}` : certificate.certificate_id}
+                {certificate.certificate_id}
               </Text>
             </View>
             <View className="flex-row justify-between">
@@ -336,7 +334,7 @@ export default function CertificateScreen() {
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Membership ID</Text>
-              <Text className="font-medium text-gray-900">{member?.membership_id}</Text>
+              <Text className="font-medium text-gray-900">{certificate.certificate_id}</Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Issued</Text>

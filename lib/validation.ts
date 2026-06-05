@@ -14,7 +14,7 @@ import { z } from 'zod';
 // ============================================================
 
 const phoneNumberRegex = /^[6-9]\d{9}$/; // Indian mobile numbers
-const aadhaarRegex = /^\d{4}\s?\d{4}\s?\d{4}$/; // Aadhaar format
+const aadhaarRegex = /^(?:\d{4}\s?\d{4}\s?\d{4}|X{4}[-\s]?X{4}[-\s]?\d{4})$/i; // Aadhaar format (accepts raw or masked)
 const gstRegex = /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}Z\d{1}$/; // GST format
 const pinCodeRegex = /^\d{6}$/; // Indian PIN code
 

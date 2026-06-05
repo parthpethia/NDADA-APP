@@ -27,18 +27,8 @@ export default function VerifyScreen() {
     setResult(null);
 
     const { data, error } = await supabase
-      .from('certificates')
-      .select(`
-        certificate_id,
-        issued_at,
-        status,
-        accounts:member_id (
-          full_name,
-          membership_id
-        )
-      `)
-      .eq('certificate_id', searchFor.toUpperCase())
-      .single();
+      .rpc('verify_certificate', { p_certificate_id: searchFor.toUpperCase() })
+      .maybeSingle();
 
     setLoading(false);
 
@@ -47,13 +37,13 @@ export default function VerifyScreen() {
       return;
     }
 
-    const member = Array.isArray((data as any).accounts) ? (data as any).accounts[0] : (data as any).accounts;
+    const cert = data as any;
     setResult({
-      certificate_id: data.certificate_id,
-      member_name: (member as any)?.full_name || 'Unknown',
-      membership_id: (member as any)?.membership_id || 'Unknown',
-      issued_at: data.issued_at,
-      status: data.status,
+      certificate_id: cert.certificate_id,
+      member_name: cert.member_name || 'Unknown',
+      membership_id: cert.membership_id || 'Unknown',
+      issued_at: cert.issued_at,
+      status: cert.status,
     });
   };
 
@@ -70,7 +60,7 @@ export default function VerifyScreen() {
         <Card className="mb-6">
           <CardHeader title="Verify a Certificate" subtitle="Enter the Certificate ID to verify its authenticity" />
           <Input
-            placeholder="CERT-2026-000001"
+            placeholder="NDADA/MAH/NAG/0001"
             value={certId}
             onChangeText={setCertId}
             autoCapitalize="characters"

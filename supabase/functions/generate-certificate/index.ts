@@ -266,7 +266,7 @@ serve(async (req) => {
     const issueDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
     // Generate QR code verification URL
-    const verifyUrl = `${appUrl}/verify?id=${certRecord.certificate_id}`;
+    const verifyUrl = `${appUrl}/verify?id=${encodeURIComponent(certRecord.certificate_id)}`;
 
     // ============================================================
     // PARALLEL I/O — embed template, fonts, and QR concurrently
@@ -323,7 +323,7 @@ serve(async (req) => {
 
     // 2. MEMBERSHIP ID
     const memIdSize = Math.round(width * 0.015); // Increased size
-    const memIdText = `${member.membership_id}`;
+    const memIdText = `NDADA/MAH/NAG/${member.membership_id}`;
     const memIdY = height * 0.2776;
     page.drawText(memIdText, {
       x: width * 0.2919,
@@ -470,7 +470,7 @@ serve(async (req) => {
               template_name: 'certificate_issued',
               data: {
                 name: member.full_name,
-                membership_id: member.membership_id,
+                membership_id: `NDADA/MAH/NAG/${member.membership_id}`,
                 download_url: signedUrl,
               },
               ...(shouldAttach ? {

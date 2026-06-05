@@ -1,23 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
-const fs = require('fs');
 
-// Read and parse environment variables from .env
-if (!fs.existsSync('.env')) {
-  console.error('Error: .env file not found in the current directory.');
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables must be set.');
+  console.error('You can run this script using native Node.js env loading:');
+  console.error('  node --env-file=.env scripts/manage_admins.js');
   process.exit(1);
 }
 
-const envFile = fs.readFileSync('.env', 'utf-8');
-const urlMatch = envFile.match(/EXPO_PUBLIC_SUPABASE_URL=(.*)/);
-const keyMatch = envFile.match(/SUPABASE_SERVICE_ROLE_KEY=(.*)/) || envFile.match(/EXPO_PUBLIC_SUPABASE_ANON_KEY=(.*)/);
-
-if (!urlMatch || !keyMatch) {
-  console.error('Error: Could not find Supabase credentials in .env file.');
-  process.exit(1);
-}
-
-const supabaseUrl = urlMatch[1].trim();
-const serviceRoleKey = keyMatch[1].trim();
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 // Parse CLI arguments
@@ -102,7 +94,7 @@ async function run() {
 
       console.log('\n=====================================================');
       console.log('To make a user an admin, run:');
-      console.log('  node manage_admins.js --email=<email> --role=<role>');
+      console.log('  node --env-file=.env scripts/manage_admins.js --email=<email> --role=<role>');
       console.log('  Available roles: super_admin, admin, reviewer');
       console.log('=====================================================');
       return;
