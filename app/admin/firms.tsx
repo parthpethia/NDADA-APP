@@ -6,6 +6,7 @@ import { Card, Button, StatusBadge, Select } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { Account, DashboardStats } from '@/types';
 import { formatDate } from '@/lib/utils';
+import { maskAadhaar } from '@/lib/aadhaar';
 
 import { Check, X, ChevronDown, ChevronUp, Edit2, Save, XCircle, FileText } from 'lucide-react-native';
 
@@ -48,9 +49,10 @@ function showAlert(title: string, message: string) {
 }
 
 // Editable field component
-function EditableField({ label, value, fieldKey, editMode, editData, onEditChange }: {
+function EditableField({ label, value, displayValue, fieldKey, editMode, editData, onEditChange }: {
   label: string;
   value: string;
+  displayValue?: string;
   fieldKey: string;
   editMode: boolean;
   editData: Record<string, any>;
@@ -68,7 +70,7 @@ function EditableField({ label, value, fieldKey, editMode, editData, onEditChang
           placeholder={`Enter ${label.toLowerCase()}`}
         />
       ) : (
-        <Text className="text-xs text-gray-700 flex-1 text-right">{value || 'N/A'}</Text>
+        <Text className="text-xs text-gray-700 flex-1 text-right">{(displayValue ?? value) || 'N/A'}</Text>
       )}
     </View>
   );
@@ -608,7 +610,7 @@ export default function AdminFirmsScreen() {
                         <EditableField label="Contact Phone" value={account.contact_phone || ''} fieldKey="contact_phone" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Contact Email" value={account.contact_email || ''} fieldKey="contact_email" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="WhatsApp" value={account.whatsapp_number || ''} fieldKey="whatsapp_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
-                        <EditableField label="Aadhaar" value={account.aadhaar_card_number || ''} fieldKey="aadhaar_card_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
+                        <EditableField label="Aadhaar" value={account.aadhaar_card_number || ''} displayValue={maskAadhaar(account.aadhaar_card_number)} fieldKey="aadhaar_card_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         {editing ? (
                           <View className="flex-row justify-between items-center py-0.5">
                             <Text className="text-xs text-gray-500 flex-1">District</Text>

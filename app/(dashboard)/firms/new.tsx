@@ -764,6 +764,9 @@ export default function NewFirmScreen() {
             className="mb-0"
             error={getFieldError('aadhaar_card_number')}
           />
+          <Text className="text-[11px] text-gray-500 mt-1.5 mb-4 leading-4 px-1">
+            Your Aadhaar number is collected for identity verification as required by NDADA membership rules. It will be stored securely and masked in all displays.
+          </Text>
 
           <Divider />
 

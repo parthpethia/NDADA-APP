@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Button, Card, CardHeader, EmptyState, LoadingScreen, StatusBadge } from '@/components/ui';
 import { Account } from '@/types';
 import { formatDate } from '@/lib/utils';
+import { maskAadhaar } from '@/lib/aadhaar';
 
 
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
@@ -85,7 +86,7 @@ export default function FirmDetailsScreen() {
         <DetailRow label="Mobile Number" value={account.contact_phone} />
         <DetailRow label="WhatsApp Number" value={account.whatsapp_number} />
         <DetailRow label="Email ID" value={account.contact_email} />
-        <DetailRow label="Aadhaar Card Number" value={account.aadhaar_card_number} />
+        <DetailRow label="Aadhaar Card Number" value={maskAadhaar(account.aadhaar_card_number)} />
         <DetailRow label="Residence Address" value={account.residence_address} />
         <DetailRow label="Residence PIN Code" value={account.residence_pin_code} />
       </Card>

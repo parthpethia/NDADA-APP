@@ -7,6 +7,7 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { confirm } from '@/lib/confirm';
 import { Account, Payment, Certificate, AdminUser } from '@/types';
 import { formatDate, formatDateTime } from '@/lib/utils';
+import { maskAadhaar } from '@/lib/aadhaar';
 import { 
   User, Building2, CreditCard, Award, FileText, Clock, 
   ArrowLeft, Send, CheckCircle, XCircle, 
@@ -461,7 +462,7 @@ export default function Member360Screen() {
                 </View>
                 <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-500 font-medium">Aadhaar Card Number</Text>
-                  <Text className="text-xs font-semibold text-gray-900">{member.aadhaar_card_number || 'N/A'}</Text>
+                  <Text className="text-xs font-semibold text-gray-900">{maskAadhaar(member.aadhaar_card_number)}</Text>
                 </View>
                 <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-500 font-medium">WhatsApp Number</Text>
