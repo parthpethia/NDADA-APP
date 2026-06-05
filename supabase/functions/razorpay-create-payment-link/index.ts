@@ -2,13 +2,7 @@
 // Creates (or reuses) a Razorpay Payment Link for the authenticated member.
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Max-Age': '86400',
-};
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 type CreateLinkResponse = {
   payment_link_id: string;
@@ -18,9 +12,10 @@ type CreateLinkResponse = {
 };
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight requests FIRST
   if (req.method === 'OPTIONS') {
-    console.log('📋 OPTIONS request - CORS preflight');
     return new Response(null, {
       status: 204,
       headers: corsHeaders,
@@ -75,25 +70,23 @@ serve(async (req) => {
     // Create Supabase client INSIDE handler
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get Authorization header (sent automatically by Supabase client)
+    // Get Authorization header
     const authHeader = req.headers.get('authorization');
     let user = null;
 
     if (authHeader) {
-      console.log('✅ Authorization header present');
       const token = authHeader.replace(/^Bearer\s+/i, '').trim();
       if (token) {
-        console.log('🔍 Token extracted from Authorization header, length:', token.length);
-        const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser(token);
-        if (authErr) {
-          console.warn('⚠️ Token validation failed:', authErr.message);
-        } else if (authUser) {
-          user = authUser;
-          console.log('✅ User authenticated:', user.id);
-        }
+        const { data: { user: authUser } } = await supabase.auth.getUser(token);
+        user = authUser;
       }
-    } else {
-      console.warn('⚠️ No Authorization header');
+    }
+
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Try to get member_id from request body
@@ -101,15 +94,12 @@ serve(async (req) => {
     try {
       const body = await req.json();
       memberId = String(body?.member_id || '').trim();
-      if (memberId) {
-        console.log('📝 member_id from request body:', memberId);
-      }
     } catch (e) {
-      console.warn('⚠️ Could not parse request body');
+      // Body might be empty
     }
 
     // If no member_id in body but user is authenticated, fetch from database
-    if (!memberId && user) {
+    if (!memberId) {
       const { data: accountData } = await supabase
         .from('accounts')
         .select('id')
@@ -118,27 +108,12 @@ serve(async (req) => {
 
       if (accountData?.id) {
         memberId = accountData.id;
-        console.log('📝 member_id from account record:', memberId);
       }
     }
 
-    // member_id must be determined somehow
+    // member_id must be determined
     if (!memberId) {
-      console.error('❌ Could not determine member_id');
-      console.error('   user:', user ? `authenticated (${user.id})` : 'NOT authenticated');
-      console.error('   body member_id:', '(empty)');
-
-      const errorDetails = {
-        error: 'member_id required or user not authenticated',
-        debug: {
-          user_authenticated: !!user,
-          user_id: user?.id || null,
-          member_id_from_body: '(empty)',
-          auth_header_present: !!authHeader,
-        },
-      };
-
-      return new Response(JSON.stringify(errorDetails), {
+      return new Response(JSON.stringify({ error: 'member_id required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -151,35 +126,19 @@ serve(async (req) => {
       .eq('id', memberId)
       .single();
 
-    if (memberErr) {
-      console.error('❌ Member fetch error:', memberErr.message);
-      console.error('   Code:', memberErr.code);
-      return new Response(JSON.stringify({
-        error: 'Failed to fetch member',
-        details: memberErr.message,
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (!member) {
-      console.error('❌ Member not found');
+    if (memberErr || !member) {
       return new Response(JSON.stringify({ error: 'Member not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Only verify ownership if user is authenticated
-    if (user) {
-      if ((member as any).user_id !== user.id) {
-        console.error('❌ User (', user.id, ') does not own member record (', (member as any).user_id, ')');
-        throw new Error('Unauthorized');
-      }
-      console.log('✅ User owns member record');
-    } else {
-      console.warn('⚠️ No user authentication - member_id trust mode');
+    // Verify ownership
+    if ((member as any).user_id !== user.id) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('✅ Member found:', (member as any).membership_id);

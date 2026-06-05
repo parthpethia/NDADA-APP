@@ -66,10 +66,11 @@ export default function PaymentScreen() {
   // Standard Checkout: Create Order → Open Modal → Verify Signature
   // ============================================================
   const handlePayWithRazorpay = async () => {
-    console.log('▶️ === PAYMENT FLOW START ===');
-    console.log('1️⃣ Checking member:', member ? `✅ ${member.id}` : '❌ MISSING');
-    console.log('2️⃣ Checking session:', session ? `✅ ${session.user?.id}` : '❌ MISSING');
-    console.log('3️⃣ Checking token:', session?.access_token ? `✅ ${session.access_token.substring(0, 20)}...` : '❌ MISSING');
+    if (__DEV__) {
+      console.log('▶️ === PAYMENT FLOW START ===');
+      console.log('1️⃣ Checking member:', member ? `✅ ${member.id}` : '❌ MISSING');
+      console.log('2️⃣ Checking session:', session ? `✅ ${session.user?.id}` : '❌ MISSING');
+    }
 
     if (!member) {
       console.error('❌ No member data');
@@ -98,7 +99,9 @@ export default function PaymentScreen() {
         .update({ payment_method: 'online' })
         .eq('id', member.id);
 
-      console.log('\n4️⃣ Invoking razorpay-create-order...');
+      if (__DEV__) {
+        console.log('\n4️⃣ Invoking razorpay-create-order...');
+      }
       const { data: orderData, error: orderError } = await supabase.functions.invoke('razorpay-create-order', {
         body: { member_id: member.id },
       });
@@ -113,7 +116,9 @@ export default function PaymentScreen() {
         throw new Error('Invalid order response');
       }
 
-      console.log('✅ Order created:', orderData.id);
+      if (__DEV__) {
+        console.log('✅ Order created:', orderData.id);
+      }
 
       // STEP 2: Open Razorpay Checkout Modal
       const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
@@ -152,7 +157,9 @@ export default function PaymentScreen() {
           handler: (response: any) => handlePaymentSuccess(response),
           modal: {
             ondismiss: () => {
-              console.log('ℹ️ User closed Razorpay modal');
+              if (__DEV__) {
+                console.log('ℹ️ User closed Razorpay modal');
+              }
               setPaymentLoading(false);
             },
           },
@@ -185,7 +192,9 @@ export default function PaymentScreen() {
 
   // STEP 3: Verify Payment Signature
   const handlePaymentSuccess = async (response: any) => {
-    console.log('3️⃣ Payment successful, verifying signature...');
+    if (__DEV__) {
+      console.log('3️⃣ Payment successful, verifying signature...');
+    }
     setVerifying(true);
     setPaymentLoading(false);
 
@@ -211,7 +220,9 @@ export default function PaymentScreen() {
         return;
       }
 
-      console.log('✅ Payment verified successfully');
+      if (__DEV__) {
+        console.log('✅ Payment verified successfully');
+      }
       await refreshMember();
       Alert.alert('Success', 'Payment verified! Your membership is being confirmed.', [
         { text: 'View Certificate', onPress: () => router.push('/(dashboard)/certificate') },
@@ -262,7 +273,9 @@ export default function PaymentScreen() {
     setCashSubmitting(true);
     setCashError(null);
     try {
-      console.log('Proceeding with cash payment for member:', member.id);
+      if (__DEV__) {
+        console.log('Proceeding with cash payment for member:', member.id);
+      }
       const { error } = await supabase
         .from('accounts')
         .update({ payment_method: 'cash' })
