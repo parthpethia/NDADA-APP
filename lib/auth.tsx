@@ -17,6 +17,8 @@ interface AuthContextType {
     phone: string;
     address: string;
     district: string;
+    privacy_policy_accepted: boolean;
+    terms_accepted: boolean;
   }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshMember: () => Promise<void>;
@@ -481,7 +483,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    profile: { full_name: string; phone: string; address: string; district: string }
+    profile: {
+      full_name: string;
+      phone: string;
+      address: string;
+      district: string;
+      privacy_policy_accepted: boolean;
+      terms_accepted: boolean;
+    }
   ) => {
     // Pass profile data as user metadata — the database trigger
     // handle_new_user() reads this and creates the member row automatically
@@ -494,6 +503,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone: profile.phone,
           address: profile.address,
           district: profile.district,
+          privacy_policy_accepted: profile.privacy_policy_accepted,
+          terms_accepted: profile.terms_accepted,
         },
       },
     });

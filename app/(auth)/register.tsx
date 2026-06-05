@@ -43,6 +43,7 @@ export default function RegisterScreen() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [agreed, setAgreed] = useState(false);
 
   const update = (key: string, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -61,6 +62,11 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!agreed) {
+      setError('You must agree to the Privacy Policy and Terms of Service');
+      return;
+    }
+
     setLoading(true);
     setError('');
     const { error: err } = await signUp(form.email, form.password, {
@@ -68,6 +74,8 @@ export default function RegisterScreen() {
       phone: form.phone,
       address: form.address,
       district: form.district,
+      privacy_policy_accepted: true,
+      terms_accepted: true,
     });
     if (err) {
       setError(err);
@@ -197,11 +205,34 @@ export default function RegisterScreen() {
               secureTextEntry
             />
 
+            <View className="mb-5 mt-2 flex-row items-start gap-2.5">
+              <TouchableOpacity
+                onPress={() => setAgreed(!agreed)}
+                className={`w-5 h-5 rounded border items-center justify-center mt-0.5 ${
+                  agreed ? 'bg-primary-600 border-primary-600' : 'border-gray-300 bg-white'
+                }`}
+                activeOpacity={0.8}
+              >
+                {agreed && <Text className="text-white text-[10px] font-bold">✓</Text>}
+              </TouchableOpacity>
+              <View className="flex-1 flex-row flex-wrap">
+                <Text className="text-sm text-gray-600">I agree to the </Text>
+                <TouchableOpacity onPress={() => router.push('/privacy-policy')}>
+                  <Text className="text-sm font-semibold text-primary-700 underline">Privacy Policy</Text>
+                </TouchableOpacity>
+                <Text className="text-sm text-gray-600"> and </Text>
+                <TouchableOpacity onPress={() => router.push('/terms')}>
+                  <Text className="text-sm font-semibold text-primary-700 underline">Terms of Service</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <Button
               title="Create Account"
               onPress={handleRegister}
               loading={loading}
               className="mt-2"
+              disabled={!agreed}
             />
           </View>
 
