@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Alert, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, Alert, RefreshControl, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, Input, StatusBadge, LoadingScreen, EmptyState } from '@/components/ui';
@@ -19,6 +20,32 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingProfile, setRefreshingProfile] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    const ok = await confirm(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone. All your personal data will be anonymized, but payment references will be kept for financial audits.',
+      {
+        destructive: true,
+        confirmText: 'Delete Account',
+      }
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
+      
+      Alert.alert('Success', 'Your account has been deleted.');
+      await signOut();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to delete account. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!member || editing) return;
@@ -239,9 +266,46 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
+        {/* Legal Info */}
+        <Card className="mb-4">
+          <CardHeader title="Legal & Privacy" />
+          <View className="gap-2 px-1">
+            <TouchableOpacity
+              onPress={() => router.push('/privacy-policy')}
+              className="flex-row justify-between py-3 border-b border-gray-100"
+            >
+              <Text className="text-gray-700 font-medium">Privacy Policy</Text>
+              <Text className="text-gray-400">View →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/terms')}
+              className="flex-row justify-between py-3"
+            >
+              <Text className="text-gray-700 font-medium">Terms of Service</Text>
+              <Text className="text-gray-400">View →</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        {/* Danger Zone */}
+        <Card className="mb-4 border border-red-200">
+          <CardHeader title="Danger Zone" />
+          <View className="gap-3 px-1">
+            <Text className="text-xs text-red-600 leading-4">
+              Deleting your account is permanent and cannot be undone. Your personal details will be anonymized, and uploaded verification documents will be deleted.
+            </Text>
+            <Button
+              title="Delete Account"
+              variant="destructive"
+              onPress={handleDeleteAccount}
+              loading={deleting}
+            />
+          </View>
+        </Card>
+
         <Button
           title="Sign Out"
-          variant="destructive"
+          variant="outline"
           onPress={handleSignOut}
         />
       </View>

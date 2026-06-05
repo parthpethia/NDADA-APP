@@ -97,6 +97,12 @@ export interface Account {
   reviewed_by: string | null;
   reviewed_at: string | null;
 
+  // Terms & Privacy Acceptance
+  privacy_policy_accepted?: boolean;
+  terms_accepted?: boolean;
+  terms_accepted_at?: string | null;
+  deleted_at?: string | null;
+
   // Timestamps
   created_at: string;
   updated_at: string;
