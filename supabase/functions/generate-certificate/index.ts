@@ -5,13 +5,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import QRCode from 'https://esm.sh/qrcode@1.5.3';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Max-Age': '86400',
-};
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 // ============================================================
 // MODULE-LEVEL CACHE — persists across invocations within the
@@ -52,6 +46,8 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,

@@ -3,13 +3,7 @@
 // This follows the Order API flow per Razorpay documentation
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Max-Age': '86400',
-};
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 type CreateOrderResponse = {
   id: string;
@@ -26,6 +20,8 @@ type CreateOrderResponse = {
 };
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
