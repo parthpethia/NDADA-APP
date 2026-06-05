@@ -27,6 +27,28 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="privacy-policy"
+              options={{
+                headerShown: true,
+                title: 'Privacy Policy',
+                headerStyle: { backgroundColor: '#166534' },
+                headerTintColor: '#fff',
+                headerTitleStyle: { fontWeight: '600' },
+                presentation: 'card',
+              }}
+            />
+            <Stack.Screen
+              name="terms"
+              options={{
+                headerShown: true,
+                title: 'Terms of Service',
+                headerStyle: { backgroundColor: '#166534' },
+                headerTintColor: '#fff',
+                headerTitleStyle: { fontWeight: '600' },
+                presentation: 'card',
+              }}
+            />
+            <Stack.Screen
               name="cart"
               options={{
                 headerShown: true,
