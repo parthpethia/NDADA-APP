@@ -24,7 +24,7 @@ BEGIN
   RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog, public;
+SET search_path = pg_catalog, public, extensions;
 
 -- Grant execute permissions to anonymous and authenticated users
 GRANT EXECUTE ON FUNCTION public.reset_password_bypass TO anon;
