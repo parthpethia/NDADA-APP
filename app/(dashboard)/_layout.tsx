@@ -6,9 +6,9 @@ import { NotificationBell } from './notifications';
 import { Image } from 'react-native';
 
 export default function DashboardLayout() {
-  const { session, loading, adminUser } = useAuth();
+  const { session, loading, adminUser, profileReady } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  if (loading || !profileReady) return <LoadingScreen />;
   if (!session) return <Redirect href="/(auth)/login" />;
   if (adminUser) return <Redirect href="/admin" />;
 

@@ -1,47 +1,54 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { Button, Input } from '@/components/ui';
 import { APP_NAME } from '@/constants';
 
 export default function ResetPasswordScreen() {
+  const { email } = useLocalSearchParams<{ email?: string }>();
+  const isBypassMode = Boolean(email);
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
-  // Guard against the effect running twice (React Strict Mode / fast refresh)
-  const initRef = useRef(false);
+  const url = Linking.useURL();
+  const processedUrlRef = useRef<string | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
+    // Helper to check if a session already exists
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setSessionReady(true);
+        return true;
+      }
+      return false;
+    };
 
-    // Since detectSessionInUrl is false in our Supabase config, we must
-    // manually extract the recovery tokens from the URL hash fragment.
-    // Supabase reset links redirect to:
-    //   /reset-password#access_token=...&refresh_token=...&type=recovery
-    //
-    // IMPORTANT: We intentionally do NOT register a second onAuthStateChange
-    // listener here — the AuthProvider already has one, and having two
-    // competing listeners causes GoTrue lock contention (the "lock not
-    // released within 5000ms" + AbortError seen in the console).
-    const handleRecoveryFromHash = async () => {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const hash = window.location.hash.substring(1); // remove leading '#'
-        if (!hash) {
-          return false;
-        }
+    // Parse recovery tokens from URL (supporting query params and hash fragments)
+    const handleRecoveryUrl = async (urlString: string) => {
+      try {
+        const delimiterIndex = urlString.indexOf('#') !== -1 ? urlString.indexOf('#') : urlString.indexOf('?');
+        if (delimiterIndex === -1) return false;
 
-        const params = new URLSearchParams(hash);
+        const queryString = urlString.substring(delimiterIndex + 1);
+        const params = new URLSearchParams(queryString);
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         const type = params.get('type');
 
         if (accessToken && refreshToken && type === 'recovery') {
+          // Clear any stale session first to avoid lock contention
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch {}
+
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -52,55 +59,47 @@ export default function ResetPasswordScreen() {
             return false;
           }
 
-          // Clean up the hash from the URL so it's not reused on refresh
-          window.history.replaceState(null, '', window.location.pathname);
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
           setSessionReady(true);
           return true;
         }
+      } catch (err: any) {
+        console.warn('Error parsing recovery URL:', err);
       }
       return false;
     };
 
-    // Try to extract tokens from hash first
-    handleRecoveryFromHash().then((handled) => {
-      if (!handled) {
-        // Fallback: the user may have already been redirected and has a
-        // valid recovery session (e.g. page refresh after initial load).
-        // Poll briefly because the AuthProvider's onAuthStateChange may
-        // still be processing the session concurrently.
-        const checkSession = async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            setSessionReady(true);
-            return true;
-          }
-          return false;
-        };
-
-        checkSession().then((found) => {
-          if (!found) {
-            // Retry once more after a short delay — the AuthProvider's
-            // initializeAuth may still be establishing the session.
-            const retryTimer = setTimeout(async () => {
-              const ok = await checkSession();
-              if (!ok) {
-                setError(
-                  'Unable to verify your reset link. Please click the link in your email again, or request a new reset link.'
-                );
-              }
-            }, 3000);
-            retryTimerRef.current = retryTimer;
-          }
-        });
+    const processUrlOrSession = async () => {
+      if (url && processedUrlRef.current !== url) {
+        processedUrlRef.current = url;
+        const handled = await handleRecoveryUrl(url);
+        if (handled) return;
       }
-    });
+
+      const foundSession = await checkSession();
+      if (foundSession) return;
+
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(async () => {
+        const ok = await checkSession();
+        if (!ok) {
+          setError(
+            'Unable to verify your reset link. Please click the link in your email again, or request a new reset link.'
+          );
+        }
+      }, 3000);
+    };
+
+    processUrlOrSession();
 
     return () => {
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current);
       }
     };
-  }, []);
+  }, [url]);
 
   const handleUpdatePassword = async () => {
     // Prevent double-submission
@@ -110,8 +109,8 @@ export default function ResetPasswordScreen() {
       setError('Please fill in all fields');
       return;
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
       return;
     }
     if (password !== confirmPassword) {
@@ -123,20 +122,40 @@ export default function ResetPasswordScreen() {
     setError('');
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
+      if (isBypassMode) {
+        // Direct bypass mode: Call the secure database RPC function
+        const { data: successResult, error: rpcError } = await supabase.rpc('reset_password_bypass', {
+          p_email: email,
+          p_new_password: password,
+        });
 
-      if (updateError) {
-        setError(updateError.message);
-        return;
+        if (rpcError) {
+          setError(rpcError.message);
+          return;
+        }
+        if (!successResult) {
+          setError('User not found. Please enter the correct email.');
+          return;
+        }
+
+        setSuccess(true);
+      } else {
+        // Standard recovery session mode
+        const { error: updateError } = await supabase.auth.updateUser({
+          password,
+        });
+
+        if (updateError) {
+          setError(updateError.message);
+          return;
+        }
+
+        // Sign out the recovery session so the user can sign in cleanly
+        // with their new password. Without this, the _layout.tsx auth guard
+        // would redirect them away from the login page immediately.
+        await supabase.auth.signOut({ scope: 'local' });
+        setSuccess(true);
       }
-
-      // Sign out the recovery session so the user can sign in cleanly
-      // with their new password. Without this, the _layout.tsx auth guard
-      // would redirect them away from the login page immediately.
-      await supabase.auth.signOut({ scope: 'local' });
-      setSuccess(true);
     } catch (e) {
       setError('An unexpected error occurred. Please try again.');
     } finally {
@@ -210,7 +229,7 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View className="rounded-2xl bg-white p-6 shadow-sm">
-            {!sessionReady ? (
+            {!sessionReady && !isBypassMode ? (
               <View className="mb-4 rounded-lg bg-yellow-50 p-3">
                 <Text className="text-sm text-yellow-700">
                   Verifying your reset link… If this takes too long, try clicking the link in your email again.
@@ -243,7 +262,7 @@ export default function ResetPasswordScreen() {
               title="Reset Password"
               onPress={handleUpdatePassword}
               loading={loading}
-              disabled={!sessionReady || loading}
+              disabled={(!sessionReady && !isBypassMode) || loading}
               className="mt-2"
             />
           </View>

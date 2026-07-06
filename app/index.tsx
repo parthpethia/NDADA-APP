@@ -3,9 +3,9 @@ import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/ui';
 
 export default function Index() {
-  const { session, adminUser, loading } = useAuth();
+  const { session, adminUser, loading, profileReady } = useAuth();
 
-  if (loading) return <LoadingScreen message="Loading..." />;
+  if (loading || !profileReady) return <LoadingScreen message="Loading..." />;
   if (session) return <Redirect href={adminUser ? '/admin' : '/(dashboard)'} />;
   return <Redirect href="/(auth)/login" />;
 }

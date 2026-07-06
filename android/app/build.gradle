@@ -93,9 +93,15 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.0"
-
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        externalNativeBuild {
+            cmake {
+                arguments "-DCMAKE_BUILD_PARALLEL_LEVEL=1",
+                          "-DCMAKE_JOB_POOL_COMPILE:STRING=compile",
+                          "-DCMAKE_JOB_POOL_LINK:STRING=link",
+                          "-DCMAKE_JOB_POOLS:STRING=compile=1;link=1"
+            }
+        }
     }
     signingConfigs {
         debug {
@@ -192,3 +198,8 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+tasks.withType(JavaCompile) {
+    options.fork = false
+}
+

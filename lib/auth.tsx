@@ -11,6 +11,7 @@ interface AuthContextType {
   member: Account | null;
   adminUser: AdminUser | null;
   loading: boolean;
+  profileReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, profile: {
     full_name: string;
@@ -56,6 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [member, setMember] = useState<Account | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
+  // profileReady: false while profile (member + admin) is being fetched after
+  // a session change.  Routing guards must wait for this before redirecting so
+  // that adminUser is resolved before any navigation decision.
+  const [profileReady, setProfileReady] = useState(false);
 
   // In-flight request deduplication
   const profileRequestRef = useRef<Promise<void> | null>(null);
@@ -110,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setMember(null);
     setAdminUser(null);
+    setProfileReady(true);
   };
 
   /**
@@ -376,6 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await clearInvalidSession();
       } finally {
         initialized = true;
+        setProfileReady(true);
         setLoading(false);
       }
     };
@@ -402,6 +409,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'INITIAL_SESSION' && profileLoaded) {
           if (!initialized) {
             initialized = true;
+            setProfileReady(true);
             setLoading(false);
           }
           return;
@@ -423,11 +431,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setMember(null);
             setAdminUser(null);
           }
+          setProfileReady(true);
           if (!initialized) {
             initialized = true;
             setLoading(false);
           }
           return;
+        }
+
+        // Mark profile as NOT ready — routing guards must wait until the
+        // admin/member lookup completes before making navigation decisions.
+        // Without this, the deferred setTimeout below causes a window where
+        // session exists but adminUser is still null, sending admins to the
+        // member dashboard.
+        if (newSession?.user) {
+          setProfileReady(false);
         }
 
         // Wrap the async/Supabase calls in a setTimeout to avoid running them
@@ -445,6 +463,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setMember(null);
             setAdminUser(null);
           }
+
+          // Profile loading is done — allow routing guards to proceed
+          setProfileReady(true);
 
           // If the listener fires before initializeAuth finishes,
           // make sure we also stop the loading spinner
@@ -527,6 +548,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setMember(null);
       setAdminUser(null);
+      setProfileReady(true);
       // Clear admin cache on sign-out so a different user gets a fresh lookup
       adminCacheRef.current.clear();
       // Clear query cache to prevent stale data for the next user
@@ -550,7 +572,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, member, adminUser, loading, signIn, signUp, signOut, refreshMember, resetPassword }}
+      value={{ session, user, member, adminUser, loading, profileReady, signIn, signUp, signOut, refreshMember, resetPassword }}
     >
       {children}
     </AuthContext.Provider>

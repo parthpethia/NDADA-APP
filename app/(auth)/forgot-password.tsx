@@ -1,34 +1,69 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { Link } from 'expo-router';
-import { useAuth } from '@/lib/auth';
+import { Link, router } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import { Button, Input } from '@/components/ui';
 import { APP_NAME } from '@/constants';
 
 export default function ForgotPasswordScreen() {
-  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleResetPassword = async () => {
-    if (!email) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setError('Please enter your email address');
       return;
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (!password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
     setError('');
-    const { error: err } = await resetPassword(email);
-    if (err) {
-      setError(err);
-    } else {
-      setSent(true);
+
+    try {
+      const { data: successResult, error: rpcError } = await supabase.rpc('reset_password_bypass', {
+        p_email: trimmedEmail,
+        p_new_password: password,
+      });
+
+      if (rpcError) {
+        setError(rpcError.message);
+        return;
+      }
+      if (!successResult) {
+        setError('User not found. Please enter the correct email.');
+        return;
+      }
+
+      setSuccess(true);
+    } catch (e) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  if (sent) {
+  if (success) {
     return (
       <KeyboardAvoidingView
         className="flex-1"
@@ -50,34 +85,20 @@ export default function ForgotPasswordScreen() {
 
             <View className="rounded-2xl bg-white p-6 shadow-sm">
               <View className="mb-4 items-center">
-                <Text className="text-5xl mb-4">📧</Text>
+                <Text className="text-5xl mb-4">✅</Text>
                 <Text className="text-xl font-bold text-gray-800 text-center">
-                  Check Your Email
+                  Password Updated!
                 </Text>
               </View>
 
-              <Text className="text-center text-gray-600 mb-2">
-                We've sent a password reset link to:
-              </Text>
-              <Text className="text-center font-semibold text-primary-700 mb-4">
-                {email}
-              </Text>
-              <Text className="text-center text-gray-500 text-sm mb-6">
-                Click the link in the email to reset your password. If you don't see it, check your spam folder.
+              <Text className="text-center text-gray-600 mb-6">
+                Your password has been successfully reset. You can now sign in with your new password.
               </Text>
 
               <Button
-                title="Resend Email"
-                onPress={handleResetPassword}
-                loading={loading}
-                variant="outline"
+                title="Go to Sign In"
+                onPress={() => router.replace('/(auth)/login')}
               />
-            </View>
-
-            <View className="mt-6 flex-row items-center justify-center">
-              <Link href="/(auth)/login">
-                <Text className="font-semibold text-primary-700">← Back to Sign In</Text>
-              </Link>
             </View>
           </View>
         </ScrollView>
@@ -103,7 +124,7 @@ export default function ForgotPasswordScreen() {
             />
             <Text className="text-3xl font-bold text-primary-800">{APP_NAME}</Text>
             <Text className="mt-1 text-center text-gray-500">
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and new password to reset directly.
             </Text>
           </View>
 
@@ -123,8 +144,24 @@ export default function ForgotPasswordScreen() {
               autoCapitalize="none"
             />
 
+            <Input
+              label="New Password"
+              placeholder="Min 6 characters"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            <Input
+              label="Confirm New Password"
+              placeholder="Re-enter password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+
             <Button
-              title="Send Reset Link"
+              title="Reset Password"
               onPress={handleResetPassword}
               loading={loading}
               className="mt-2"

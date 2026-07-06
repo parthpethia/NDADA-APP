@@ -10,10 +10,10 @@ import {
 } from 'lucide-react-native';
 
 export default function AdminLayout() {
-  const { session, loading, adminUser, signOut } = useAuth();
+  const { session, loading, adminUser, signOut, profileReady } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
 
-  if (loading) return <LoadingScreen />;
+  if (loading || !profileReady) return <LoadingScreen />;
   if (!session) return <Redirect href="/(auth)/login" />;
   if (!adminUser) return <Redirect href="/(dashboard)" />;
 

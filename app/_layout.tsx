@@ -1,13 +1,18 @@
 import '../global.css';
+import { useState } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/lib/auth';
 import { NotificationProvider } from '@/lib/useNotifications';
+import { SplashScreen } from '@/components/SplashScreen';
 
 export default function RootLayout() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
     <SafeAreaProvider>
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
       <AuthProvider>
         <NotificationProvider>
           <StatusBar style="auto" />
