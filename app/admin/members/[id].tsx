@@ -43,6 +43,7 @@ export default function Member360Screen() {
 
   // Action states
   const [actionLoading, setActionLoading] = useState<boolean>(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [newNote, setNewNote] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
@@ -156,6 +157,48 @@ export default function Member360Screen() {
       setLoading(false);
     }
   }, [id]);
+
+  const handleViewFile = async (path: string, bucket: string, trackCert?: Certificate) => {
+    if (!path) return;
+    
+    // If it's already a full HTTP URL, open it directly
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      try {
+        await Linking.openURL(path);
+      } catch (err: any) {
+        Alert.alert('Error opening link', err.message || 'Failed to open link');
+      }
+      return;
+    }
+
+    setDownloadingFile(path);
+    try {
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, 60);
+
+      if (urlError || !urlData?.signedUrl) {
+        throw new Error(urlError?.message || 'Could not generate signed URL.');
+      }
+
+      if (trackCert) {
+        // Track certificate download
+        await supabase.from('certificate_downloads').insert({
+          certificate_id: trackCert.id,
+          member_id: trackCert.member_id,
+        });
+        
+        // Update last certificate download timestamp in local state
+        setLastCertDownload(new Date().toISOString());
+      }
+
+      await Linking.openURL(urlData.signedUrl);
+    } catch (err: any) {
+      Alert.alert('Error opening file', err.message || 'Failed to open file');
+    } finally {
+      setDownloadingFile(null);
+    }
+  };
 
   useEffect(() => {
     fetch360Data();
@@ -477,10 +520,13 @@ export default function Member360Screen() {
                     <Text className="text-xs font-bold text-gray-500 mb-2">APPLICANT PHOTO</Text>
                     <TouchableOpacity
                       className="flex-row items-center py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md"
-                      onPress={() => Linking.openURL(member.applicant_photo_url!)}
+                      onPress={() => handleViewFile(member.applicant_photo_url!, 'documents')}
+                      disabled={downloadingFile !== null}
                     >
                       <FileText size={14} color="#15803d" />
-                      <Text className="ml-2 text-xs font-semibold text-primary-900">View Applicant Photo</Text>
+                      <Text className="ml-2 text-xs font-semibold text-primary-900">
+                        {downloadingFile === member.applicant_photo_url ? 'Loading...' : 'View Applicant Photo'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -489,10 +535,13 @@ export default function Member360Screen() {
                     {!member.applicant_photo_url && <Text className="text-xs font-bold text-gray-500 mb-2">IDENTITY DOCUMENT</Text>}
                     <TouchableOpacity
                       className="flex-row items-center py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md"
-                      onPress={() => Linking.openURL(member.id_proof_url!)}
+                      onPress={() => handleViewFile(member.id_proof_url!, 'id-proofs')}
+                      disabled={downloadingFile !== null}
                     >
                       <FileText size={14} color="#15803d" />
-                      <Text className="ml-2 text-xs font-semibold text-primary-900">View ID Proof</Text>
+                      <Text className="ml-2 text-xs font-semibold text-primary-900">
+                        {downloadingFile === member.id_proof_url ? 'Loading...' : 'View ID Proof'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -609,10 +658,13 @@ export default function Member360Screen() {
                         <TouchableOpacity 
                           key={index}
                           className="flex-row items-center py-1.5 px-3 mb-1 bg-gray-50 border border-gray-200 rounded-md"
-                          onPress={() => Linking.openURL(url)}
+                          onPress={() => handleViewFile(url, 'documents')}
+                          disabled={downloadingFile !== null}
                         >
                           <FileText size={14} color="#15803d" />
-                          <Text className="ml-2 text-xs font-semibold text-primary-900 flex-1 truncate">Document #{index+1}</Text>
+                          <Text className="ml-2 text-xs font-semibold text-primary-900 flex-1 truncate">
+                            {downloadingFile === url ? 'Loading...' : `Document #${index+1}`}
+                          </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -758,10 +810,12 @@ export default function Member360Screen() {
 
                 <View className="flex-row gap-2 border-t border-green-100/50 pt-2">
                   <Button 
-                    title="Download Link" 
+                    title="Download Certificate" 
                     variant="primary" 
                     size="sm"
-                    onPress={() => Linking.openURL(cert.certificate_url)}
+                    onPress={() => handleViewFile(cert.certificate_url, 'certificates', cert)}
+                    loading={downloadingFile === cert.certificate_url}
+                    disabled={downloadingFile !== null}
                   />
                 </View>
               </Card>

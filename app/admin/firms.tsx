@@ -100,6 +100,38 @@ export default function AdminFirmsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [saveLoading, setSaveLoading] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+
+  const handleViewFile = async (path: string, bucket: string) => {
+    if (!path) return;
+
+    // If it's already a full HTTP URL, open it directly
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      try {
+        await Linking.openURL(path);
+      } catch (err: any) {
+        showAlert('Error opening link', err.message || 'Failed to open link');
+      }
+      return;
+    }
+
+    setDownloadingFile(path);
+    try {
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, 60);
+
+      if (urlError || !urlData?.signedUrl) {
+        throw new Error(urlError?.message || 'Could not generate signed URL.');
+      }
+
+      await Linking.openURL(urlData.signedUrl);
+    } catch (err: any) {
+      showAlert('Error opening file', err.message || 'Failed to open file');
+    } finally {
+      setDownloadingFile(null);
+    }
+  };
 
   // Fetch dashboard stats
   const fetchStats = useCallback(async () => {
@@ -663,10 +695,13 @@ export default function AdminFirmsScreen() {
                           <TouchableOpacity
                             key={index}
                             className="flex-row items-center py-1.5 px-3 mb-1 bg-white border border-gray-200 rounded-md"
-                            onPress={() => Linking.openURL(url)}
+                            onPress={() => handleViewFile(url, 'documents')}
+                            disabled={downloadingFile !== null}
                           >
                             <FileText size={14} color="#15803d" />
-                            <Text className="ml-2 text-xs font-semibold text-primary-900 flex-1">Document #{index + 1}</Text>
+                            <Text className="ml-2 text-xs font-semibold text-primary-900 flex-1">
+                              {downloadingFile === url ? 'Loading...' : `Document #${index + 1}`}
+                            </Text>
                           </TouchableOpacity>
                         ))}
                       </View>
