@@ -6,6 +6,7 @@ import { Button, Card, CardHeader } from '@/components/ui';
 import * as WebBrowser from 'expo-web-browser';
 import { Linking } from 'react-native';
 import { getFunctionsErrorMessage } from '@/lib/utils';
+import { MEMBERSHIP_AMOUNT } from '@/constants';
 
 // Razorpay types
 interface RazorpayOrderResponse {
@@ -299,7 +300,7 @@ export function RazorpayCheckout() {
       <View className="gap-3">
         <View className="gap-2">
           <Text className="text-sm font-medium text-gray-700">Fee Amount</Text>
-          <Text className="text-2xl font-bold text-gray-900">₹{member.payment_status === 'paid' ? 'Paid' : '300'}</Text>
+          <Text className="text-2xl font-bold text-gray-900">₹{member.payment_status === 'paid' ? 'Paid' : MEMBERSHIP_AMOUNT}</Text>
         </View>
 
         {member.payment_status === 'paid' ? (

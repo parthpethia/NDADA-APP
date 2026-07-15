@@ -60,6 +60,7 @@ function deleteCxxDirs(dir) {
   }
 }
 deleteCxxDirs(androidDir);
+deleteCxxDirs(path.join(projectRoot, 'node_modules'));
 
 // Run gradle clean
 spawnSync(

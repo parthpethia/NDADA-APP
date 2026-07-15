@@ -5,7 +5,12 @@
 -- and triggers to automatically queue certificates on approval
 -- ============================================================
 
-CREATE TYPE certificate_generation_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'certificate_generation_status') THEN
+    CREATE TYPE certificate_generation_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+  END IF;
+END$$;
 
 CREATE TABLE public.certificate_generation_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

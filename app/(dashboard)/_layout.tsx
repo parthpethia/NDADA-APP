@@ -3,10 +3,12 @@ import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/ui';
 import { LayoutDashboard, Building2, Award, User } from 'lucide-react-native';
 import { NotificationBell } from './notifications';
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardLayout() {
   const { session, loading, adminUser, profileReady } = useAuth();
+  const insets = useSafeAreaInsets();
 
   if (loading || !profileReady) return <LoadingScreen />;
   if (!session) return <Redirect href="/(auth)/login" />;
@@ -20,7 +22,11 @@ export default function DashboardLayout() {
         headerTitleStyle: { fontWeight: '600' },
         tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
-        tabBarStyle: { paddingBottom: 4, height: 56 },
+        tabBarStyle: {
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 6,
+          height: 60 + (insets.bottom > 0 ? insets.bottom - 6 : 0),
+          paddingTop: 6,
+        },
         headerLeft: () => (
           <Image
             source={require('@/assets/logo-ndada.png')}

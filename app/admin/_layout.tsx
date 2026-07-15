@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, TouchableOpacity, View, Image } from 'react-native';
+import { Text, TouchableOpacity, View, Image, Platform } from 'react-native';
 import { Tabs, Redirect, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
@@ -8,10 +8,12 @@ import {
   LayoutDashboard, Users, Building2, CreditCard,
   AlertTriangle, FileText, Award, Search,
 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AdminLayout() {
   const { session, loading, adminUser, signOut, profileReady } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const insets = useSafeAreaInsets();
 
   if (loading || !profileReady) return <LoadingScreen />;
   if (!session) return <Redirect href="/(auth)/login" />;
@@ -27,7 +29,11 @@ export default function AdminLayout() {
         headerTitleStyle: { fontWeight: '600' },
         tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
-        tabBarStyle: { paddingBottom: 4, height: 56 },
+        tabBarStyle: {
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 6,
+          height: 60 + (insets.bottom > 0 ? insets.bottom - 6 : 0),
+          paddingTop: 6,
+        },
         headerLeft: () => (
           <Image
             source={require('@/assets/logo-ndada.png')}

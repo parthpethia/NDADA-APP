@@ -10,14 +10,33 @@
 -- PART 1: Type Definitions
 -- ============================================================
 
-CREATE TYPE IF NOT EXISTS firm_type AS ENUM ('proprietorship', 'partnership', 'private_limited', 'llp', 'other');
-CREATE TYPE IF NOT EXISTS payment_status AS ENUM ('pending', 'processing', 'paid', 'failed', 'abandoned', 'expired');
-CREATE TYPE IF NOT EXISTS approval_status AS ENUM ('pending', 'approved', 'rejected');
-CREATE TYPE IF NOT EXISTS account_status AS ENUM ('active', 'suspended', 'deleted');
-CREATE TYPE IF NOT EXISTS certificate_status AS ENUM ('valid', 'revoked', 'suspended');
-CREATE TYPE IF NOT EXISTS admin_role AS ENUM ('super_admin', 'admin', 'reviewer');
-CREATE TYPE IF NOT EXISTS notification_type AS ENUM ('payment', 'approval', 'certificate', 'system');
-CREATE TYPE IF NOT EXISTS certificate_generation_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'firm_type') THEN
+    CREATE TYPE firm_type AS ENUM ('proprietorship', 'partnership', 'private_limited', 'llp', 'other');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
+    CREATE TYPE payment_status AS ENUM ('pending', 'processing', 'paid', 'failed', 'abandoned', 'expired');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'approval_status') THEN
+    CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_status') THEN
+    CREATE TYPE account_status AS ENUM ('active', 'suspended', 'deleted');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'certificate_status') THEN
+    CREATE TYPE certificate_status AS ENUM ('valid', 'revoked', 'suspended');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'admin_role') THEN
+    CREATE TYPE admin_role AS ENUM ('super_admin', 'admin', 'reviewer');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
+    CREATE TYPE notification_type AS ENUM ('payment', 'approval', 'certificate', 'system');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'certificate_generation_status') THEN
+    CREATE TYPE certificate_generation_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+  END IF;
+END$$;
 
 -- ============================================================
 -- PART 2: Helper Functions

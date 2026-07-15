@@ -8,9 +8,9 @@
 -- ============================================================
 
 -- Alter the payment_status enum to add new values
-ALTER TYPE payment_status ADD VALUE 'processing' BEFORE 'paid';
-ALTER TYPE payment_status ADD VALUE 'abandoned' AFTER 'failed';
-ALTER TYPE payment_status ADD VALUE 'expired' AFTER 'failed';
+ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'processing' BEFORE 'paid';
+ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'abandoned' AFTER 'failed';
+ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'expired' AFTER 'failed';
 
 -- Add columns to payments table for better tracking
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS failure_reason TEXT;

@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS public.account_drafts (
 CREATE INDEX IF NOT EXISTS idx_account_drafts_user_id ON public.account_drafts(user_id);
 
 -- Trigger to auto-update the updated_at timestamp
-CREATE TRIGGER IF NOT EXISTS trg_account_drafts_updated_at
+DROP TRIGGER IF EXISTS trg_account_drafts_updated_at ON public.account_drafts;
+CREATE TRIGGER trg_account_drafts_updated_at
   BEFORE UPDATE ON public.account_drafts
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();

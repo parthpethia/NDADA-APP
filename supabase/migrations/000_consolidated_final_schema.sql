@@ -6,12 +6,27 @@
 -- ============================================================
 -- ENUMS
 -- ============================================================
-CREATE TYPE IF NOT EXISTS firm_type AS ENUM ('proprietorship', 'partnership', 'private_limited', 'llp', 'other');
-CREATE TYPE IF NOT EXISTS payment_status AS ENUM ('pending', 'paid', 'failed');
-CREATE TYPE IF NOT EXISTS approval_status AS ENUM ('pending', 'approved', 'rejected');
-CREATE TYPE IF NOT EXISTS account_status AS ENUM ('active', 'suspended', 'deleted');
-CREATE TYPE IF NOT EXISTS certificate_status AS ENUM ('valid', 'revoked', 'suspended');
-CREATE TYPE IF NOT EXISTS admin_role AS ENUM ('super_admin', 'admin', 'reviewer');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'firm_type') THEN
+    CREATE TYPE firm_type AS ENUM ('proprietorship', 'partnership', 'private_limited', 'llp', 'other');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
+    CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'approval_status') THEN
+    CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_status') THEN
+    CREATE TYPE account_status AS ENUM ('active', 'suspended', 'deleted');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'certificate_status') THEN
+    CREATE TYPE certificate_status AS ENUM ('valid', 'revoked', 'suspended');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'admin_role') THEN
+    CREATE TYPE admin_role AS ENUM ('super_admin', 'admin', 'reviewer');
+  END IF;
+END$$;
 
 -- ============================================================
 -- SEQUENCES
@@ -200,13 +215,15 @@ CREATE TABLE IF NOT EXISTS public.members (
 CREATE INDEX IF NOT EXISTS idx_members_user_id ON public.members(user_id);
 CREATE INDEX IF NOT EXISTS idx_members_phone ON public.members(phone);
 
-CREATE TRIGGER IF NOT EXISTS trg_generate_membership_id
+DROP TRIGGER IF EXISTS trg_generate_membership_id ON public.members;
+CREATE TRIGGER trg_generate_membership_id
   BEFORE INSERT ON public.members
   FOR EACH ROW
   WHEN (NEW.membership_id IS NULL OR NEW.membership_id = '')
   EXECUTE FUNCTION generate_membership_id();
 
-CREATE TRIGGER IF NOT EXISTS trg_members_updated_at
+DROP TRIGGER IF EXISTS trg_members_updated_at ON public.members;
+CREATE TRIGGER trg_members_updated_at
   BEFORE UPDATE ON public.members
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
@@ -256,12 +273,14 @@ CREATE TABLE IF NOT EXISTS public.firms (
 CREATE INDEX IF NOT EXISTS idx_firms_member_id ON public.firms(member_id);
 CREATE INDEX IF NOT EXISTS idx_firms_reviewed_by ON public.firms(reviewed_by);
 
-CREATE TRIGGER IF NOT EXISTS trg_firms_updated_at
+DROP TRIGGER IF EXISTS trg_firms_updated_at ON public.firms;
+CREATE TRIGGER trg_firms_updated_at
   BEFORE UPDATE ON public.firms
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 
-CREATE TRIGGER IF NOT EXISTS trg_check_duplicate_license
+DROP TRIGGER IF EXISTS trg_check_duplicate_license ON public.firms;
+CREATE TRIGGER trg_check_duplicate_license
   AFTER INSERT ON public.firms
   FOR EACH ROW
   EXECUTE FUNCTION check_duplicate_license();
@@ -290,7 +309,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_razorpay_payment_link_id
 CREATE INDEX IF NOT EXISTS idx_payments_provider
   ON public.payments (provider);
 
-CREATE TRIGGER IF NOT EXISTS trg_check_failed_payments
+DROP TRIGGER IF EXISTS trg_check_failed_payments ON public.payments;
+CREATE TRIGGER trg_check_failed_payments
   AFTER INSERT OR UPDATE ON public.payments
   FOR EACH ROW
   EXECUTE FUNCTION check_failed_payments();
@@ -309,7 +329,8 @@ CREATE TABLE IF NOT EXISTS public.certificates (
 
 CREATE INDEX IF NOT EXISTS idx_certificates_member_id ON public.certificates(member_id);
 
-CREATE TRIGGER IF NOT EXISTS trg_generate_certificate_id
+DROP TRIGGER IF EXISTS trg_generate_certificate_id ON public.certificates;
+CREATE TRIGGER trg_generate_certificate_id
   BEFORE INSERT ON public.certificates
   FOR EACH ROW
   WHEN (NEW.certificate_id IS NULL OR NEW.certificate_id = '')

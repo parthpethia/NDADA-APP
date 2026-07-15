@@ -265,8 +265,9 @@ serve(async (req) => {
     const now = new Date();
     const issueDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
-    // Generate QR code verification URL
-    const verifyUrl = `${appUrl}/verify?id=${encodeURIComponent(certRecord.certificate_id)}`;
+    // Generate QR code verification URL (uses secure_token if available, falls back to certificate_id)
+    const verificationToken = certRecord.secure_token || certRecord.certificate_id;
+    const verifyUrl = `${appUrl}/verify?id=${encodeURIComponent(verificationToken)}`;
 
     // ============================================================
     // PARALLEL I/O — embed template, fonts, and QR concurrently

@@ -71,21 +71,20 @@ CREATE INDEX IF NOT EXISTS idx_accounts_membership_id ON public.accounts(members
 CREATE INDEX IF NOT EXISTS idx_accounts_reviewed_by ON public.accounts(reviewed_by);
 
 -- Triggers
-CREATE TRIGGER IF NOT EXISTS trg_generate_membership_id_accounts
+DROP TRIGGER IF EXISTS trg_generate_membership_id_accounts ON public.accounts;
+CREATE TRIGGER trg_generate_membership_id_accounts
   BEFORE INSERT ON public.accounts
   FOR EACH ROW
   WHEN (NEW.membership_id IS NULL OR NEW.membership_id = '')
   EXECUTE FUNCTION generate_membership_id();
 
-CREATE TRIGGER IF NOT EXISTS trg_accounts_updated_at
+DROP TRIGGER IF EXISTS trg_accounts_updated_at ON public.accounts;
+CREATE TRIGGER trg_accounts_updated_at
   BEFORE UPDATE ON public.accounts
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 
-CREATE TRIGGER IF NOT EXISTS trg_check_duplicate_license_accounts
-  AFTER INSERT ON public.accounts
-  FOR EACH ROW
-  EXECUTE FUNCTION check_duplicate_license_accounts();
+
 
 -- ============================================================
 -- PHASE 2: Update fraud_flags to reference accounts
@@ -150,6 +149,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path TO pg_catalog, public;
+
+DROP TRIGGER IF EXISTS trg_check_duplicate_license_accounts ON public.accounts;
+CREATE TRIGGER trg_check_duplicate_license_accounts
+  AFTER INSERT ON public.accounts
+  FOR EACH ROW
+  EXECUTE FUNCTION check_duplicate_license_accounts();
 
 -- Update handle_new_user to create account record instead of member
 CREATE OR REPLACE FUNCTION handle_new_user_consolidated()
@@ -252,15 +257,15 @@ SELECT
   f.aadhaar_card_number,
   f.ifms_number,
   f.seed_cotton_license_number,
-  f.seed_cotton_license_expiry,
+  NULLIF(f.seed_cotton_license_expiry, '')::TIMESTAMPTZ,
   f.sarthi_id_cotton,
   f.seed_general_license_number,
-  f.seed_general_license_expiry,
+  NULLIF(f.seed_general_license_expiry, '')::TIMESTAMPTZ,
   f.sarthi_id_general,
   f.pesticide_license_number,
-  f.pesticide_license_expiry,
+  NULLIF(f.pesticide_license_expiry, '')::TIMESTAMPTZ,
   f.fertilizer_license_number,
-  f.fertilizer_license_expiry,
+  NULLIF(f.fertilizer_license_expiry, '')::TIMESTAMPTZ,
   f.residence_address,
   f.residence_pin_code,
   f.applicant_photo_url,

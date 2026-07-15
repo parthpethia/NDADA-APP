@@ -5,7 +5,12 @@
 -- about payment, approval, certificate, and system events
 -- ============================================================
 
-CREATE TYPE notification_type AS ENUM ('payment', 'approval', 'certificate', 'system');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
+    CREATE TYPE notification_type AS ENUM ('payment', 'approval', 'certificate', 'system');
+  END IF;
+END$$;
 
 CREATE TABLE public.notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

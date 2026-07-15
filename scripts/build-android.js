@@ -5,6 +5,9 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const androidDir = path.join(projectRoot, 'android');
 
+// Redirect Gradle caches to the D: drive to free up C: space and avoid Windows MAX_PATH (260 char) limits
+process.env.GRADLE_USER_HOME = 'D:\\.gradle';
+
 // Check if we are running in clean-only mode
 const cleanOnly = process.argv.includes('--clean-only');
 
@@ -56,6 +59,7 @@ function deleteCxxDirs(dir) {
   }
 }
 deleteCxxDirs(androidDir);
+deleteCxxDirs(path.join(projectRoot, 'node_modules'));
 
 // Run gradle clean
 spawnSync(
@@ -74,6 +78,8 @@ if (cleanOnly) {
 console.log('=== [3/3] Building Release Android App Bundle (AAB) ===');
 // Limit C++ compiler parallel threads globally to avoid Windows paging file/OOM crashes
 process.env.CMAKE_BUILD_PARALLEL_LEVEL = '1';
+// Increase Node memory limit to prevent Metro bundler OOM crashes
+process.env.NODE_OPTIONS = '--max-old-space-size=4096';
 
 const gradleArgs = [
   'bundleRelease',

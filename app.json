@@ -37,9 +37,11 @@
       "expo-secure-store"
     ],
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "7151a0a9-f592-4e17-a71d-4d044b66ae57"
       }
-    }
+    },
+    "owner": "parthpethia13"
   }
 }
