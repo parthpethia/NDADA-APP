@@ -158,15 +158,11 @@ export default function AdminCertificatesScreen() {
       // Delete existing certificate first
       await callAdminAction('delete-certificate', { account_id: cert.member_id });
 
-      // Trigger new generation
-      const { error } = await supabase.functions.invoke('generate-certificate', {
-        body: { member_id: cert.member_id },
-      });
-
-      if (error) throw new Error(error.message || 'Failed to trigger generation');
+      // Enqueue certificate for regeneration via queue & fallback system
+      await callAdminAction('bulk-regenerate', { account_ids: [cert.member_id] });
 
       await fetchCertificates();
-      showAlert('Success', 'Certificate regenerated successfully.');
+      showAlert('Success', 'Certificate enqueued for regeneration successfully.');
     } catch (err: any) {
       showAlert('Error', err?.message || 'Failed to regenerate certificate');
     }

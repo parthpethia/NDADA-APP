@@ -27,8 +27,17 @@ export default function AdminLayout() {
         headerStyle: { backgroundColor: '#14532d' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '600' },
+        headerTitleContainerStyle: Platform.OS === 'web' ? undefined : { maxWidth: '55%' },
         tabBarActiveTintColor: '#15803d',
         tabBarInactiveTintColor: '#9ca3af',
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '500',
+          paddingBottom: 2,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 0,
+        },
         tabBarStyle: {
           paddingBottom: insets.bottom > 0 ? insets.bottom : 6,
           height: 60 + (insets.bottom > 0 ? insets.bottom - 6 : 0),

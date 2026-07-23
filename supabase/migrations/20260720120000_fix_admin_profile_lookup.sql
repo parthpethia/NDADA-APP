@@ -1,14 +1,6 @@
--- Migration 061: Unified get_user_profile() RPC
---
--- Replaces the two separate REST queries (accounts + admin_users) that fire
--- on every login/auth event with a single database round-trip.
---
--- Returns a JSON object with:
---   { account: { ...lightweight fields }, admin: { ...admin fields } | null }
---
--- SECURITY INVOKER: respects existing RLS policies on both tables.
--- Normal users can read their own account row and their own admin_users row
--- (if it exists) via the existing SELECT policies.
+-- Migration: Fix Admin Profile Lookup in get_user_profile() RPC
+-- Created at: 2026-07-20 12:00:00
+-- Version: 20260720120000
 
 CREATE OR REPLACE FUNCTION public.get_user_profile(p_user_id UUID)
 RETURNS JSON
@@ -20,7 +12,7 @@ DECLARE
   v_account JSON;
   v_admin JSON;
 BEGIN
-  -- Fetch essential account fields (lightweight for routing/auth init)
+  -- Fetch essential account fields
   SELECT json_build_object(
     'id', a.id,
     'user_id', a.user_id,
@@ -43,7 +35,7 @@ BEGIN
   FROM public.accounts a
   WHERE a.user_id = p_user_id;
 
-  -- Always check admin_users table regardless of whether account exists
+  -- Always check admin_users table regardless of whether v_account exists
   SELECT json_build_object(
     'id', au.id,
     'user_id', au.user_id,
@@ -61,11 +53,10 @@ BEGIN
 END;
 $$;
 
--- Restrict execution to authenticated users only
+-- Restrict execution permissions
 REVOKE EXECUTE ON FUNCTION public.get_user_profile(UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.get_user_profile(UUID) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_user_profile(UUID) TO authenticated;
 
 COMMENT ON FUNCTION public.get_user_profile IS
-  'Returns lightweight account profile + admin status in a single RPC call. '
-  'Used by the client auth flow to avoid 2 separate REST queries on every login.';
+  'Returns lightweight account profile + admin status in a single RPC call. Always checks admin_users table independently of account presence.';

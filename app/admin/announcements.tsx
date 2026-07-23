@@ -195,7 +195,7 @@ export default function AnnouncementCampaignScreen() {
               />
             </View>
 
-            <View className="flex-row gap-2">
+            <View className="flex-col sm:flex-row gap-2">
               <View className="flex-1">
                 <Text className="text-xs font-bold text-gray-500 mb-1.5">Recipient Scope</Text>
                 <Select

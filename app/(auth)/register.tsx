@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, Select } from '@/components/ui';
 import {
   APP_NAME,
   MEMBERSHIP_AMOUNT,
@@ -91,7 +91,7 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
-        contentContainerClassName="flex-grow justify-center px-6 py-12"
+        contentContainerClassName="flex-grow justify-center px-4 sm:px-6 py-8 sm:py-12"
         keyboardShouldPersistTaps="handled"
       >
         <View className="mx-auto w-full max-w-md">
@@ -101,34 +101,34 @@ export default function RegisterScreen() {
               style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 12 }}
               resizeMode="contain"
             />
-            <Text className="text-3xl font-bold text-primary-800">{APP_NAME}</Text>
-            <Text className="mt-1 text-center text-gray-500">
+            <Text className="text-2xl sm:text-3xl font-bold text-primary-800 text-center">{APP_NAME}</Text>
+            <Text className="mt-1 text-center text-sm text-gray-500">
               Join as a member, pay once, and receive your certificate after approval.
             </Text>
           </View>
 
-          <View className="mb-4 rounded-2xl border border-primary-100 bg-primary-50 p-5">
-            <Text className="text-lg font-semibold text-primary-900">{MEMBERSHIP_PLAN_NAME}</Text>
-            <Text className="mt-1 text-sm text-primary-700">
+          <View className="mb-4 rounded-2xl border border-primary-100 bg-primary-50 p-4 sm:p-5">
+            <Text className="text-base sm:text-lg font-semibold text-primary-900">{MEMBERSHIP_PLAN_NAME}</Text>
+            <Text className="mt-1 text-xs sm:text-sm text-primary-700">
               {formatCurrency(MEMBERSHIP_AMOUNT)} • {MEMBERSHIP_VALIDITY_LABEL}
             </Text>
-            <View className="mt-4 gap-2">
+            <View className="mt-3.5 gap-1.5">
               {MEMBERSHIP_STEPS.map((step, index) => (
-                <Text key={step} className="text-sm text-primary-800">
+                <Text key={step} className="text-xs sm:text-sm text-primary-800">
                   {index + 1}. {step}
                 </Text>
               ))}
             </View>
-            <View className="mt-4 gap-2">
+            <View className="mt-3 gap-1.5">
               {MEMBERSHIP_BENEFITS.slice(0, 2).map((benefit) => (
-                <Text key={benefit} className="text-sm text-primary-700">
+                <Text key={benefit} className="text-xs sm:text-sm text-primary-700">
                   • {benefit}
                 </Text>
               ))}
             </View>
           </View>
 
-          <View className="rounded-2xl bg-white p-6 shadow-sm">
+          <View className="rounded-2xl bg-white px-4 py-5 sm:p-6 shadow-sm">
             {error ? (
               <View className="mb-4 rounded-lg bg-red-50 p-3">
                 <Text className="text-sm text-red-600">{error}</Text>
@@ -165,30 +165,13 @@ export default function RegisterScreen() {
               numberOfLines={3}
             />
 
-            <View className="mb-4">
-              <Text className="mb-2 text-sm font-medium text-gray-700">District (Optional)</Text>
-              <View className="flex-row flex-wrap gap-2">
-                {DISTRICTS.map((district) => (
-                  <TouchableOpacity
-                    key={district}
-                    onPress={() => update('district', form.district === district ? '' : district)}
-                    className={`rounded-full border px-4 py-2 ${
-                      form.district === district
-                        ? 'border-primary-600 bg-primary-50'
-                        : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <Text
-                      className={`text-sm ${
-                        form.district === district ? 'font-medium text-primary-700' : 'text-gray-600'
-                      }`}
-                    >
-                      {district}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <Select
+              label="District (Optional)"
+              options={DISTRICTS.map((d) => ({ label: d, value: d }))}
+              value={form.district}
+              onValueChange={(v) => update('district', v)}
+              placeholder="Select district..."
+            />
 
             <Input
               label="Password *"
@@ -208,6 +191,7 @@ export default function RegisterScreen() {
             <View className="mb-5 mt-2 flex-row items-start gap-2.5">
               <TouchableOpacity
                 onPress={() => setAgreed(!agreed)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 className={`w-5 h-5 rounded border items-center justify-center mt-0.5 ${
                   agreed ? 'bg-primary-600 border-primary-600' : 'border-gray-300 bg-white'
                 }`}

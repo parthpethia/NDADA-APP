@@ -321,29 +321,29 @@ export default function CertificateScreen() {
 
         <Card className="mb-4">
           <CardHeader title="Certificate Details" />
-          <View className="gap-2">
-            <View className="flex-row justify-between">
-              <Text className="text-gray-500">Certificate ID</Text>
-              <Text className="font-medium text-gray-900">
+          <View className="gap-2.5">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-gray-500">Certificate ID</Text>
+              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">
                 {certificate.certificate_id}
               </Text>
             </View>
-            <View className="flex-row justify-between">
-              <Text className="text-gray-500">Member</Text>
-              <Text className="font-medium text-gray-900">{member?.full_name}</Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-gray-500">Member</Text>
+              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">{member?.full_name}</Text>
             </View>
-            <View className="flex-row justify-between">
-              <Text className="text-gray-500">Membership ID</Text>
-              <Text className="font-medium text-gray-900">{certificate.certificate_id}</Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-gray-500">Membership ID</Text>
+              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">{certificate.certificate_id}</Text>
             </View>
-            <View className="flex-row justify-between">
-              <Text className="text-gray-500">Issued</Text>
-              <Text className="font-medium text-gray-900">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-gray-500">Issued</Text>
+              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">
                 {formatDateTime(certificate.issued_at)}
               </Text>
             </View>
-            <View className="flex-row justify-between">
-              <Text className="text-gray-500">Status</Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-gray-500">Status</Text>
               <StatusBadge status={certificate.status} />
             </View>
           </View>

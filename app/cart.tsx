@@ -176,13 +176,21 @@ export default function CartScreen() {
         checkoutRef.current.open();
       } else {
         // React Native: try react-native-razorpay, fallback to WebBrowser
+        let razorpayOpened = false;
         try {
-          const RazorpayCheckoutModule = require('react-native-razorpay').default;
-          RazorpayCheckoutModule.open(checkoutOptions)
-            .then((response: any) => handlePaymentSuccess(response))
-            .catch((error: any) => handlePaymentFailure(error));
+          const RazorpayCheckoutModule = require('react-native-razorpay')?.default || require('react-native-razorpay');
+          if (RazorpayCheckoutModule && typeof RazorpayCheckoutModule.open === 'function') {
+            razorpayOpened = true;
+            RazorpayCheckoutModule.open(checkoutOptions)
+              .then((response: any) => handlePaymentSuccess(response))
+              .catch((error: any) => handlePaymentFailure(error));
+          }
         } catch (err: any) {
-          console.warn('⚠️ react-native-razorpay not available, opening in browser');
+          console.warn('⚠️ react-native-razorpay native module unavailable:', err?.message || err);
+        }
+
+        if (!razorpayOpened) {
+          console.log('🌐 Opening checkout in WebBrowser...');
           await WebBrowser.openBrowserAsync(
             `https://checkout.razorpay.com/?key_id=${keyId}&order_id=${orderData.id}`
           );
@@ -457,9 +465,9 @@ export default function CartScreen() {
 
 function CartRow({ label, value }: { label: string; value: string }) {
   return (
-    <View className="flex-row justify-between">
+    <View className="flex-row justify-between items-center gap-2 py-0.5">
       <Text className="text-sm text-gray-500">{label}</Text>
-      <Text className="text-sm font-medium text-gray-900">{value}</Text>
+      <Text className="text-sm font-medium text-gray-900 flex-1 text-right" numberOfLines={2}>{value || 'N/A'}</Text>
     </View>
   );
 }

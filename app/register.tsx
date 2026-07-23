@@ -1,5 +1,10 @@
 import { Redirect } from 'expo-router';
+import { useAuth } from '@/lib/auth';
 
 export default function RegisterScreen() {
-  return <Redirect href="/(dashboard)/firms/new" />;
+  const { session } = useAuth();
+  if (session) {
+    return <Redirect href="/(dashboard)/firms/new" />;
+  }
+  return <Redirect href="/(auth)/register" />;
 }

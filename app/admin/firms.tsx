@@ -60,7 +60,7 @@ function EditableField({ label, value, displayValue, fieldKey, editMode, editDat
 }) {
   return (
     <View className="flex-row justify-between items-center py-0.5">
-      <Text className="text-xs text-gray-500 flex-1">{label}</Text>
+      <Text className="text-xs text-gray-500 w-2/5 pr-1">{label}</Text>
       {editMode ? (
         <TextInput
           className="flex-1 text-xs text-gray-900 font-semibold text-right border-b border-primary-200 py-0.5 px-1 bg-primary-50/30 rounded"
@@ -70,7 +70,7 @@ function EditableField({ label, value, displayValue, fieldKey, editMode, editDat
           placeholder={`Enter ${label.toLowerCase()}`}
         />
       ) : (
-        <Text className="text-xs text-gray-700 flex-1 text-right">{(displayValue ?? value) || 'N/A'}</Text>
+        <Text className="text-xs text-gray-700 flex-1 text-right" numberOfLines={2}>{(displayValue ?? value) || 'N/A'}</Text>
       )}
     </View>
   );
@@ -336,7 +336,7 @@ export default function AdminFirmsScreen() {
     setSaveLoading(true);
     try {
       // Timestamp/date columns must receive null (not '') when empty,
-      // but NOT NULL text columns (registration_number, license_number, etc.) must keep ''.
+      // and valid ISO date strings when populated.
       const TIMESTAMP_FIELDS = new Set([
         'seed_cotton_license_expiry', 'seed_general_license_expiry',
         'pesticide_license_expiry', 'fertilizer_license_expiry',
@@ -344,7 +344,22 @@ export default function AdminFirmsScreen() {
       const updatePayload: Record<string, any> = {};
       for (const [key, value] of Object.entries(editData)) {
         if (value !== undefined && value !== null) {
-          updatePayload[key] = (value === '' && TIMESTAMP_FIELDS.has(key)) ? null : value;
+          if (TIMESTAMP_FIELDS.has(key)) {
+            const trimmed = String(value).trim();
+            if (!trimmed) {
+              updatePayload[key] = null;
+            } else {
+              const parsed = Date.parse(trimmed);
+              if (isNaN(parsed)) {
+                showAlert('Invalid Date Format', `The date entered for "${key.replace(/_/g, ' ')}" is invalid. Please use YYYY-MM-DD format.`);
+                setSaveLoading(false);
+                return;
+              }
+              updatePayload[key] = new Date(parsed).toISOString();
+            }
+          } else {
+            updatePayload[key] = value;
+          }
         }
       }
 

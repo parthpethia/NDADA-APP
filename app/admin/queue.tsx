@@ -163,7 +163,7 @@ export default function CertificateQueueScreen() {
         <View className="flex-row flex-wrap gap-2 mb-4">
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Avg Compile Time</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Avg Compile Time</Text>
               <Clock size={14} color="#6b7280" />
             </View>
             <Text className="text-lg font-extrabold text-gray-900">{avgProcessingTime}</Text>
@@ -171,7 +171,7 @@ export default function CertificateQueueScreen() {
 
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Pending Queue</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Pending Queue</Text>
               <Activity size={14} color="#16a34a" />
             </View>
             <Text className="text-lg font-extrabold text-primary-600">{pendingCount}</Text>
@@ -179,7 +179,7 @@ export default function CertificateQueueScreen() {
 
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Processing Rate</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Processing Rate</Text>
               <Play size={14} color="#f59e0b" />
             </View>
             <Text className="text-lg font-extrabold text-amber-500">{processingCount}</Text>
@@ -187,7 +187,7 @@ export default function CertificateQueueScreen() {
 
           <View className="flex-1 min-w-[45%] bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Total Failures</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Total Failures</Text>
               <AlertTriangle size={14} color="#ef4444" />
             </View>
             <Text className="text-lg font-extrabold text-red-500">{failedCount}</Text>

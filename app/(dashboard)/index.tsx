@@ -246,7 +246,7 @@ export default function DashboardHome() {
 
       {/* Quick Stats */}
       <View className="flex-row flex-wrap gap-3">
-        <Card className="min-w-[160px] flex-1">
+        <Card className="min-w-[130px] flex-1">
           <View className="flex-row items-center gap-3">
             <View className="rounded-lg bg-primary-100 p-2">
               <Building2 size={20} color="#15803d" />
@@ -257,7 +257,7 @@ export default function DashboardHome() {
             </View>
           </View>
         </Card>
-        <Card className="min-w-[160px] flex-1">
+        <Card className="min-w-[130px] flex-1">
           <View className="flex-row items-center gap-3">
             <View className="rounded-lg bg-green-100 p-2">
               <CreditCard size={20} color="#15803d" />

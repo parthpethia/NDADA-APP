@@ -42,20 +42,27 @@ export function Select({
           error ? 'border-red-500' : 'border-gray-300'
         )}
       >
-        <Text className={cn('text-base', selected ? 'text-gray-900' : 'text-gray-400')}>
+        <Text
+          numberOfLines={1}
+          className={cn('flex-1 pr-2 text-base', selected ? 'text-gray-900' : 'text-gray-400')}
+        >
           {selected ? selected.label : placeholder}
         </Text>
         <ChevronDown size={20} color="#6b7280" />
       </TouchableOpacity>
       {error && <Text className="mt-1 text-sm text-red-600">{error}</Text>}
 
-      <Modal visible={open} transparent animationType="fade">
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity
-          className="flex-1 justify-center bg-black/50 px-6"
+          className="flex-1 justify-center bg-black/50 px-4 py-8"
           activeOpacity={1}
           onPress={() => setOpen(false)}
         >
-          <View className="max-h-[400px] rounded-xl bg-white p-2 shadow-lg">
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation?.()}
+            className="max-h-[75vh] rounded-xl bg-white p-2 shadow-lg"
+          >
             <Text className="px-3 py-2 text-sm font-semibold text-gray-500">
               {label || 'Select an option'}
             </Text>
@@ -74,6 +81,7 @@ export function Select({
                   )}
                 >
                   <Text
+                    numberOfLines={1}
                     className={cn(
                       'text-base',
                       item.value === value
@@ -86,7 +94,7 @@ export function Select({
                 </TouchableOpacity>
               )}
             />
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </View>

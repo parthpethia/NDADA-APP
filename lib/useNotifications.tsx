@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { Notification } from '@/types';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -232,14 +232,30 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
       }
     };
 
+    let lastAppState = AppState.currentState;
+
     // Set up subscription if app is active on mount
-    if (AppState.currentState === 'active') {
+    if (lastAppState === 'active') {
       subscribe();
     }
 
     // AppState change listener
     const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === lastAppState) return;
+      lastAppState = nextAppState;
+
       console.log(`Notifications AppState changed to: ${nextAppState}`);
+
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        if (document.visibilityState === 'hidden' && nextAppState !== 'active') {
+          unsubscribe();
+        } else if (document.visibilityState === 'visible') {
+          fetchCountOnly();
+          subscribe();
+        }
+        return;
+      }
+
       if (nextAppState === 'active') {
         // Catch up on any notifications missed while backgrounded
         fetchCountOnly();
@@ -253,8 +269,6 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     return () => {
       subscription.remove();
       unsubscribe();
-      supabase.realtime.disconnect();
-      console.log('Realtime client disconnected on notifications unmount');
     };
   }, [userId, fetchCountOnly]);
 

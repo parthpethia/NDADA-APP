@@ -204,6 +204,7 @@ RETURNS TABLE (
   pending_reviews BIGINT,
   certificates_count BIGINT
 ) AS $$
+#variable_conflict use_column
 DECLARE
   v_role admin_role;
 BEGIN
@@ -220,7 +221,12 @@ BEGIN
     COUNT(a.id) FILTER (WHERE a.approval_status = 'approved')::BIGINT as approvals_count,
     COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'paid'), 0)::NUMERIC as revenue,
     COUNT(a.id) FILTER (WHERE a.approval_status = 'pending' AND a.payment_status = 'paid')::BIGINT as pending_reviews,
-    (SELECT COUNT(*) FROM public.certificates c WHERE c.member_id IN (SELECT id FROM public.accounts WHERE district = a.district))::BIGINT as certificates_count
+    (
+      SELECT COUNT(*)::BIGINT 
+      FROM public.certificates c 
+      JOIN public.accounts acc ON acc.id = c.member_id 
+      WHERE acc.district IS NOT DISTINCT FROM a.district
+    ) as certificates_count
   FROM public.accounts a
   LEFT JOIN public.payments p ON p.member_id = a.id
   GROUP BY a.district
@@ -276,6 +282,7 @@ RETURNS TABLE (
   status TEXT,
   members_count BIGINT
 ) AS $$
+#variable_conflict use_column
 DECLARE
   v_role admin_role;
 BEGIN
@@ -299,7 +306,8 @@ BEGIN
   FROM public.accounts a
   LEFT JOIN public.certificates c ON c.member_id = a.id
   WHERE a.account_status = 'active'
-  GROUP BY status;
+  GROUP BY 1;
+END;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 

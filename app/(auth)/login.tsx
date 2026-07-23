@@ -15,6 +15,7 @@ import {
 import Head from 'expo-router/head';
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { APP_NAME } from '@/constants';
 import {
   Lock,
@@ -28,6 +29,8 @@ import {
   Scale,
   CheckCircle,
   ArrowRight,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 
 export default function LoginScreen() {
@@ -35,15 +38,14 @@ export default function LoginScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
+  const [contentHeight, setContentHeight] = useState(360);
 
   // Animation value for dropdown
   const dropdownAnim = useRef(new Animated.Value(0)).current;
-
-  // Dynamic height that accounts for error message
-  const formHeight = error ? 360 : 320;
 
   useEffect(() => {
     Animated.timing(dropdownAnim, {
@@ -55,7 +57,7 @@ export default function LoginScreen() {
 
   const dropdownHeight = dropdownAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, formHeight],
+    outputRange: [0, contentHeight],
   });
 
   const dropdownOpacity = dropdownAnim.interpolate({
@@ -64,13 +66,41 @@ export default function LoginScreen() {
   });
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    const inputStr = email.trim();
+    if (!inputStr || !password) {
       setError('Please fill in all fields');
       return;
     }
     setLoading(true);
     setError('');
-    const { error: err } = await signIn(email, password);
+
+    let targetEmail = inputStr;
+    if (!inputStr.includes('@')) {
+      // Input is a Member ID (e.g. NDADA-10042 or 10042)
+      try {
+        const formattedId = inputStr.toUpperCase().startsWith('NDADA-')
+          ? inputStr.toUpperCase()
+          : `NDADA-${inputStr}`;
+
+        const { data: memberAcc } = await supabase
+          .from('accounts')
+          .select('email')
+          .or(`membership_id.eq.${formattedId},membership_id.eq.${inputStr}`)
+          .maybeSingle();
+
+        if (memberAcc?.email) {
+          targetEmail = memberAcc.email;
+        } else {
+          setError(`No account found matching Member ID "${inputStr}". Please check your ID or enter your email.`);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Member ID lookup failed:', err);
+      }
+    }
+
+    const { error: err } = await signIn(targetEmail, password);
     if (err) setError(err);
     setLoading(false);
   };
@@ -82,11 +112,10 @@ export default function LoginScreen() {
     }
   };
 
-  // Responsive card widths — recalculated on resize
+  // Responsive layout breakpoints for mobile devices
+  const useStackedLayout = screenWidth < 440;
   const serviceCardWidth = Math.min((screenWidth - 44) / 2, 200);
   const benefitItemWidth = Math.min((screenWidth - 48) / 2, 220);
-  // On narrow screens (<360px), stack to single column
-  const useStackedLayout = screenWidth < 360;
 
   return (
     <KeyboardAvoidingView
@@ -135,7 +164,7 @@ export default function LoginScreen() {
             }}
           />
 
-          <View className="relative px-6 pt-12 pb-8 items-center">
+          <View className="relative px-5 pt-12 pb-8 items-center">
             {/* Logo */}
             <View className="mb-4 bg-white rounded-full p-1.5 border-2 border-primary-400/30 shadow-lg">
               <Image
@@ -147,23 +176,23 @@ export default function LoginScreen() {
 
             {/* Badge */}
             <View
-              className="mb-5 rounded-full px-5 py-2 flex-row items-center gap-2"
+              className="mb-5 rounded-full px-4 py-1.5 flex-row items-center gap-2"
               style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', borderWidth: 1, borderColor: 'rgba(34, 197, 94, 0.3)' }}
             >
               <View className="w-2 h-2 rounded-full bg-primary-400" />
-              <Text className="text-primary-300 text-xs font-semibold tracking-wide">
+              <Text className="text-primary-300 text-xs font-semibold tracking-wide text-center">
                 Nagpur District Agro Dealers Association
               </Text>
             </View>
 
             {/* Main heading */}
-            <Text className="text-white text-3xl font-bold text-center mb-3 leading-9">
+            <Text className="text-white text-2xl sm:text-3xl font-bold text-center mb-3 leading-8 sm:leading-9">
               Serving Agro Dealers.{'\n'}Strengthening Agriculture.
             </Text>
 
             {/* Subtitle */}
             <Text
-              className="text-center text-sm mb-7 leading-5"
+              className="text-center text-sm mb-6 leading-5 max-w-md"
               style={{ color: 'rgba(187, 247, 208, 0.8)' }}
             >
               A dedicated platform protecting the rights of agro dealers across Nagpur
@@ -171,10 +200,10 @@ export default function LoginScreen() {
             </Text>
 
             {/* Action Buttons */}
-            <View className={`${useStackedLayout ? 'flex-col' : 'flex-row'} items-center gap-3 mb-2`}>
+            <View className={`${useStackedLayout ? 'flex-col w-full max-w-xs' : 'flex-row'} items-center justify-center gap-3 mb-2`}>
               <TouchableOpacity
                 onPress={toggleLogin}
-                className="flex-row items-center gap-2 rounded-lg px-5 py-3"
+                className={`flex-row items-center justify-center gap-2 rounded-xl px-5 py-3.5 ${useStackedLayout ? 'w-full' : ''}`}
                 style={{
                   backgroundColor: loginOpen ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.12)',
                   borderWidth: 1,
@@ -182,21 +211,21 @@ export default function LoginScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <Lock size={15} color="#bbf7d0" />
+                <Lock size={16} color="#bbf7d0" />
                 <Text className="text-white font-semibold text-sm">Member login</Text>
                 {loginOpen ? (
-                  <ChevronUp size={14} color="#bbf7d0" />
+                  <ChevronUp size={16} color="#bbf7d0" />
                 ) : (
-                  <ChevronDown size={14} color="#bbf7d0" />
+                  <ChevronDown size={16} color="#bbf7d0" />
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => router.push('/(auth)/register')}
-                className="flex-row items-center gap-2 rounded-lg px-5 py-3 bg-primary-600"
+                className={`flex-row items-center justify-center gap-2 rounded-xl px-5 py-3.5 bg-primary-600 ${useStackedLayout ? 'w-full' : ''}`}
                 activeOpacity={0.8}
               >
-                <UserPlus size={15} color="#fff" />
+                <UserPlus size={16} color="#fff" />
                 <Text className="text-white font-semibold text-sm">Register as member</Text>
               </TouchableOpacity>
             </View>
@@ -208,68 +237,88 @@ export default function LoginScreen() {
                 opacity: dropdownOpacity,
                 overflow: 'hidden',
                 width: '100%',
-                maxWidth: 380,
+                maxWidth: 400,
               }}
             >
               <View
+                onLayout={(e) => {
+                  const h = e.nativeEvent.layout.height;
+                  if (h > 0 && Math.abs(h - contentHeight) > 2) {
+                    setContentHeight(h + 8);
+                  }
+                }}
                 className="mt-4 rounded-2xl p-5"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: 'rgba(255,255,255,0.09)',
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
+                  borderColor: 'rgba(255,255,255,0.16)',
                 }}
               >
                 {/* Error */}
                 {error ? (
-                  <View className="mb-3 rounded-lg p-3 flex-row items-center gap-2" style={{ backgroundColor: 'rgba(239,68,68,0.15)' }}>
-                    <AlertCircle size={14} color="#fca5a5" />
-                    <Text className="text-sm flex-1" style={{ color: '#fca5a5' }}>{error}</Text>
+                  <View className="mb-3.5 rounded-xl p-3 flex-row items-center gap-2" style={{ backgroundColor: 'rgba(239,68,68,0.18)' }}>
+                    <AlertCircle size={15} color="#fca5a5" />
+                    <Text className="text-xs flex-1 leading-4 font-medium" style={{ color: '#fca5a5' }}>{error}</Text>
                   </View>
                 ) : null}
 
                 {/* Email / Member ID Input */}
-                <Text className="mb-1.5 text-xs font-medium" style={{ color: 'rgba(187,247,208,0.7)' }}>
+                <Text className="mb-1.5 text-xs font-medium" style={{ color: 'rgba(187,247,208,0.85)' }}>
                   Email / Member ID
                 </Text>
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="you@example.com"
+                  placeholder="you@example.com or NDADA-10042"
                   placeholderTextColor="rgba(156,163,175,0.6)"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  className="mb-3 rounded-lg px-4 py-3 text-sm"
+                  className="mb-3 rounded-xl px-4 py-3 text-sm"
                   style={{
                     backgroundColor: 'rgba(255,255,255,0.07)',
                     borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.12)',
+                    borderColor: 'rgba(255,255,255,0.14)',
                     color: '#fff',
                   }}
                 />
 
-                {/* Password Input */}
-                <Text className="mb-1.5 text-xs font-medium" style={{ color: 'rgba(187,247,208,0.7)' }}>
+                {/* Password Input with Eye Toggle */}
+                <Text className="mb-1.5 text-xs font-medium" style={{ color: 'rgba(187,247,208,0.85)' }}>
                   Password
                 </Text>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor="rgba(156,163,175,0.6)"
-                  secureTextEntry
-                  className="mb-3 rounded-lg px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: 'rgba(255,255,255,0.07)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.12)',
-                    color: '#fff',
-                  }}
-                />
+                <View className="relative mb-3">
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Enter your password"
+                    placeholderTextColor="rgba(156,163,175,0.6)"
+                    secureTextEntry={!showPassword}
+                    className="rounded-xl px-4 py-3 text-sm pr-11"
+                    style={{
+                      backgroundColor: 'rgba(255,255,255,0.07)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.14)',
+                      color: '#fff',
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    activeOpacity={0.7}
+                    className="absolute right-0 top-0 bottom-0 px-3.5 items-center justify-center"
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={18} color="rgba(187,247,208,0.8)" />
+                    ) : (
+                      <Eye size={18} color="rgba(187,247,208,0.8)" />
+                    )}
+                  </TouchableOpacity>
+                </View>
 
                 {/* Forgot Password */}
-                <View className="items-end mb-3">
+                <View className="items-end mb-4">
                   <Link href="/(auth)/forgot-password">
-                    <Text className="text-xs font-medium text-primary-300">Forgot Password?</Text>
+                    <Text className="text-xs font-medium text-primary-300 underline">Forgot Password?</Text>
                   </Link>
                 </View>
 
@@ -277,7 +326,7 @@ export default function LoginScreen() {
                 <TouchableOpacity
                   onPress={handleLogin}
                   disabled={loading}
-                  className="rounded-lg py-3 items-center justify-center flex-row gap-2 bg-primary-600"
+                  className="rounded-xl py-3.5 items-center justify-center flex-row gap-2 bg-primary-600 active:bg-primary-700"
                   activeOpacity={0.85}
                   style={{ opacity: loading ? 0.6 : 1 }}
                 >
@@ -423,11 +472,11 @@ export default function LoginScreen() {
 function StatItem({ value, label, border }: { value: string; label: string; border?: boolean }) {
   return (
     <View
-      className="flex-1 items-center py-4"
+      className="flex-1 items-center py-4 px-1"
       style={border ? { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e5e7eb' } : undefined}
     >
-      <Text className="text-xl font-bold text-gray-900">{value}</Text>
-      <Text className="text-[10px] text-gray-500 mt-0.5">{label}</Text>
+      <Text className="text-xl font-bold text-gray-900 text-center" numberOfLines={1}>{value}</Text>
+      <Text className="text-[10px] text-gray-500 mt-0.5 text-center" numberOfLines={2}>{label}</Text>
     </View>
   );
 }
@@ -446,7 +495,7 @@ function ServiceCard({
   return (
     <View
       className="rounded-xl border border-gray-200 bg-white p-4"
-      style={width ? { width } : { flex: 1, minWidth: 140 }}
+      style={width ? { width } : { width: '100%' }}
     >
       <View className="mb-3 w-10 h-10 rounded-lg bg-primary-50 items-center justify-center">
         {icon}
@@ -459,7 +508,7 @@ function ServiceCard({
 
 function BenefitItem({ text, width }: { text: string; width?: number }) {
   return (
-    <View className="flex-row items-center gap-2" style={width ? { width } : { flex: 1, minWidth: 140 }}>
+    <View className="flex-row items-center gap-2" style={width ? { width } : { width: '100%' }}>
       <CheckCircle size={14} color="#16a34a" />
       <Text className="text-xs text-gray-700 flex-1">{text}</Text>
     </View>

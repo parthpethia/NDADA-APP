@@ -96,7 +96,10 @@ function MobileStepIndicator({
                   </Text>
                 )}
               </View>
-              <Text className={`mt-1.5 text-xs font-medium ${done || current ? 'text-primary-700' : 'text-gray-400'}`}>
+              <Text
+                numberOfLines={1}
+                className={`mt-1.5 text-[10px] sm:text-xs font-medium ${done || current ? 'text-primary-700 font-semibold' : 'text-gray-400'}`}
+              >
                 {step.shortLabel}
               </Text>
             </TouchableOpacity>

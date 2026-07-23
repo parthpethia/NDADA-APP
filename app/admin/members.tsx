@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, TextInput, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TextInput, Alert, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, StatusBadge, Select } from '@/components/ui';
@@ -75,8 +75,9 @@ export default function AdminMembersScreen() {
   const fetchSavedFilters = useCallback(async () => {
     try {
       const result = await callAdminAction('get-saved-filters', {});
-      if (result && result.filters) {
-        setSavedFilters(result.filters);
+      if (result) {
+        const filters = result.filters || result.data || [];
+        setSavedFilters(filters);
       }
     } catch (err: any) {
       console.error('Failed to fetch saved filters:', err.message);
@@ -181,15 +182,14 @@ export default function AdminMembersScreen() {
     try {
       const payload: Record<string, any> = { account_ids: selectedIds };
       if (action === 'bulk-reject') {
-        // Alert.prompt is iOS-only; use cross-platform approach
         let reason = 'Requirements not met';
-        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-          const input = window.prompt('Bulk Rejection Reason:\nProvide feedback to rejected candidates:', reason);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof (window as any).prompt === 'function') {
+          const input = (window as any).prompt('Bulk Rejection Reason:\nProvide feedback to rejected candidates:', reason);
           if (input === null) {
             setBulkProcessing(false);
             return;
           }
-          reason = input || reason;
+          reason = input.trim() || reason;
         }
         try {
           await callAdminAction('bulk-reject', { account_ids: selectedIds, reason });
@@ -360,7 +360,7 @@ export default function AdminMembersScreen() {
         </View>
 
         {/* Manual Selection Dropdown Filters */}
-        <View className="flex-row gap-2 mt-1">
+        <View className="flex-col sm:flex-row gap-2 mt-1">
           <View className="flex-1">
             <Select
               value={filterApproval}

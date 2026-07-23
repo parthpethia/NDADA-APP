@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Account, AdminUser } from '@/types';
 import { fetchUserProfile, UserProfileResponse } from './queries';
 import { cacheClear } from './queryCache';
@@ -53,14 +55,25 @@ const ACCOUNT_SELECT_COLUMNS = [
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, _setUser] = useState<User | null>(null);
+  const userRef = useRef<User | null>(null);
+  const setUser = useCallback((u: User | null) => {
+    userRef.current = u;
+    _setUser(u);
+  }, []);
+
   const [member, setMember] = useState<Account | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   // profileReady: false while profile (member + admin) is being fetched after
-  // a session change.  Routing guards must wait for this before redirecting so
+  // a session change. Routing guards must wait for this before redirecting so
   // that adminUser is resolved before any navigation decision.
-  const [profileReady, setProfileReady] = useState(false);
+  const [profileReady, _setProfileReady] = useState(false);
+  const profileReadyRef = useRef(false);
+  const setProfileReady = useCallback((val: boolean) => {
+    profileReadyRef.current = val;
+    _setProfileReady(val);
+  }, []);
 
   // In-flight request deduplication
   const profileRequestRef = useRef<Promise<void> | null>(null);
@@ -72,6 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Broader check for invalid/expired session errors from Supabase
   const isInvalidSessionError = (message?: string | null): boolean => {
     const errorMessage = String(message || '').toLowerCase();
+    // Exclude network/connection/timeout errors explicitly
+    if (
+      errorMessage.includes('fetcherror') ||
+      errorMessage.includes('network request failed') ||
+      errorMessage.includes('failed to fetch') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('abort')
+    ) {
+      return false;
+    }
     return (
       errorMessage.includes('invalid refresh token') ||
       errorMessage.includes('refresh token not found') ||
@@ -110,6 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Silently fail
       }
     }
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const sbKeys = keys.filter(k => k.startsWith('sb-'));
+      if (sbKeys.length > 0) {
+        await Promise.all(sbKeys.map(k => AsyncStorage.removeItem(k)));
+      }
+    } catch (e) {
+      // Silently fail
+    }
 
     setSession(null);
     setUser(null);
@@ -143,6 +175,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Set admin status unconditionally from profile RPC result
+    const cachedAdmin = profile?.admin ?? null;
+    adminCacheRef.current.set(userId, cachedAdmin);
+    setAdminUser(cachedAdmin);
+
     if (profile?.account) {
       // Merge lightweight fields into the Account type.
       // Existing full-profile fields (from a prior refreshMember) are preserved
@@ -151,18 +188,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...(prev && prev.user_id === userId ? prev : {} as Account),
         ...profile.account,
       } as Account));
-
-      // Cache admin status
-      const cachedAdmin = profile.admin ?? null;
-      adminCacheRef.current.set(userId, cachedAdmin);
-      setAdminUser(cachedAdmin);
       return;
     }
 
     // No account found — try to create one if we have user metadata
     if (!currentUser) {
       setMember(null);
-      setAdminUser(null);
       return;
     }
 
@@ -192,14 +223,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (createError) {
       console.error('Failed to create account profile:', createError.message, createError.details, createError.hint);
       setMember(null);
-      setAdminUser(null);
       return;
     }
 
     setMember(createdAccount as unknown as Account);
-    // New account — definitely not an admin
-    adminCacheRef.current.set(userId, null);
-    setAdminUser(null);
   }, []);
 
   /**
@@ -305,12 +332,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // refreshMember: re-fetches the FULL account (all 47 columns) from the database.
   // This is used after profile edits, form submissions, payment updates, etc.
   const refreshMember = useCallback(async () => {
-    if (!user) return;
+    if (!userRef.current) return;
     try {
       const { data, error } = await supabase
         .from('accounts')
         .select(ACCOUNT_SELECT_COLUMNS)
-        .eq('user_id', user.id)
+        .eq('user_id', userRef.current.id)
         .maybeSingle();
 
       if (error) {
@@ -321,22 +348,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMember(data as unknown as Account);
       } else {
         console.log('refreshMember: profile not found, attempting auto-creation/reload fallback');
-        await loadUserProfile(user.id, user);
+        await loadUserProfile(userRef.current.id, userRef.current);
       }
     } catch (err) {
       console.warn('refreshMember error:', err);
     }
-  }, [user, loadUserProfile]);
+  }, [loadUserProfile]);
 
   // Helper: load user profile data with error recovery
   const loadProfile = async (currentSession: Session): Promise<boolean> => {
     try {
       await loadUserProfile(currentSession.user.id, currentSession.user);
       return true;
-    } catch (err) {
-      console.warn('Auth: profile fetch failed, clearing invalid session:', err);
-      await clearInvalidSession();
-      return false;
+    } catch (err: any) {
+      console.warn('Auth: profile fetch failed:', err);
+      if (isInvalidSessionError(err?.message)) {
+        await clearInvalidSession();
+        return false;
+      }
+      // Preserve session on non-auth/network errors
+      return true;
     }
   };
 
@@ -347,6 +378,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // to skip the duplicate load from onAuthStateChange(INITIAL_SESSION)
     let profileLoaded = false;
 
+    // React Native AppState listener for auto-refresh handling across APK lifecycle
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+      } else if (state === 'background' || state === 'inactive') {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
     const initializeAuth = async () => {
       try {
         // Wrap getSession in a timeout — if the SDK's internal token refresh
@@ -355,7 +395,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const sessionResult = await Promise.race([
           supabase.auth.getSession(),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('getSession timed out')), 5000)
+            setTimeout(() => reject(new Error('getSession timed out')), 15000)
           ),
         ]);
         const { data: { session: currentSession }, error } = sessionResult;
@@ -364,22 +404,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isInvalidSessionError(error.message)) {
             console.warn('Auth: clearing invalid session on init:', error.message);
             await clearInvalidSession();
+            return;
           } else {
-            console.warn('Failed to restore auth session:', error.message);
+            console.warn('Auth: non-fatal session restore warning (preserving state):', error.message);
           }
-          return;
         }
 
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
-          const ok = await loadProfile(currentSession);
+        let effectiveSession = currentSession;
+        // If currentSession is null from getSession, check if stored session exists in AsyncStorage directly
+        // to prevent false logouts on APK cold boot timing glitches
+        if (!effectiveSession) {
+          try {
+            const keys = await AsyncStorage.getAllKeys();
+            const sbKey = keys.find(k => k.startsWith('sb-') && k.includes('auth-token'));
+            if (sbKey) {
+              const rawStored = await AsyncStorage.getItem(sbKey);
+              if (rawStored) {
+                const parsedStored = JSON.parse(rawStored);
+                if (parsedStored?.access_token && parsedStored?.user) {
+                  console.log('Auth: recovered stored session from AsyncStorage fallback on init');
+                  effectiveSession = parsedStored as Session;
+                }
+              }
+            }
+          } catch (storageErr) {
+            console.warn('Auth: AsyncStorage raw session fallback check failed:', storageErr);
+          }
+        }
+
+        setSession(effectiveSession);
+        setUser(effectiveSession?.user ?? null);
+        if (effectiveSession?.user) {
+          const ok = await loadProfile(effectiveSession);
           if (ok) profileLoaded = true;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Auth initialization error:', err);
-        // On any unexpected error, clear session to prevent stuck state
-        await clearInvalidSession();
+        if (isInvalidSessionError(err?.message)) {
+          await clearInvalidSession();
+        } else {
+          console.warn('Auth init failed due to non-auth error (e.g. network/timeout), preserving session');
+        }
       } finally {
         initialized = true;
         setProfileReady(true);
@@ -400,6 +465,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
+        const previousUserId = userRef.current?.id;
+        const newUserId = newSession?.user?.id;
+        const isSameUser = !!(previousUserId && newUserId && previousUserId === newUserId);
+
         // Run state updates synchronously so the UI updates immediately
         setSession(newSession);
         setUser(newSession?.user ?? null);
@@ -407,6 +476,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Skip profile fetch for INITIAL_SESSION if initializeAuth already loaded it.
         // This prevents the double-fetch that fires 4 queries instead of 2.
         if (event === 'INITIAL_SESSION' && profileLoaded) {
+          if (!initialized) {
+            initialized = true;
+            setProfileReady(true);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // If it's a token refresh for the SAME user and profile is ALREADY ready,
+        // do not reset profileReady to false (which would trigger LoadingScreen & unmount the UI).
+        if (event === 'TOKEN_REFRESHED' && isSameUser && profileReadyRef.current) {
           if (!initialized) {
             initialized = true;
             setProfileReady(true);
@@ -439,12 +519,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Mark profile as NOT ready — routing guards must wait until the
-        // admin/member lookup completes before making navigation decisions.
-        // Without this, the deferred setTimeout below causes a window where
-        // session exists but adminUser is still null, sending admins to the
-        // member dashboard.
-        if (newSession?.user) {
+        // Only mark profile as NOT ready if the user ID actually changed or profile was not ready yet.
+        // This avoids unnecessary UI unmounts/reloads during background auth events.
+        if (newSession?.user && (!isSameUser || !profileReadyRef.current)) {
           setProfileReady(false);
         }
 
@@ -453,7 +530,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(async () => {
           if (newSession?.user) {
             try {
-              await loadUserProfile(newSession.user.id, newSession.user);
+              if (!isSameUser || !profileReadyRef.current) {
+                await loadUserProfile(newSession.user.id, newSession.user);
+              }
             } catch (err) {
               console.warn('Auth: onAuthStateChange profile fetch failed:', err);
               // If profile loading fails due to auth error, clear session
@@ -479,6 +558,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       clearTimeout(safetyTimer);
+      appStateSubscription.remove();
       subscription.unsubscribe();
     };
   }, []);

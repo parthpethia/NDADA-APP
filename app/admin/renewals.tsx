@@ -217,7 +217,7 @@ export default function RenewalsWorkflowScreen() {
             }`}
             onPress={() => setSelectedBucket('expired')}
           >
-            <Text className="text-[10px] uppercase font-bold text-red-600 mb-1">Expired Members</Text>
+            <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-red-600 mb-1">Expired Members</Text>
             <Text className="text-xl font-extrabold text-gray-900">{counts.expired}</Text>
           </TouchableOpacity>
 
@@ -227,7 +227,7 @@ export default function RenewalsWorkflowScreen() {
             }`}
             onPress={() => setSelectedBucket('0_30')}
           >
-            <Text className="text-[10px] uppercase font-bold text-orange-600 mb-1">Expiring (0-30 Days)</Text>
+            <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-orange-600 mb-1">Expiring (0-30 Days)</Text>
             <Text className="text-xl font-extrabold text-gray-900">{counts['0_30_days']}</Text>
           </TouchableOpacity>
 
@@ -237,7 +237,7 @@ export default function RenewalsWorkflowScreen() {
             }`}
             onPress={() => setSelectedBucket('31_60')}
           >
-            <Text className="text-[10px] uppercase font-bold text-yellow-600 mb-1">Expiring (31-60 Days)</Text>
+            <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-yellow-600 mb-1">Expiring (31-60 Days)</Text>
             <Text className="text-xl font-extrabold text-gray-900">{counts['31_60_days']}</Text>
           </TouchableOpacity>
 
@@ -247,7 +247,7 @@ export default function RenewalsWorkflowScreen() {
             }`}
             onPress={() => setSelectedBucket('61_90')}
           >
-            <Text className="text-[10px] uppercase font-bold text-primary-600 mb-1">Expiring (61-90 Days)</Text>
+            <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-primary-600 mb-1">Expiring (61-90 Days)</Text>
             <Text className="text-xl font-extrabold text-gray-900">{counts['61_90_days']}</Text>
           </TouchableOpacity>
         </View>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, TextInput, Alert, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TextInput, Alert, TouchableOpacity, Linking, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, Badge, StatusBadge, Select } from '@/components/ui';
@@ -394,12 +394,11 @@ export default function Member360Screen() {
                       variant="destructive"
                       size="sm"
                       onPress={() => {
-                        // Alert.prompt is iOS-only; use cross-platform approach
                         let reason = 'Requirements not met';
-                        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-                          const input = window.prompt('Rejection Reason:\nProvide rejection feedback to applicant:', reason);
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof (window as any).prompt === 'function') {
+                          const input = (window as any).prompt('Rejection Reason:\nProvide rejection feedback to applicant:', reason);
                           if (input === null) return;
-                          reason = input || reason;
+                          reason = input.trim() || reason;
                         }
                         handleQuickAction('reject-account', { reason }, 'reject this application');
                       }}

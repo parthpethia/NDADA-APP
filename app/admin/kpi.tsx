@@ -121,43 +121,43 @@ export default function ExecutiveKPIDashboardScreen() {
           {/* Conversion Yield Card */}
           <Card className="flex-1 min-w-[45%] bg-white p-3 border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Conversion Rate</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Conversion Rate</Text>
               <ShieldCheck size={14} color="#16a34a" />
             </View>
             <Text className="text-xl font-extrabold text-gray-900">{kpis.conversion_rate_pct}%</Text>
-            <Text className="text-[9px] text-gray-400 mt-1">Approved to total registrations ratio.</Text>
+            <Text numberOfLines={1} className="text-[9px] text-gray-400 mt-1">Approved to total registrations ratio.</Text>
           </Card>
 
           {/* Month-over-Month Growth Card */}
           <Card className="flex-1 min-w-[45%] bg-white p-3 border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">MoM Growth Rate</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">MoM Growth Rate</Text>
               <TrendingUp size={14} color={kpis.monthly_growth_rate_pct >= 0 ? '#16a34a' : '#dc2626'} />
             </View>
             <Text className={`text-xl font-extrabold ${kpis.monthly_growth_rate_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {kpis.monthly_growth_rate_pct >= 0 ? '+' : ''}{kpis.monthly_growth_rate_pct}%
             </Text>
-            <Text className="text-[9px] text-gray-400 mt-1">Current month vs previous month.</Text>
+            <Text numberOfLines={1} className="text-[9px] text-gray-400 mt-1">Current month vs previous month.</Text>
           </Card>
 
           {/* Outstanding Invoice Card */}
           <Card className="flex-1 min-w-[45%] bg-white p-3 border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Outstanding Invoices</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Outstanding Invoices</Text>
               <DollarSign size={14} color="#16a34a" />
             </View>
             <Text className="text-lg font-extrabold text-primary-600">₹{kpis.outstanding_invoices_rupees.toLocaleString('en-IN')}</Text>
-            <Text className="text-[9px] text-gray-400 mt-1">Uncollected pending fee receivables.</Text>
+            <Text numberOfLines={1} className="text-[9px] text-gray-400 mt-1">Uncollected pending fee receivables.</Text>
           </Card>
 
           {/* Operational Review Speed Card */}
           <Card className="flex-1 min-w-[45%] bg-white p-3 border border-gray-100 shadow-sm">
             <View className="flex-row justify-between items-center mb-1">
-              <Text className="text-[10px] uppercase font-bold text-gray-400">Review Turnaround</Text>
+              <Text numberOfLines={1} className="text-[10px] uppercase font-bold text-gray-400">Review Turnaround</Text>
               <Clock size={14} color="#4f46e5" />
             </View>
             <Text className="text-lg font-extrabold text-gray-900">{kpis.average_review_hours}h</Text>
-            <Text className="text-[9px] text-gray-400 mt-1">Average submission to review latency.</Text>
+            <Text numberOfLines={1} className="text-[9px] text-gray-400 mt-1">Average submission to review latency.</Text>
           </Card>
         </View>
 
