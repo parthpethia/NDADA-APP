@@ -183,25 +183,51 @@ serve(async (req) => {
     console.log('📤 Creating order in Razorpay...');
     console.log('   Amount (paise):', amountPaise);
     console.log('   Receipt:', receipt);
+    console.log('   RAZORPAY_KEY_ID prefix:', razorpayKeyId.substring(0, 12) + '...');
 
     const basicAuth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
-    const razorpayResp = await fetch('https://api.razorpay.com/v1/orders', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basicAuth}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
 
-    const razorpayJson = await razorpayResp.json().catch(() => null);
+    let razorpayResp: Response;
+    try {
+      razorpayResp = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (fetchErr) {
+      console.error('❌ Razorpay fetch network error:', fetchErr);
+      return new Response(JSON.stringify({
+        error: `Network error contacting Razorpay: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('   Razorpay HTTP status:', razorpayResp.status);
+
+    const razorpayRawText = await razorpayResp.text().catch(() => '');
+    console.log('   Razorpay raw response:', razorpayRawText.substring(0, 500));
+
+    let razorpayJson: any = null;
+    try {
+      razorpayJson = JSON.parse(razorpayRawText);
+    } catch (_) {
+      console.error('❌ Razorpay response is not valid JSON');
+    }
 
     if (!razorpayResp.ok) {
-      console.error('❌ Razorpay error:', razorpayJson);
+      console.error('❌ Razorpay error status:', razorpayResp.status);
+      console.error('❌ Razorpay error body:', JSON.stringify(razorpayJson));
       const errorMsg = razorpayJson?.error?.description || `Razorpay API failed (${razorpayResp.status})`;
       return new Response(JSON.stringify({
         error: errorMsg,
         razorpay_status: razorpayResp.status,
+        razorpay_error_code: razorpayJson?.error?.code || null,
+        razorpay_error_reason: razorpayJson?.error?.reason || null,
       }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
