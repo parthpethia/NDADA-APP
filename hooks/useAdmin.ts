@@ -640,7 +640,9 @@ export function useAdmin() {
       throw new Error('Not authenticated');
     }
 
-    console.log('🚀 Calling admin action:', action, params);
+    if (__DEV__) {
+      console.log('🚀 Calling admin action:', action, params);
+    }
 
     let data: any = null;
     let error: any = null;
@@ -655,11 +657,15 @@ export function useAdmin() {
       error = invokeErr;
     }
 
-    console.log('📢 Admin action response:', { data, error });
+    if (__DEV__) {
+      console.log('📢 Admin action response:', { data, error });
+    }
 
     if (error) {
       const anyError = error as any;
-      console.error('❌ Admin action error:', anyError);
+      if (__DEV__) {
+        console.error('❌ Admin action error:', anyError);
+      }
 
       const isFetchError =
         anyError.name === 'FunctionsFetchError' ||
@@ -723,7 +729,9 @@ export function useAdmin() {
       throw new Error(finalMessage);
     }
 
-    console.log('✅ Admin action success:', data);
+    if (__DEV__) {
+      console.log('✅ Admin action success:', data);
+    }
     return data;
   }, [session, executeFallbackAdminAction]);
 

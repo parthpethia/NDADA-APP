@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Account, AdminUser } from '@/types';
 import { fetchUserProfile, UserProfileResponse } from './queries';
 import { cacheClear } from './queryCache';
+import { warmStaticDataCache } from './staticDataCache';
 
 interface AuthContextType {
   session: Session | null;
@@ -434,6 +435,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setSession(effectiveSession);
         setUser(effectiveSession?.user ?? null);
+
+        // Pre-warm static data cache in background on app launch
+        warmStaticDataCache().catch(() => {});
+
         if (effectiveSession?.user) {
           const ok = await loadProfile(effectiveSession);
           if (ok) profileLoaded = true;

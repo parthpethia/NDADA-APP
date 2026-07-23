@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -9,17 +9,61 @@ import {
   TrendingUp, Map, Shield, Activity, Megaphone, BarChart2
 } from 'lucide-react-native';
 
+// In-memory cache for admin dashboard stats (60s TTL)
+let _adminStatsCache: { data: DashboardStats; timestamp: number } | null = null;
+const ADMIN_STATS_TTL_MS = 60_000;
+
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    total_members: 0,
-    total_firms: 0,
-    payments_completed: 0,
-    certificates_issued: 0,
-    pending_reviews: 0,
-  });
+  const [stats, setStats] = useState<DashboardStats>(
+    _adminStatsCache?.data ?? {
+      total_members: 0,
+      total_firms: 0,
+      payments_completed: 0,
+      certificates_issued: 0,
+      pending_reviews: 0,
+    }
+  );
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchStats = async () => {
+  /**
+   * Fetch admin stats via single RPC (5 queries → 1).
+   * Falls back to parallel queries if the RPC isn't deployed yet.
+   */
+  const fetchStats = async (skipCache = false) => {
+    // Serve from cache if fresh
+    if (!skipCache && _adminStatsCache) {
+      const age = Date.now() - _adminStatsCache.timestamp;
+      if (age < ADMIN_STATS_TTL_MS) {
+        setStats(_adminStatsCache.data);
+        return;
+      }
+    }
+
+    // Try consolidated RPC first
+    try {
+      const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
+      if (!error && data) {
+        const parsed: DashboardStats = {
+          total_members: data.total_members ?? 0,
+          total_firms: data.total_firms ?? 0,
+          payments_completed: data.payments_completed ?? 0,
+          certificates_issued: data.certificates_issued ?? 0,
+          pending_reviews: data.pending_reviews ?? 0,
+        };
+        _adminStatsCache = { data: parsed, timestamp: Date.now() };
+        setStats(parsed);
+        return;
+      }
+      if (__DEV__) {
+        console.warn('Admin dashboard RPC failed, falling back to separate queries:', error?.message);
+      }
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('Admin dashboard RPC unavailable, using fallback:', err);
+      }
+    }
+
+    // Fallback: 5 parallel queries (for when RPC migration isn't deployed)
     const [accounts, firms, payments, certs, pending] = await Promise.all([
       supabase.from('accounts').select('id', { count: 'exact', head: true }),
       supabase.from('accounts').select('id', { count: 'exact', head: true }).neq('firm_name', ''),
@@ -28,20 +72,22 @@ export default function AdminDashboard() {
       supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending'),
     ]);
 
-    setStats({
+    const fallbackStats: DashboardStats = {
       total_members: accounts.count || 0,
       total_firms: firms.count || 0,
       payments_completed: payments.count || 0,
       certificates_issued: certs.count || 0,
       pending_reviews: pending.count || 0,
-    });
+    };
+    _adminStatsCache = { data: fallbackStats, timestamp: Date.now() };
+    setStats(fallbackStats);
   };
 
   useEffect(() => { fetchStats(); }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchStats();
+    await fetchStats(true);
     setRefreshing(false);
   };
 

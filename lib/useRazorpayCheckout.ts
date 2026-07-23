@@ -1,0 +1,264 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Alert, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
+import { getFunctionsErrorMessage } from '@/lib/utils';
+import * as WebBrowser from 'expo-web-browser';
+
+export interface UseRazorpayCheckoutReturn {
+  paymentLoading: boolean;
+  verifying: boolean;
+  cashSubmitting: boolean;
+  cashError: string | null;
+  handlePayWithRazorpay: () => Promise<void>;
+  confirmCashPayment: () => Promise<void>;
+  setCashError: (err: string | null) => void;
+}
+
+export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
+  const router = useRouter();
+  const { member, refreshMember, session } = useAuth();
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [cashSubmitting, setCashSubmitting] = useState(false);
+  const [cashError, setCashError] = useState<string | null>(null);
+
+  const checkoutRef = useRef<any>(null);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Load Razorpay checkout.js script on Web
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if ((window as any).Razorpay) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const handlePaymentSuccess = useCallback(async (response: any) => {
+    if (__DEV__) {
+      console.log('3️⃣ Payment successful, verifying signature...');
+    }
+    if (isMountedRef.current) {
+      setVerifying(true);
+      setPaymentLoading(false);
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('razorpay-verify-signature', {
+        body: {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        },
+      });
+
+      if (error) {
+        const errMsg = await getFunctionsErrorMessage(error);
+        throw new Error(errMsg);
+      }
+
+      if (!data?.verified) {
+        Alert.alert(
+          'Security Alert',
+          'Payment signature verification failed. This payment has not been processed for security reasons.'
+        );
+        return;
+      }
+
+      if (__DEV__) {
+        console.log('✅ Payment verified successfully');
+      }
+      await refreshMember();
+      Alert.alert('Success', 'Payment verified! Your membership is being confirmed.', [
+        { text: 'View Certificate', onPress: () => router.push('/(dashboard)/certificate') },
+      ]);
+      redirectTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          router.push('/(dashboard)/certificate');
+        }
+      }, 3000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Verification failed';
+      Alert.alert('Verification Error', message);
+    } finally {
+      if (isMountedRef.current) {
+        setVerifying(false);
+      }
+    }
+  }, [refreshMember, router]);
+
+  const handlePaymentFailure = useCallback((error: any) => {
+    if (__DEV__) {
+      console.error('❌ Payment failed:', error);
+    }
+    if (isMountedRef.current) {
+      setPaymentLoading(false);
+    }
+    const errorMessage = error?.description || error?.message || 'Payment failed';
+    Alert.alert('Payment Failed', errorMessage, [
+      { text: 'Retry', onPress: () => void handlePayWithRazorpay() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, []);
+
+  const handlePayWithRazorpay = useCallback(async () => {
+    if (!member) {
+      Alert.alert('Error', 'Member data not found');
+      return;
+    }
+
+    if (!session || !session.access_token) {
+      Alert.alert('Error', 'Not authenticated');
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      await supabase
+        .from('accounts')
+        .update({ payment_method: 'online' })
+        .eq('id', member.id);
+
+      const { data: orderData, error: orderError } = await supabase.functions.invoke('razorpay-create-order', {
+        body: { member_id: member.id },
+      });
+
+      if (orderError) {
+        const errMsg = await getFunctionsErrorMessage(orderError);
+        throw new Error(errMsg);
+      }
+
+      if (!orderData?.id) {
+        throw new Error('Invalid order response');
+      }
+
+      const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
+      if (!keyId) {
+        throw new Error('Razorpay configuration missing (EXPO_PUBLIC_RAZORPAY_KEY_ID)');
+      }
+
+      const checkoutOptions = {
+        key: keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.id,
+        name: 'NDADA Membership',
+        description: 'Registration Fee',
+        prefill: {
+          name: member.full_name,
+          email: member.email,
+          contact: member.phone || '',
+        },
+        notes: {
+          member_id: member.id,
+          membership_id: member.membership_id || '',
+        },
+        theme: { color: '#15803d' },
+        timeout: 600,
+      };
+
+      if (Platform.OS === 'web') {
+        const Razorpay = (window as any).Razorpay;
+        if (!Razorpay) {
+          throw new Error('Razorpay SDK not loaded. Please refresh the page.');
+        }
+
+        checkoutRef.current = new Razorpay({
+          ...checkoutOptions,
+          handler: (response: any) => handlePaymentSuccess(response),
+          modal: {
+            ondismiss: () => {
+              if (isMountedRef.current) setPaymentLoading(false);
+            },
+          },
+        });
+        checkoutRef.current.on('payment.failed', (response: any) => {
+          handlePaymentFailure(response.error);
+        });
+        checkoutRef.current.open();
+      } else {
+        let razorpayOpened = false;
+        try {
+          const RazorpayCheckoutModule = require('react-native-razorpay')?.default || require('react-native-razorpay');
+          if (RazorpayCheckoutModule && typeof RazorpayCheckoutModule.open === 'function') {
+            razorpayOpened = true;
+            RazorpayCheckoutModule.open(checkoutOptions)
+              .then((response: any) => handlePaymentSuccess(response))
+              .catch((error: any) => handlePaymentFailure(error));
+          }
+        } catch (err: any) {
+          if (__DEV__) {
+            console.warn('⚠️ react-native-razorpay native module unavailable:', err?.message || err);
+          }
+        }
+
+        if (!razorpayOpened) {
+          await WebBrowser.openBrowserAsync(
+            `https://checkout.razorpay.com/?key_id=${keyId}&order_id=${orderData.id}`
+          );
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to start payment');
+      if (isMountedRef.current) {
+        setPaymentLoading(false);
+      }
+    }
+  }, [member, session, handlePaymentSuccess, handlePaymentFailure]);
+
+  const confirmCashPayment = useCallback(async () => {
+    if (!member) return;
+    setCashSubmitting(true);
+    setCashError(null);
+    try {
+      const { error } = await supabase
+        .from('accounts')
+        .update({ payment_method: 'cash' })
+        .eq('id', member.id);
+
+      if (error) {
+        setCashError(error.message || 'Failed to process cash payment request');
+        return;
+      }
+
+      router.replace('/(dashboard)/cash-payment-review');
+    } catch (err: any) {
+      setCashError(err?.message || 'Failed to process request');
+    } finally {
+      if (isMountedRef.current) {
+        setCashSubmitting(false);
+      }
+    }
+  }, [member, router]);
+
+  return {
+    paymentLoading,
+    verifying,
+    cashSubmitting,
+    cashError,
+    handlePayWithRazorpay,
+    confirmCashPayment,
+    setCashError,
+  };
+}

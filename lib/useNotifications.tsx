@@ -186,9 +186,6 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     const subscribe = () => {
       if (channel) return;
 
-      // Ensure global realtime client is connected
-      supabase.realtime.connect();
-
       channel = supabase
         .channel(`notifications:${userId}`)
         .on(
@@ -242,7 +239,7 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
         );
 
       channel.subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
+        if (status === 'SUBSCRIBED' && __DEV__) {
           console.log(`Subscribed to notifications:${userId}`);
         }
       });
@@ -252,7 +249,9 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
       if (channel) {
         supabase.removeChannel(channel);
         channel = null;
-        console.log(`Unsubscribed from notifications:${userId}`);
+        if (__DEV__) {
+          console.log(`Unsubscribed from notifications:${userId}`);
+        }
       }
     };
 
