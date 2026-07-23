@@ -2,24 +2,21 @@
 // Periodically checks pending payments against Razorpay APIs and reconciles them in the database.
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 serve(async (req) => {
+  const corsHeaders = {
+    ...getCorsHeaders(req),
+    'Content-Type': 'application/json',
+  };
+
   // CORS Headers support
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
+      headers: corsHeaders,
     });
   }
-
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Content-Type': 'application/json',
-  };
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -128,9 +125,10 @@ serve(async (req) => {
               const ORDER_EXPIRY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
               const isExpired = Number.isFinite(orderCreatedAt) && (Date.now() - orderCreatedAt) > ORDER_EXPIRY_WINDOW_MS;
               if (isExpired) {
-              // Order expired in our DB or timeline
-              finalStatus = 'expired';
-              statusUpdated = true;
+                // Order expired in our DB or timeline
+                finalStatus = 'expired';
+                statusUpdated = true;
+              }
             }
           } else {
             console.error(`   Failed to fetch order details from Razorpay: ${res.statusText}`);
