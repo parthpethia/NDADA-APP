@@ -211,6 +211,97 @@ serve(async (req) => {
     }
 
     // ============================================================
+    // Standard Checkout flow: payment.failed
+    // Fires when a payment attempt fails (declined, timeout, etc.)
+    // ============================================================
+    if (eventType === 'payment.failed') {
+      console.log('⚠️ Payment failed event received');
+
+      const failureReason = String(
+        event?.payload?.payment?.entity?.error_description ||
+        event?.payload?.payment?.entity?.error_reason ||
+        'Payment failed'
+      );
+
+      // Find member via order or payment notes
+      let memberId = memberIdFromNotes;
+
+      if (!memberId && orderId) {
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('id, member_id')
+          .eq('razorpay_order_id', orderId)
+          .single();
+
+        if (orderData) {
+          memberId = orderData.member_id;
+
+          // Update order status
+          await supabase
+            .from('orders')
+            .update({
+              status: 'failed',
+              provider_payload: event,
+            })
+            .eq('id', orderData.id);
+        }
+      }
+
+      // Update payment record if exists
+      if (paymentId) {
+        const { data: existingPayment } = await supabase
+          .from('payments')
+          .select('id, member_id')
+          .eq('razorpay_payment_id', paymentId)
+          .single();
+
+        if (existingPayment) {
+          memberId = memberId || existingPayment.member_id;
+          await supabase
+            .from('payments')
+            .update({
+              status: 'failed',
+              provider_event: eventType,
+              provider_payload: event,
+            })
+            .eq('razorpay_payment_id', paymentId);
+        } else if (orderId) {
+          await supabase
+            .from('payments')
+            .update({
+              status: 'failed',
+              razorpay_payment_id: paymentId,
+              provider_event: eventType,
+              provider_payload: event,
+            })
+            .eq('razorpay_order_id', orderId);
+        }
+      }
+
+      // Update account status — but only if not already 'paid'
+      // (a previous successful attempt on the same order should not be overwritten)
+      if (memberId) {
+        const { data: account } = await supabase
+          .from('accounts')
+          .select('payment_status')
+          .eq('id', memberId)
+          .single();
+
+        if (account && account.payment_status !== 'paid') {
+          await supabase
+            .from('accounts')
+            .update({ payment_status: 'failed' })
+            .eq('id', memberId);
+          console.log('✅ Account payment_status updated to failed');
+        }
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ============================================================
     // Payment Link flow: payment_link.paid / cancelled / expired
     // These events fire when payment is made via a Razorpay Payment Link
     // ============================================================

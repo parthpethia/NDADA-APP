@@ -1,20 +1,31 @@
 import '../global.css';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/lib/auth';
 import { NotificationProvider } from '@/lib/useNotifications';
+import { useErrorTracking } from '@/lib/useErrorTracking';
 import { SplashScreen } from '@/components/SplashScreen';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+// Wrapper to call useErrorTracking inside AuthProvider context
+function ErrorTrackingInit() {
+  useErrorTracking();
+  return null;
+}
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
+  const handleSplashFinish = useCallback(() => setShowSplash(false), []);
 
   return (
-    <SafeAreaProvider>
-      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-      <AuthProvider>
-        <NotificationProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
+        <AuthProvider>
+          <ErrorTrackingInit />
+          <NotificationProvider>
           <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
@@ -70,5 +81,6 @@ export default function RootLayout() {
         </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

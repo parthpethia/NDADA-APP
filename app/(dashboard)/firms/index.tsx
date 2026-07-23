@@ -33,10 +33,10 @@ export default function FirmsListScreen() {
     setRefreshing(false);
   };
 
-  if (!account) {
+  if (!account || !account.firm_name) {
     return (
       <EmptyState
-        title="No Account Found"
+        title="No Firm Registered"
         message="Your firm details are not registered yet. Please complete your registration."
       >
         <Button title="Register Your Firm" onPress={() => router.push('/(dashboard)/firms/new')} />

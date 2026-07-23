@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, Image, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Image, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,19 +10,20 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
-
 interface SplashScreenProps {
   onFinish: () => void;
 }
 
 export function SplashScreen({ onFinish }: SplashScreenProps) {
+  const { width, height } = useWindowDimensions();
+  const isMountedRef = useRef(true);
   const opacity = useSharedValue(0);
   const logoScale = useSharedValue(0.7);
   const textOpacity = useSharedValue(0);
   const textTranslateY = useSharedValue(15);
 
   useEffect(() => {
+    isMountedRef.current = true;
     // Fade in the whole screen
     opacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
 
@@ -33,15 +34,24 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
     textOpacity.value = withDelay(300, withTiming(1, { duration: 400 }));
     textTranslateY.value = withDelay(300, withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) }));
 
+    const handleFinish = () => {
+      if (isMountedRef.current) {
+        onFinish();
+      }
+    };
+
     // After showing for ~1.5s total, fade everything out and call onFinish
     const timeout = setTimeout(() => {
       opacity.value = withTiming(0, { duration: 400, easing: Easing.in(Easing.cubic) }, () => {
-        runOnJS(onFinish)();
+        runOnJS(handleFinish)();
       });
     }, 1500);
 
-    return () => clearTimeout(timeout);
-  }, []);
+    return () => {
+      isMountedRef.current = false;
+      clearTimeout(timeout);
+    };
+  }, [onFinish]);
 
   const containerStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -59,8 +69,8 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
   return (
     <Animated.View style={[styles.container, containerStyle]}>
       {/* Background gradient effect using layered views */}
-      <View style={styles.bgOverlayTop} />
-      <View style={styles.bgOverlayBottom} />
+      <View style={[styles.bgOverlayTop, { height: height * 0.45, borderBottomLeftRadius: width, borderBottomRightRadius: width }]} />
+      <View style={[styles.bgOverlayBottom, { height: height * 0.15 }]} />
 
       <View style={styles.content}>
         <Animated.View style={[styles.logoContainer, logoStyle]}>
@@ -96,17 +106,13 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: height * 0.45,
     backgroundColor: 'rgba(255,255,255,0.03)',
-    borderBottomLeftRadius: width,
-    borderBottomRightRadius: width,
   },
   bgOverlayBottom: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: height * 0.15,
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
   content: {

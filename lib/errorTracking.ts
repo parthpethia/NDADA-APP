@@ -223,10 +223,14 @@ class ErrorTracker {
     }
   }
 
+  private remoteDisabled = false;
+
   /**
    * Report to remote service
    */
   private async reportRemote(report: ErrorReport) {
+    if (this.remoteDisabled) return;
+
     const now = Date.now();
     if (now - this.lastReportTime > 60000) {
       this.reportCount = 0;
@@ -253,10 +257,17 @@ class ErrorTracker {
       if (!error) {
         report.reported = true;
       } else {
-        console.error('[ErrorTracker] Failed to report to remote:', error);
+        // If table doesn't exist or RLS denies access, disable remote reporting to avoid network spam
+        if (error.code === '42P01' || error.message.includes('does not exist') || error.code === '42501') {
+          console.warn('[ErrorTracker] error_logs table not available. Disabling remote tracking.');
+          this.remoteDisabled = true;
+        } else {
+          console.warn('[ErrorTracker] Failed to report to remote:', error.message);
+        }
       }
     } catch (err) {
-      console.error('[ErrorTracker] Failed to report remote error:', err);
+      console.warn('[ErrorTracker] Failed to report remote error, disabling remote tracking:', err);
+      this.remoteDisabled = true;
     }
   }
 

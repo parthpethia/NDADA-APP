@@ -25,6 +25,19 @@ export default function PaymentScreen() {
   const [cashSubmitting, setCashSubmitting] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
   const checkoutRef = useRef<any>(null);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   // Load Razorpay checkout.js script (Web only)
   useEffect(() => {
@@ -50,7 +63,7 @@ export default function PaymentScreen() {
     if (cashPending) {
       router.replace('/(dashboard)/cash-payment-review');
     }
-  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id, router]);
+  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id]);
 
   if (!member) return null;
 
@@ -140,7 +153,7 @@ export default function PaymentScreen() {
         },
         notes: {
           member_id: member.id,
-          membership_id: member.membership_id,
+          membership_id: member.membership_id || '',
         },
         theme: { color: '#15803d' },
         timeout: 600,
@@ -228,14 +241,18 @@ export default function PaymentScreen() {
         { text: 'View Certificate', onPress: () => router.push('/(dashboard)/certificate') },
       ]);
       // Auto-redirect after a short delay if user doesn't tap
-      setTimeout(() => {
-        router.push('/(dashboard)/certificate');
+      redirectTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          router.push('/(dashboard)/certificate');
+        }
       }, 3000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
       Alert.alert('Verification Error', message);
     } finally {
-      setVerifying(false);
+      if (isMountedRef.current) {
+        setVerifying(false);
+      }
     }
   };
 
@@ -378,7 +395,7 @@ export default function PaymentScreen() {
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Membership ID</Text>
-              <Text className="font-medium text-gray-900">{member.membership_id}</Text>
+              <Text className="font-medium text-gray-900">{member.membership_id || 'Assigned after payment'}</Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Fee</Text>
@@ -474,7 +491,7 @@ export default function PaymentScreen() {
               {member.payment_status === 'processing' || verifying ? (
                 <>
                   <Button
-                    title={verifying ? "Verifying Signature..." : "Verify Payment Now"}
+                    title={verifying ? "Verifying Signature..." : "Refresh Payment Status"}
                     onPress={handleRefreshStatus}
                     loading={refreshing || verifying}
                     size="lg"

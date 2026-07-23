@@ -26,10 +26,13 @@ export default function CertificateScreen() {
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
+  const isMountedRef = useRef(true);
 
   // Clean up polling on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -76,22 +79,33 @@ export default function CertificateScreen() {
     if (pollTimerRef.current) return;
 
     pollStartRef.current = Date.now();
-    setQueueStatus('queued');
+    if (isMountedRef.current) setQueueStatus('queued');
 
     pollTimerRef.current = setInterval(async () => {
+      if (!isMountedRef.current) {
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        return;
+      }
+
       // Check timeout
       if (Date.now() - pollStartRef.current > MAX_POLL_DURATION) {
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
           pollTimerRef.current = null;
         }
-        setQueueStatus('idle');
-        setError('Certificate generation is taking longer than expected. Please check back later.');
+        if (isMountedRef.current) {
+          setQueueStatus('idle');
+          setError('Certificate generation is taking longer than expected. Please check back later.');
+        }
         return;
       }
 
       // Check if certificate is ready
       const cert = await checkCertificate();
+      if (!isMountedRef.current) return;
       if (cert) {
         setCertificate(cert);
         setQueueStatus('idle');
@@ -104,7 +118,8 @@ export default function CertificateScreen() {
 
       // Update queue status for UI feedback
       const status = await checkQueueStatus();
-      setQueueStatus(status === 'completed' ? 'processing' : status); // Completed in queue but no cert yet = still processing
+      if (!isMountedRef.current) return;
+      setQueueStatus(status === 'completed' ? 'processing' : status);
       if (status === 'failed') {
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
@@ -334,7 +349,7 @@ export default function CertificateScreen() {
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-500">Membership ID</Text>
-              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">{certificate.certificate_id}</Text>
+              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">{member?.membership_id || 'N/A'}</Text>
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-500">Issued</Text>

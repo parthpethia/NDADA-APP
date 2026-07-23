@@ -328,7 +328,7 @@ export default function Member360Screen() {
         <View className="flex-row items-start justify-between">
           <View className="flex-1 pr-2">
             <Text className="text-xl font-bold text-white">{member.full_name}</Text>
-            <Text className="text-sm font-semibold text-primary-200">{member.membership_id}</Text>
+            <Text className="text-[13px] font-semibold text-primary-200">{member.membership_id || 'ID Pending'}</Text>
           </View>
           <View className="items-end gap-1">
             <StatusBadge status={member.account_status} />

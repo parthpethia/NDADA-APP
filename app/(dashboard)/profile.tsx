@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, Input, StatusBadge, LoadingScreen, EmptyState } from '@/components/ui';
-import { formatDate } from '@/lib/utils';
+import { formatDate, getFunctionsErrorMessage } from '@/lib/utils';
 import { MEMBERSHIP_PLAN_NAME, MEMBERSHIP_VALIDITY_LABEL } from '@/constants';
 import { confirm } from '@/lib/confirm';
 
@@ -41,7 +41,8 @@ export default function ProfileScreen() {
       Alert.alert('Success', 'Your account has been deleted.');
       await signOut();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to delete account. Please try again.');
+      const errorMessage = (await getFunctionsErrorMessage(err)) || err.message || 'Failed to delete account. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -245,7 +246,7 @@ export default function ProfileScreen() {
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Membership ID</Text>
-              <Text className="font-medium text-gray-900">{member.membership_id}</Text>
+              <Text className="font-medium text-gray-900">{member.membership_id || 'Pending'}</Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Validity</Text>

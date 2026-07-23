@@ -156,9 +156,9 @@ export function NotificationBell() {
   const { unreadCount } = useNotifications(user?.id);
 
   return (
-    <TouchableOpacity onPress={() => router.push('/(dashboard)/notifications')}>
+    <TouchableOpacity onPress={() => router.push('/(dashboard)/notifications')} style={{ marginRight: 16 }}>
       <View className="relative">
-        <Bell size={24} color="#1f2937" />
+        <Bell size={24} color="#ffffff" />
         {unreadCount > 0 && (
           <View className="absolute -right-2 -top-2 h-5 w-5 items-center justify-center rounded-full bg-red-500">
             <Text className="text-xs font-bold text-white">

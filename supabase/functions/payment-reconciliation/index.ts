@@ -121,7 +121,13 @@ serve(async (req) => {
                   }
                 }
               }
-            } else if (data.status === 'attempted' && new Date(payment.expires_at || '').getTime() < Date.now()) {
+            } else if (data.status === 'attempted') {
+              // Consider orders expired if they were created more than 30 minutes ago
+              // (expires_at column does not exist; use created_at + window instead)
+              const orderCreatedAt = Date.parse(String(payment.created_at || ''));
+              const ORDER_EXPIRY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+              const isExpired = Number.isFinite(orderCreatedAt) && (Date.now() - orderCreatedAt) > ORDER_EXPIRY_WINDOW_MS;
+              if (isExpired) {
               // Order expired in our DB or timeline
               finalStatus = 'expired';
               statusUpdated = true;

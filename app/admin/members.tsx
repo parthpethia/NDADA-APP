@@ -7,13 +7,15 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { confirm } from '@/lib/confirm';
 import { Account } from '@/types';
 import { formatDate } from '@/lib/utils';
-import { Search, Bookmark, BookmarkPlus, Trash2 } from 'lucide-react-native';
+import { DISTRICT_FILTER_OPTIONS } from '@/constants/districts';
+import { Search, Bookmark, BookmarkPlus, Trash2, Plus, X } from 'lucide-react-native';
 
 export default function AdminMembersScreen() {
   const { callAdminAction, role } = useAdmin();
   const [members, setMembers] = useState<Account[]>([]);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const [createEmail, setCreateEmail] = useState('');
@@ -29,6 +31,7 @@ export default function AdminMembersScreen() {
   const [reviewers, setReviewers] = useState<any[]>([]);
   const [bulkReviewerId, setBulkReviewerId] = useState('unassigned');
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Saved Filters and View Presets States
   const [savedFilters, setSavedFilters] = useState<any[]>([]);
@@ -156,7 +159,7 @@ export default function AdminMembersScreen() {
     }
   };
 
-  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+  useEffect(() => { fetchMembers().finally(() => setInitialLoading(false)); }, [fetchMembers]);
 
   useEffect(() => {
     const fetchReviewers = async () => {
@@ -248,42 +251,27 @@ export default function AdminMembersScreen() {
   const handleSetPaymentStatus = async (accountId: string, status: 'pending' | 'paid' | 'failed') => {
     try {
       const label = status === 'paid' ? 'mark as PAID' : status === 'pending' ? 'mark as NOT PAID' : 'mark as FAILED';
-      console.log('💬 Requesting confirmation for:', label);
 
       const ok = await confirm('Confirm', `Are you sure you want to ${label}?`, {
         confirmText: 'Confirm',
         destructive: status !== 'paid',
       });
 
-      console.log('✏️ Confirmation result:', ok);
-      if (!ok) {
-        console.log('User cancelled the action');
-        return;
-      }
+      if (!ok) return;
 
-      console.log('📍 Setting action loading for account:', accountId);
       setActionLoading(accountId);
 
       try {
-        console.log('🔄 Calling admin action with:', { account_id: accountId, status });
-        const result = await callAdminAction('set-payment-status', { account_id: accountId, status });
-        console.log('✅ Admin action result:', result);
-
-        console.log('🔄 Fetching updated members list...');
+        await callAdminAction('set-payment-status', { account_id: accountId, status });
         await fetchMembers();
-        console.log('✅ Members list updated');
-
         Alert.alert('Success', `Payment status updated to ${label}`);
       } catch (err: any) {
-        console.error('❌ Action failed:', err);
         const errorMsg = err.message || 'Failed to update payment status';
         Alert.alert('Error', errorMsg);
       } finally {
-        console.log('🏁 Clearing action loading');
         setActionLoading(null);
       }
     } catch (err: any) {
-      console.error('❌ Outer catch error:', err);
       Alert.alert('Error', String(err.message || 'An error occurred'));
     }
   };
@@ -374,6 +362,7 @@ export default function AdminMembersScreen() {
                 setFilterApproval(val);
                 setActiveFilterId('custom');
               }}
+              className="mb-0"
             />
           </View>
           <View className="flex-1">
@@ -389,32 +378,34 @@ export default function AdminMembersScreen() {
                 setFilterPayment(val);
                 setActiveFilterId('custom');
               }}
+              className="mb-0"
+            />
+          </View>
+          <View className="flex-1">
+            <Select
+              value={filterAccount}
+              options={[
+                { label: 'All Statuses', value: 'all' },
+                { label: 'Active', value: 'active' },
+                { label: 'Suspended', value: 'suspended' },
+                { label: 'Deleted', value: 'deleted' }
+              ]}
+              onValueChange={(val: any) => {
+                setFilterAccount(val);
+                setActiveFilterId('custom');
+              }}
+              className="mb-0"
             />
           </View>
           <View className="flex-1">
             <Select
               value={filterDistrict}
-              options={[
-                { label: 'All Districts', value: 'all' },
-                { label: 'Nagpur', value: 'Nagpur' },
-                { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
-                { label: 'Hingna', value: 'Hingna' },
-                { label: 'Kuhi', value: 'Kuhi' },
-                { label: 'Kalmeshwar', value: 'Kalmeshwar' },
-                { label: 'Katol', value: 'Katol' },
-                { label: 'Narkhed', value: 'Narkhed' },
-                { label: 'Saoner', value: 'Saoner' },
-                { label: 'Parshivani', value: 'Parshivani' },
-                { label: 'Kamthi', value: 'Kamthi' },
-                { label: 'Ramtek', value: 'Ramtek' },
-                { label: 'Mouda', value: 'Mouda' },
-                { label: 'Umred', value: 'Umred' },
-                { label: 'Bhiwapur', value: 'Bhiwapur' }
-              ]}
+              options={DISTRICT_FILTER_OPTIONS as any}
               onValueChange={(val: any) => {
                 setFilterDistrict(val);
                 setActiveFilterId('custom');
               }}
+              className="mb-0"
             />
           </View>
         </View>
@@ -561,59 +552,78 @@ export default function AdminMembersScreen() {
         contentContainerClassName="p-4 pb-8"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Create Member */}
-        <Card className="mb-4">
-          <Text className="mb-3 text-base font-semibold text-gray-900">Add Member</Text>
-          <View className="gap-2">
-            <TextInput
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="Full name (optional)"
-              placeholderTextColor="#9ca3af"
-              value={createFullName}
-              onChangeText={setCreateFullName}
-            />
-            <TextInput
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="Email *"
-              placeholderTextColor="#9ca3af"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={createEmail}
-              onChangeText={setCreateEmail}
-            />
-            <TextInput
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="Password (optional, defaults to 123456)"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry
-              value={createPassword}
-              onChangeText={setCreatePassword}
-            />
-            <TextInput
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="Phone (optional)"
-              placeholderTextColor="#9ca3af"
-              keyboardType="phone-pad"
-              value={createPhone}
-              onChangeText={setCreatePhone}
-            />
-            <TextInput
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="Address (optional)"
-              placeholderTextColor="#9ca3af"
-              value={createAddress}
-              onChangeText={setCreateAddress}
-            />
-            <Button
-              title="Create Member"
-              variant="primary"
-              onPress={handleCreateMember}
-              loading={createLoading}
-            />
+        {/* Create Member (Collapsible) */}
+        <TouchableOpacity
+          className="mb-3 flex-row items-center justify-between rounded-lg bg-white border border-gray-200 px-4 py-3"
+          onPress={() => setShowCreateForm(!showCreateForm)}
+          activeOpacity={0.7}
+        >
+          <Text className="text-base font-semibold text-gray-900">Add Member</Text>
+          <View className={`rounded-full p-1 ${showCreateForm ? 'bg-red-100' : 'bg-primary-100'}`}>
+            {showCreateForm ? <X size={16} color="#ef4444" /> : <Plus size={16} color="#15803d" />}
           </View>
-        </Card>
+        </TouchableOpacity>
+        {showCreateForm && (
+          <Card className="mb-4">
+            <View className="gap-2">
+              <TextInput
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                placeholder="Full name (optional)"
+                placeholderTextColor="#9ca3af"
+                value={createFullName}
+                onChangeText={setCreateFullName}
+              />
+              <TextInput
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                placeholder="Email *"
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={createEmail}
+                onChangeText={setCreateEmail}
+              />
+              <TextInput
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                placeholder="Password (optional, defaults to 123456)"
+                placeholderTextColor="#9ca3af"
+                secureTextEntry
+                value={createPassword}
+                onChangeText={setCreatePassword}
+              />
+              <TextInput
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                placeholder="Phone (optional)"
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+                value={createPhone}
+                onChangeText={setCreatePhone}
+              />
+              <TextInput
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                placeholder="Address (optional)"
+                placeholderTextColor="#9ca3af"
+                value={createAddress}
+                onChangeText={setCreateAddress}
+              />
+              <Button
+                title="Create Member"
+                variant="primary"
+                onPress={handleCreateMember}
+                loading={createLoading}
+              />
+            </View>
+          </Card>
+        )}
 
-        {members.map((m) => (
+        {initialLoading ? (
+          <View className="py-12 items-center">
+            <ActivityIndicator size="large" color="#15803d" />
+            <Text className="mt-3 text-gray-500 font-medium">Loading members...</Text>
+          </View>
+        ) : members.length === 0 ? (
+          <Text className="py-12 text-center text-gray-500">No members found</Text>
+        ) : (
+          members.map((m) => (
           <Card key={m.id} className="mb-3">
             <View className="flex-row items-start justify-between">
               {bulkMode && (
@@ -633,8 +643,8 @@ export default function AdminMembersScreen() {
                 </TouchableOpacity>
               )}
               <View className="flex-1">
-                <Text className="text-lg font-semibold text-gray-900">{m.full_name}</Text>
-                <Text className="text-xs text-gray-500">{m.membership_id}</Text>
+                <Text className="text-lg font-semibold text-gray-900">{m.full_name || 'N/A'}</Text>
+                <Text className="text-xs text-gray-500">{m.membership_id || 'N/A'}</Text>
               </View>
               <StatusBadge status={m.account_status} />
             </View>
@@ -642,11 +652,11 @@ export default function AdminMembersScreen() {
             <View className="mt-3 gap-1">
               <View className="flex-row justify-between">
                 <Text className="text-xs text-gray-500">Email</Text>
-                <Text className="text-xs text-gray-700">{m.email}</Text>
+                <Text className="text-xs text-gray-700">{m.email || 'N/A'}</Text>
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-xs text-gray-500">Phone</Text>
-                <Text className="text-xs text-gray-700">{m.phone}</Text>
+                <Text className="text-xs text-gray-700">{m.phone || 'N/A'}</Text>
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-xs text-gray-500">Approval</Text>
@@ -725,10 +735,7 @@ export default function AdminMembersScreen() {
               )}
             </View>
           </Card>
-        ))}
-
-        {members.length === 0 && (
-          <Text className="py-12 text-center text-gray-500">No members found</Text>
+        ))
         )}
       </ScrollView>
 

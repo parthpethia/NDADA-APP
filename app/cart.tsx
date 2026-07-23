@@ -28,6 +28,18 @@ export default function CartScreen() {
   const [cashSubmitting, setCashSubmitting] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
   const checkoutRef = useRef<any>(null);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   // Load Razorpay checkout.js script (Web only)
   useEffect(() => {
@@ -46,10 +58,14 @@ export default function CartScreen() {
     };
   }, []);
 
+  const refreshedOnMountRef = useRef(false);
   useEffect(() => {
-    // Sync cart with latest account state on mount only
-    refreshMember();
-  }, []);
+    // Sync cart with latest account state on mount only once
+    if (!refreshedOnMountRef.current) {
+      refreshedOnMountRef.current = true;
+      refreshMember();
+    }
+  }, [refreshMember]);
 
   useEffect(() => {
     if (params.success === 'true') {
@@ -148,7 +164,7 @@ export default function CartScreen() {
         },
         notes: {
           member_id: member.id,
-          membership_id: member.membership_id,
+          membership_id: member.membership_id || '',
         },
         theme: { color: '#15803d' },
         timeout: 600,
@@ -237,14 +253,18 @@ export default function CartScreen() {
         { text: 'View Certificate', onPress: () => router.push('/(dashboard)/certificate') },
       ]);
       // Auto-redirect after a short delay if user doesn't tap
-      setTimeout(() => {
-        router.push('/(dashboard)/certificate');
+      redirectTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          router.push('/(dashboard)/certificate');
+        }
       }, 3000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
       Alert.alert('Verification Error', message);
     } finally {
-      setVerifying(false);
+      if (isMountedRef.current) {
+        setVerifying(false);
+      }
     }
   };
 
@@ -329,7 +349,7 @@ export default function CartScreen() {
         <Card className="mb-4 border-primary-100 bg-primary-50">
           <CardHeader title={MEMBERSHIP_PLAN_NAME} subtitle="One-time payment" />
           <Text className="text-sm text-primary-700">
-            This registration fee activates the member profile linked to {member.membership_id} and enables certificate issuance.
+            This registration fee activates your member profile{member.membership_id ? ` linked to ${member.membership_id}` : ''} and enables certificate issuance.
           </Text>
         </Card>
 

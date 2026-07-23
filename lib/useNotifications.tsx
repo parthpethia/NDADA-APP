@@ -57,6 +57,7 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
 
   // Track whether the full list has been loaded at least once
   const listLoadedRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   /**
    * Fetch only the unread count (lightweight O(1) lookup from cached table).
@@ -64,13 +65,15 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
    */
   const fetchCountOnly = useCallback(async () => {
     if (!userId) {
-      setUnreadCount(0);
+      if (isMountedRef.current) setUnreadCount(0);
       return;
     }
 
     try {
       const { data } = await fetchUnreadNotificationCount(userId);
-      setUnreadCount(data || 0);
+      if (isMountedRef.current) {
+        setUnreadCount(data || 0);
+      }
     } catch (err) {
       console.warn('fetchUnreadNotificationCount error:', err);
     }
@@ -82,13 +85,17 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
    */
   const fetchFullData = useCallback(async () => {
     if (!userId) {
-      setNotifications([]);
-      setUnreadCount(0);
+      if (isMountedRef.current) {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (isMountedRef.current) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       // Fetch notifications (first page) and unread count in parallel
@@ -102,18 +109,29 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
       }
 
       const items = notificationsResult.data || [];
-      setNotifications(items);
-      setUnreadCount(countResult.data || 0);
-      setHasMore(items.length === PAGE_SIZE);
-      listLoadedRef.current = true;
+      if (isMountedRef.current) {
+        setNotifications(items);
+        setUnreadCount(countResult.data || 0);
+        setHasMore(items.length === PAGE_SIZE);
+        listLoadedRef.current = true;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch notifications';
-      setError(message);
+      if (isMountedRef.current) {
+        setError(message);
+      }
       console.error('useNotifications error:', message);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [userId]);
+
+  const notificationsRef = useRef<Notification[]>([]);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
 
   /**
    * Load the next page of older notifications (cursor-based pagination).
@@ -121,10 +139,11 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
   const loadMore = useCallback(async () => {
     if (!userId || !hasMore || loadingMore) return;
 
-    setLoadingMore(true);
+    if (isMountedRef.current) setLoadingMore(true);
     try {
-      // Use the last notification's created_at as the cursor
-      const lastNotification = notifications[notifications.length - 1];
+      // Use the last notification's created_at as the cursor from the ref to avoid stale closure
+      const currentList = notificationsRef.current;
+      const lastNotification = currentList[currentList.length - 1];
       if (!lastNotification) return;
 
       const { data, error: fetchError } = await fetchNotifications(
@@ -139,23 +158,28 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
       }
 
       const items = data || [];
-      setNotifications((prev) => [...prev, ...items]);
-      setHasMore(items.length === PAGE_SIZE);
+      if (isMountedRef.current) {
+        setNotifications((prev) => [...prev, ...items]);
+        setHasMore(items.length === PAGE_SIZE);
+      }
     } catch (err) {
       console.warn('loadMore error:', err);
     } finally {
-      setLoadingMore(false);
+      if (isMountedRef.current) {
+        setLoadingMore(false);
+      }
     }
-  }, [userId, hasMore, loadingMore, notifications]);
+  }, [userId, hasMore, loadingMore]);
 
   // ─── Realtime subscription ─────────────────────────────────
   // Single channel per user session. Replaces the 120s polling interval.
   // App active -> subscribe, App backgrounded -> unsubscribe, App closed -> disconnect.
   useEffect(() => {
+    isMountedRef.current = true;
     // Fetch initial unread count on mount
     fetchCountOnly();
 
-    if (!userId) return;
+    if (!userId) return () => { isMountedRef.current = false; };
 
     let channel: any = null;
 
@@ -267,6 +291,7 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
 
     // Cleanup: remove channel/listeners on unmount or userId change, and disconnect websocket
     return () => {
+      isMountedRef.current = false;
       subscription.remove();
       unsubscribe();
     };

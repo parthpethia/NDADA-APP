@@ -464,18 +464,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 10_000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      async (event, newSession) => {
         const previousUserId = userRef.current?.id;
         const newUserId = newSession?.user?.id;
         const isSameUser = !!(previousUserId && newUserId && previousUserId === newUserId);
 
-        // Run state updates synchronously so the UI updates immediately
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-
         // Skip profile fetch for INITIAL_SESSION if initializeAuth already loaded it.
         // This prevents the double-fetch that fires 4 queries instead of 2.
         if (event === 'INITIAL_SESSION' && profileLoaded) {
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
           if (!initialized) {
             initialized = true;
             setProfileReady(true);
@@ -487,6 +485,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // If it's a token refresh for the SAME user and profile is ALREADY ready,
         // do not reset profileReady to false (which would trigger LoadingScreen & unmount the UI).
         if (event === 'TOKEN_REFRESHED' && isSameUser && profileReadyRef.current) {
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
           if (!initialized) {
             initialized = true;
             setProfileReady(true);
@@ -507,6 +507,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.location.pathname.includes('reset-password');
 
         if (event === 'PASSWORD_RECOVERY' || isResetPasswordPage) {
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
           if (!newSession?.user) {
             setMember(null);
             setAdminUser(null);
@@ -519,40 +521,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Only mark profile as NOT ready if the user ID actually changed or profile was not ready yet.
-        // This avoids unnecessary UI unmounts/reloads during background auth events.
+        // FIX: Set profileReady to false BEFORE session/user to prevent a render
+        // where session is set but adminUser is still null (admin login race condition).
+        // This ensures routing guards see profileReady=false in the same render batch.
         if (newSession?.user && (!isSameUser || !profileReadyRef.current)) {
           setProfileReady(false);
         }
 
-        // Wrap the async/Supabase calls in a setTimeout to avoid running them
-        // inside the onAuthStateChange execution context which holds GoTrue locks.
-        setTimeout(async () => {
-          if (newSession?.user) {
-            try {
-              if (!isSameUser || !profileReadyRef.current) {
-                await loadUserProfile(newSession.user.id, newSession.user);
-              }
-            } catch (err) {
-              console.warn('Auth: onAuthStateChange profile fetch failed:', err);
-              // If profile loading fails due to auth error, clear session
-              await clearInvalidSession();
+        // Now set session/user — any render from here will already see profileReady=false
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+
+        // Load profile directly (no setTimeout needed — GoTrue locks are already bypassed
+        // in supabase.ts via the custom lock implementation).
+        if (newSession?.user) {
+          try {
+            if (!isSameUser || !profileReadyRef.current) {
+              await loadUserProfile(newSession.user.id, newSession.user);
             }
-          } else {
-            setMember(null);
-            setAdminUser(null);
+          } catch (err) {
+            console.warn('Auth: onAuthStateChange profile fetch failed:', err);
+            // If profile loading fails due to auth error, clear session
+            await clearInvalidSession();
           }
+        } else {
+          setMember(null);
+          setAdminUser(null);
+        }
 
-          // Profile loading is done — allow routing guards to proceed
-          setProfileReady(true);
+        // Profile loading is done — allow routing guards to proceed
+        setProfileReady(true);
 
-          // If the listener fires before initializeAuth finishes,
-          // make sure we also stop the loading spinner
-          if (!initialized) {
-            initialized = true;
-            setLoading(false);
-          }
-        }, 0);
+        // If the listener fires before initializeAuth finishes,
+        // make sure we also stop the loading spinner
+        if (!initialized) {
+          initialized = true;
+          setLoading(false);
+        }
       }
     );
 
@@ -631,6 +636,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileReady(true);
       // Clear admin cache on sign-out so a different user gets a fresh lookup
       adminCacheRef.current.clear();
+      // Clear in-flight profile request to prevent stale promise on re-login
+      profileRequestRef.current = null;
       // Clear query cache to prevent stale data for the next user
       cacheClear();
     }

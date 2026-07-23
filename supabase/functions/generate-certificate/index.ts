@@ -198,6 +198,13 @@ serve(async (req) => {
       });
     }
 
+    if (!member.membership_id) {
+      return new Response(JSON.stringify({ error: 'Membership ID not assigned' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // ============================================================
     // LOAD TEMPLATE (cached) — only downloads on first invocation
     // ============================================================

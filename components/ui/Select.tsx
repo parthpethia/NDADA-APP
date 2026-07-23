@@ -20,7 +20,7 @@ interface SelectProps {
 
 export function Select({
   label,
-  options,
+  options = [],
   value,
   onValueChange,
   placeholder = 'Select...',
@@ -28,7 +28,8 @@ export function Select({
   className,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
+  const safeOptions = Array.isArray(options) ? options : [];
+  const selected = safeOptions.find((o) => o?.value === value);
 
   return (
     <View className={cn('mb-4', className)}>
@@ -67,8 +68,11 @@ export function Select({
               {label || 'Select an option'}
             </Text>
             <FlatList
-              data={options as SelectOption[]}
-              keyExtractor={(item) => item.value}
+              data={safeOptions as SelectOption[]}
+              keyExtractor={(item, idx) => item?.value || String(idx)}
+              ListEmptyComponent={
+                <Text className="p-4 text-center text-sm text-gray-500">No options available</Text>
+              }
               renderItem={({ item }) => (
                 <TouchableOpacity
                   onPress={() => {

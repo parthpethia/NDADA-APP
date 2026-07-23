@@ -36,14 +36,15 @@ export function useDashboardData(): DashboardData {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Prevent duplicate in-flight requests
+  // Prevent duplicate in-flight requests & unmounted state updates
   const fetchingRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   const userId = user?.id;
 
   const fetchData = useCallback(async (skipCache = false) => {
     if (!userId || !member) {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
       return;
     }
 
@@ -52,9 +53,11 @@ export function useDashboardData(): DashboardData {
     if (!skipCache) {
       const cached = cacheGet<DashboardDataResponse>(key, 120_000);
       if (cached) {
-        setCertificate(cached.certificate);
-        setUnreadCount(cached.unread_notification_count);
-        setLoading(false);
+        if (isMountedRef.current) {
+          setCertificate(cached.certificate);
+          setUnreadCount(cached.unread_notification_count);
+          setLoading(false);
+        }
         return;
       }
     }
@@ -76,15 +79,19 @@ export function useDashboardData(): DashboardData {
 
       if (data) {
         cacheSet(key, data);
-        setCertificate(data.certificate);
-        setUnreadCount(data.unread_notification_count);
+        if (isMountedRef.current) {
+          setCertificate(data.certificate);
+          setUnreadCount(data.unread_notification_count);
+        }
       }
     } catch (err) {
       console.warn('Dashboard data fetch failed:', err);
       await fallbackFetch(userId);
     } finally {
       fetchingRef.current = false;
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [userId, member]);
 
@@ -98,7 +105,13 @@ export function useDashboardData(): DashboardData {
       if (!member) return;
       const { data: cert } = await fetchAccountCertificate(member.id);
       const validCert = cert?.certificate_url && cert?.certificate_id ? cert : null;
-      setCertificate(validCert);
+      if (isMountedRef.current) {
+        setCertificate(validCert);
+      }
+      cacheSet(cacheKey(CACHE_NS, uid), {
+        certificate: validCert,
+        unread_notification_count: 0,
+      });
     } catch (err) {
       console.warn('Fallback certificate fetch failed:', err);
     }
@@ -106,7 +119,11 @@ export function useDashboardData(): DashboardData {
 
   // Fetch on mount / when userId changes
   useEffect(() => {
+    isMountedRef.current = true;
     fetchData();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [fetchData]);
 
   const refresh = useCallback(async () => {

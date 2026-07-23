@@ -109,7 +109,7 @@ export default function DashboardHome() {
         Welcome, {member.full_name}
       </Text>
       <Text className="mb-5 text-sm text-gray-500">
-        Membership ID: {member.membership_id}
+        Membership ID: {member.membership_id || 'Pending — assigned on payment'}
       </Text>
 
       {/* Hero Card — Register Now CTA (shown when no firms registered yet) */}

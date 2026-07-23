@@ -57,6 +57,7 @@ export function StatusBadge({ status }: { status: string }) {
     processing: { label: 'Processing', variant: 'info' },
     completed: { label: 'Completed', variant: 'success' },
     pending_review: { label: 'Pending Review', variant: 'warning' },
+    abandoned: { label: 'Abandoned', variant: 'warning' },
   };
   const entry = map[status] || { label: status, variant: 'default' as BadgeVariant };
   return <Badge label={entry.label} variant={entry.variant} />;

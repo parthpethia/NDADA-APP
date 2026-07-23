@@ -56,7 +56,10 @@ function confirmWithAlert(title: string, message: string, confirmText: string): 
   // Worst-case fallback when neither window.confirm nor Alert work on web
   // Use the native browser confirm as final attempt
   try {
-    return Boolean(window.confirm(`${title}\n\n${message}`));
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      return Boolean(window.confirm(`${title}\n\n${message}`));
+    }
+    return false;
   } catch {
     // If all else fails, don't proceed with the action
     return false;

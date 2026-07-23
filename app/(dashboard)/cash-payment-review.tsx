@@ -110,7 +110,7 @@ export default function CashPaymentReviewScreen() {
       subscription.remove();
       unsubscribe();
     };
-  }, [member?.id, refreshMember]);
+  }, [member?.id]);
 
   if (!member) return null;
 

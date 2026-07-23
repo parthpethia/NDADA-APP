@@ -175,7 +175,7 @@ serve(async (req) => {
       receipt: receipt,
       notes: {
         member_id: (member as any).id,
-        membership_id: (member as any).membership_id,
+        membership_id: (member as any).membership_id || '',
       },
       partial_payment: false,
     };
@@ -221,16 +221,16 @@ serve(async (req) => {
 
     console.log('✅ Order created in Razorpay:', orderId);
 
-    // Store order in database
+    // Store order in database (amounts in paise to match Razorpay convention)
     const { error: insertErr } = await supabase.from('orders').insert({
       member_id: (member as any).id,
       razorpay_order_id: orderId,
-      amount: feeAmountRupees,
+      amount: amountPaise,
       currency: feeCurrency,
       receipt: receipt,
       status: 'created',
       amount_paid: 0,
-      amount_due: feeAmountRupees,
+      amount_due: amountPaise,
       attempts: 0,
       notes: payload.notes,
       provider_payload: razorpayJson,

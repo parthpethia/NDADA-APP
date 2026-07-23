@@ -19,7 +19,7 @@ export function EmptyState({
   children?: React.ReactNode;
 }) {
   return (
-    <View className="flex-1 items-center justify-center p-8">
+    <View className="flex-1 items-center justify-center bg-gray-50 p-8">
       <Text className="text-lg font-semibold text-gray-900">{title}</Text>
       {message && (
         <Text className="mt-1 text-center text-gray-500">{message}</Text>

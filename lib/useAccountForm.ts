@@ -134,6 +134,14 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
     }
   }, [userId]);
 
+  const formDataRef = useRef(formData);
+  const currentStepRef = useRef(currentStep);
+
+  useEffect(() => {
+    formDataRef.current = formData;
+    currentStepRef.current = currentStep;
+  }, [formData, currentStep]);
+
   // Auto-save draft using UPSERT to avoid race conditions
   const saveDraft = useCallback(async () => {
     if (!userId) return;
@@ -146,8 +154,8 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
         .upsert(
           {
             user_id: userId,
-            form_data: formData,
-            current_step: currentStep,
+            form_data: formDataRef.current,
+            current_step: currentStepRef.current,
             updated_at: new Date().toISOString(),
             saved_at: new Date().toISOString(),
           },
@@ -160,7 +168,7 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
     } finally {
       setIsDrafting(false);
     }
-  }, [userId, formData, currentStep]);
+  }, [userId]);
 
   // Delete draft from database
   const deleteDraft = useCallback(async () => {
@@ -189,10 +197,10 @@ export function useAccountForm(userId?: string): UseAccountFormReturn {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Set new timeout (10 seconds of inactivity)
+    // Set new timeout (3 seconds of inactivity)
     saveTimeoutRef.current = setTimeout(() => {
       saveDraft();
-    }, 10000);
+    }, 3000);
 
     // Cleanup on unmount
     return () => {

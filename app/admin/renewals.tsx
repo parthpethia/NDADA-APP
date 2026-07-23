@@ -296,7 +296,7 @@ export default function RenewalsWorkflowScreen() {
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="flex-1 pr-2">
                       <Text className="text-sm font-bold text-gray-900">{m.full_name}</Text>
-                      <Text className="text-[10px] text-gray-500 font-mono mt-0.5">{m.membership_id}</Text>
+                      <Text className="text-[10px] text-gray-500 font-mono mt-0.5">{m.membership_id || 'N/A'}</Text>
                     </View>
                     <StatusBadge status={cert.status === 'valid' && remainingDays < 0 ? 'expired' : 'active'} />
                   </View>

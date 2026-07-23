@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Button, Card, CardHeader } from '@/components/ui';
 import * as WebBrowser from 'expo-web-browser';
 import { Linking } from 'react-native';
-import { getFunctionsErrorMessage } from '@/lib/utils';
+import { formatCurrency, getFunctionsErrorMessage } from '@/lib/utils';
 import { MEMBERSHIP_AMOUNT } from '@/constants';
 
 // Razorpay types
@@ -46,6 +46,7 @@ export function RazorpayCheckout() {
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const checkoutRef = useRef<any>(null);
+  const scriptCreatedRef = useRef<boolean>(false);
 
   // Initialize Razorpay script (Web only) - memoized to prevent reloading
   useEffect(() => {
@@ -58,10 +59,12 @@ export function RazorpayCheckout() {
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
     document.body.appendChild(script);
+    scriptCreatedRef.current = true;
 
     return () => {
-      if (document.body.contains(script)) {
+      if (scriptCreatedRef.current && document.body.contains(script)) {
         document.body.removeChild(script);
+        scriptCreatedRef.current = false;
       }
     };
   }, []);
@@ -154,6 +157,15 @@ export function RazorpayCheckout() {
         ...checkoutOptions,
         handler: (response: RazorpaySuccessResponse) =>
           handlePaymentSuccess(response),
+        modal: {
+          ondismiss: () => {
+            console.log('ℹ️ User closed Razorpay modal');
+            setLoading(false);
+          },
+        },
+      });
+      checkoutRef.current.on('payment.failed', (response: any) => {
+        handlePaymentFailure(response.error);
       });
       checkoutRef.current.open();
     } else {
@@ -300,7 +312,9 @@ export function RazorpayCheckout() {
       <View className="gap-3">
         <View className="gap-2">
           <Text className="text-sm font-medium text-gray-700">Fee Amount</Text>
-          <Text className="text-2xl font-bold text-gray-900">₹{member.payment_status === 'paid' ? 'Paid' : MEMBERSHIP_AMOUNT}</Text>
+          <Text className="text-2xl font-bold text-gray-900">
+            {member.payment_status === 'paid' ? 'Paid' : formatCurrency(MEMBERSHIP_AMOUNT)}
+          </Text>
         </View>
 
         {member.payment_status === 'paid' ? (

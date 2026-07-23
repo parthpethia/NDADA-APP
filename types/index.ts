@@ -81,7 +81,7 @@ export interface Account {
   documents_urls: string[];
 
   // Status Fields
-  membership_id: string;
+  membership_id: string | null;
   payment_status: PaymentStatus;
   payment_method?: 'online' | 'cash';
   cash_payment_verified?: boolean;
@@ -190,7 +190,7 @@ export interface AccountWithDetails extends Account {
 export interface CertificateVerification {
   certificate_id: string;
   member_name: string;
-  membership_id: string;
+  membership_id: string | null;
   issued_at: string;
   status: CertificateStatus;
 }

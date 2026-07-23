@@ -7,26 +7,11 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { Account, DashboardStats } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { maskAadhaar } from '@/lib/aadhaar';
+import { DISTRICT_FILTER_OPTIONS, DISTRICT_EDIT_OPTIONS } from '@/constants/districts';
 
 import { Check, X, ChevronDown, ChevronUp, Edit2, Save, XCircle, FileText } from 'lucide-react-native';
 
-const DISTRICT_OPTIONS = [
-  { label: 'All Districts', value: 'all' },
-  { label: 'Nagpur', value: 'Nagpur' },
-  { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
-  { label: 'Hingna', value: 'Hingna' },
-  { label: 'Kuhi', value: 'Kuhi' },
-  { label: 'Kalmeshwar', value: 'Kalmeshwar' },
-  { label: 'Katol', value: 'Katol' },
-  { label: 'Narkhed', value: 'Narkhed' },
-  { label: 'Saoner', value: 'Saoner' },
-  { label: 'Parshivani', value: 'Parshivani' },
-  { label: 'Kamthi', value: 'Kamthi' },
-  { label: 'Ramtek', value: 'Ramtek' },
-  { label: 'Mouda', value: 'Mouda' },
-  { label: 'Umred', value: 'Umred' },
-  { label: 'Bhiwapur', value: 'Bhiwapur' },
-] as const;
+// District options imported from @/constants/districts
 
 const FIRM_TYPE_OPTIONS = [
   { label: 'Proprietorship', value: 'proprietorship' },
@@ -86,7 +71,7 @@ export default function AdminFirmsScreen() {
   // Filter states
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'created_at' | 'updated_at'>('created_at');
+  const sortBy = 'created_at';
   const [filterDistrict, setFilterDistrict] = useState('all');
 
   // Bulk action states
@@ -164,7 +149,7 @@ export default function AdminFirmsScreen() {
     let query = supabase
       .from('accounts')
       .select('*')
-      .order(sortBy, { ascending: false });
+      .order('created_at', { ascending: false });
 
     // Apply status filter
     if (filterStatus === 'pending_review') {
@@ -186,7 +171,7 @@ export default function AdminFirmsScreen() {
       showAlert('Error', 'Failed to fetch firms: ' + error.message);
     }
     setAccounts((data || []) as Account[]);
-  }, [filterStatus, sortBy, filterDistrict]);
+  }, [filterStatus, filterDistrict]);
 
   // Filter and search accounts in memory
   useEffect(() => {
@@ -263,7 +248,7 @@ export default function AdminFirmsScreen() {
     try {
       setActionLoading(accountId);
       await callAdminAction('approve-account', { account_id: accountId });
-      await fetchAccounts();
+      await Promise.all([fetchAccounts(), fetchStats()]);
       showAlert('Success', 'Application approved successfully.');
     } catch (err: any) {
       showAlert('Error', err?.message || 'Failed to approve application');
@@ -282,7 +267,7 @@ export default function AdminFirmsScreen() {
       await callAdminAction('reject-account', { account_id: accountId, reason: rejectReason });
       setRejectingId(null);
       setRejectReason('');
-      await fetchAccounts();
+      await Promise.all([fetchAccounts(), fetchStats()]);
     } catch (err: any) {
       showAlert('Error', err?.message || 'Failed to reject application');
     } finally {
@@ -395,7 +380,7 @@ export default function AdminFirmsScreen() {
         >
           <Card className="min-w-[120px]">
             <Text className="text-xs text-gray-500">Total Firms</Text>
-            <Text className="mt-1 text-2xl font-bold text-gray-900">{stats.total_members}</Text>
+            <Text className="mt-1 text-2xl font-bold text-gray-900">{stats.total_firms}</Text>
           </Card>
           <Card className="min-w-[120px] border-red-200 bg-red-50">
             <Text className="text-xs text-red-600">Pending Review</Text>
@@ -453,7 +438,7 @@ export default function AdminFirmsScreen() {
         {/* District Filter */}
         <Select
           label="District"
-          options={DISTRICT_OPTIONS}
+          options={DISTRICT_FILTER_OPTIONS as any}
           value={filterDistrict}
           onValueChange={setFilterDistrict}
           placeholder="All Districts"
@@ -532,6 +517,7 @@ export default function AdminFirmsScreen() {
                       setExpandedId(expanded ? null : account.id);
                     }
                   }}
+                  onLongPress={() => setExpandedId(expanded ? null : account.id)}
                   activeOpacity={0.7}
                 >
                   <View className="flex-row items-start gap-3">
@@ -556,13 +542,16 @@ export default function AdminFirmsScreen() {
                       <View className="flex-row items-start justify-between">
                         <View className="flex-1">
                           <Text className="text-lg font-semibold text-gray-900">{account.firm_name}</Text>
-                          <Text className="text-xs text-gray-500">by {account.full_name} • {account.membership_id}</Text>
+                          <Text className="text-xs text-gray-500">by {account.full_name} • {account.membership_id || 'ID Pending'}</Text>
                         </View>
                         <View className="flex-row items-center gap-2">
                           <StatusBadge status={account.approval_status} />
-                          {filterStatus !== 'pending_review' && (
-                            expanded ? <ChevronUp size={16} color="#6b7280" /> : <ChevronDown size={16} color="#6b7280" />
-                          )}
+                          <TouchableOpacity
+                            onPress={() => setExpandedId(expanded ? null : account.id)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            {expanded ? <ChevronUp size={16} color="#6b7280" /> : <ChevronDown size={16} color="#6b7280" />}
+                          </TouchableOpacity>
                         </View>
                       </View>
 
@@ -663,8 +652,8 @@ export default function AdminFirmsScreen() {
                             <Text className="text-xs text-gray-500 flex-1">District</Text>
                             <View className="flex-1">
                               <Select
-                                value={editData.district || account.district || 'all'}
-                                options={DISTRICT_OPTIONS.filter(d => d.value !== 'all') as any}
+                                value={editData.district || account.district || ''}
+                                options={DISTRICT_EDIT_OPTIONS as any}
                                 onValueChange={(val) => handleEditChange('district', val)}
                                 className="mb-0"
                               />
@@ -681,15 +670,15 @@ export default function AdminFirmsScreen() {
                       <Text className="text-[10px] font-bold text-gray-400 uppercase mb-2">License Details</Text>
                       <View className="gap-1.5">
                         <EditableField label="Seed Cotton License" value={account.seed_cotton_license_number || ''} fieldKey="seed_cotton_license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
-                        <EditableField label="Cotton License Expiry" value={account.seed_cotton_license_expiry || ''} fieldKey="seed_cotton_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
+                        <EditableField label="Cotton License Expiry" value={account.seed_cotton_license_expiry || ''} displayValue={account.seed_cotton_license_expiry ? formatDate(account.seed_cotton_license_expiry) : 'N/A'} fieldKey="seed_cotton_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Sarthi ID (Cotton)" value={account.sarthi_id_cotton || ''} fieldKey="sarthi_id_cotton" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Seed General License" value={account.seed_general_license_number || ''} fieldKey="seed_general_license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
-                        <EditableField label="General License Expiry" value={account.seed_general_license_expiry || ''} fieldKey="seed_general_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
+                        <EditableField label="General License Expiry" value={account.seed_general_license_expiry || ''} displayValue={account.seed_general_license_expiry ? formatDate(account.seed_general_license_expiry) : 'N/A'} fieldKey="seed_general_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Sarthi ID (General)" value={account.sarthi_id_general || ''} fieldKey="sarthi_id_general" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Pesticide License" value={account.pesticide_license_number || ''} fieldKey="pesticide_license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
-                        <EditableField label="Pesticide Expiry" value={account.pesticide_license_expiry || ''} fieldKey="pesticide_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
+                        <EditableField label="Pesticide Expiry" value={account.pesticide_license_expiry || ''} displayValue={account.pesticide_license_expiry ? formatDate(account.pesticide_license_expiry) : 'N/A'} fieldKey="pesticide_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Fertilizer License" value={account.fertilizer_license_number || ''} fieldKey="fertilizer_license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
-                        <EditableField label="Fertilizer Expiry" value={account.fertilizer_license_expiry || ''} fieldKey="fertilizer_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
+                        <EditableField label="Fertilizer Expiry" value={account.fertilizer_license_expiry || ''} displayValue={account.fertilizer_license_expiry ? formatDate(account.fertilizer_license_expiry) : 'N/A'} fieldKey="fertilizer_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                       </View>
                     </View>
 

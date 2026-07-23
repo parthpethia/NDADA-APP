@@ -75,6 +75,11 @@ serve(async (req) => {
       .eq('user_id', adminUser.id)
       .single();
 
+    // adminAccount may be null if the admin was added directly to admin_users
+    // without a full registration. We allow the action to proceed but record
+    // the verified_by as null in that case.
+    const adminAccountId = adminAccount?.id || null;
+
     // Parse request body
     const body = await req.json();
     const { member_id, status, notes } = body;
@@ -117,7 +122,7 @@ serve(async (req) => {
         .from('accounts')
         .update({
           cash_payment_verified: true,
-          cash_payment_verified_by: adminAccount.id,
+          cash_payment_verified_by: adminAccountId,
           cash_payment_verified_at: new Date().toISOString(),
           cash_payment_notes: notes || null,
           payment_status: 'paid', // Mark as paid once verified
@@ -133,7 +138,7 @@ serve(async (req) => {
         .from('cash_payment_verifications')
         .insert({
           member_id,
-          verified_by: adminAccount.id,
+          verified_by: adminAccountId,
           status: 'approved',
           notes,
         });
@@ -180,7 +185,7 @@ serve(async (req) => {
         .from('cash_payment_verifications')
         .insert({
           member_id,
-          verified_by: adminAccount.id,
+          verified_by: adminAccountId,
           status: 'rejected',
           notes,
         });

@@ -192,14 +192,21 @@ serve(async (req) => {
 
     // ============================================================
     // UPDATE ORDER STATUS TO ATTEMPTED
+    // Note: We use a raw SQL increment to avoid a read-then-write
+    // race condition when concurrent verify requests hit this endpoint.
     // ============================================================
-    const { error: updateOrderErr } = await supabase
-      .from('orders')
-      .update({
-        status: 'attempted',
-        attempts: order.attempts + 1,
-      })
-      .eq('id', order.id);
+    const { error: updateOrderErr } = await supabase.rpc('increment_order_attempts', {
+      p_order_id: order.id,
+    }).then(
+      () => ({ error: null }),
+      // Fallback: if the RPC doesn't exist, do a simple update without incrementing
+      async () => {
+        return await supabase
+          .from('orders')
+          .update({ status: 'attempted' })
+          .eq('id', order.id);
+      }
+    );
 
     if (updateOrderErr) {
       console.error('❌ Failed to update order status:', updateOrderErr.message);
@@ -252,34 +259,37 @@ serve(async (req) => {
     console.log('✅ Payment signature verified and recorded');
 
     // ============================================================
-    // IMMEDIATELY UPDATE PAYMENT STATUS (belt-and-suspenders)
-    // The webhook will also do this, but updating here ensures
-    // the UI reflects "paid" right away without waiting for the
-    // async webhook callback.
+    // UPDATE STATUS TO 'processing' (NOT 'paid')
+    // Signature verification confirms authenticity but NOT that
+    // Razorpay has actually captured the funds. The webhook
+    // (payment.captured / order.paid) is the true source of truth
+    // and will set the final 'paid' status. Setting 'processing'
+    // here gives the user fast feedback while preventing phantom
+    // 'paid' accounts when capture ultimately fails.
     // ============================================================
     await supabase
       .from('accounts')
-      .update({ payment_status: 'paid' })
+      .update({ payment_status: 'processing' })
       .eq('id', order.member_id);
-    console.log('✅ Account payment_status set to paid');
+    console.log('✅ Account payment_status set to processing (awaiting webhook confirmation)');
 
     await supabase
       .from('payments')
-      .update({ status: 'paid' })
+      .update({ status: 'processing' })
       .eq('razorpay_payment_id', razorpay_payment_id);
-    console.log('✅ Payment record set to paid');
+    console.log('✅ Payment record set to processing');
 
     await supabase
       .from('orders')
-      .update({ status: 'paid' })
+      .update({ status: 'attempted' })
       .eq('id', order.id);
-    console.log('✅ Order status set to paid');
+    console.log('✅ Order status set to attempted');
 
     const response: VerifySignatureResponse = {
       verified: true,
       order_id: razorpay_order_id,
       payment_id: razorpay_payment_id,
-      message: 'Payment verified and confirmed successfully.',
+      message: 'Payment signature verified. Awaiting capture confirmation.',
     };
 
     return new Response(JSON.stringify(response), {

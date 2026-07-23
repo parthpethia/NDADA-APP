@@ -263,7 +263,7 @@ export default function AdminPaymentsScreen() {
                   <Text className="font-semibold text-gray-900">{p.full_name}</Text>
                   <Text className="text-xs text-gray-500">{p.email}</Text>
                   <Text className="mt-1 text-xs font-medium text-gray-700">
-                    Membership ID: {p.membership_id}
+                    Membership ID: {p.membership_id || 'Pending'}
                   </Text>
                 </View>
                 <View>

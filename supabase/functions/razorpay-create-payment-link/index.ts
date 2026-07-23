@@ -194,14 +194,14 @@ serve(async (req) => {
       amount: amountPaise,
       currency: feeCurrency,
       accept_partial: false,
-      description: `NDADA registration fee (${(member as any).membership_id})`,
+      description: `NDADA registration fee${(member as any).membership_id ? ` (${(member as any).membership_id})` : ''}`,
       customer: {
         name: (member as any).full_name,
         email: (member as any).email,
       },
       notes: {
         member_id: (member as any).id,
-        membership_id: (member as any).membership_id,
+        membership_id: (member as any).membership_id || '',
       },
     };
 
