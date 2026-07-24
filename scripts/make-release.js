@@ -80,8 +80,8 @@ function findAabFile(dir) {
 const defaultAab = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab');
 const foundAab = fs.existsSync(defaultAab) ? defaultAab : findAabFile(path.join(androidDir, 'app', 'build'));
 
-const rootAab = path.join(projectRoot, 'app-release-v1.1.aab');
-const downloadsAab = path.join(userHome, 'Downloads', 'app-release-v1.1.aab');
+const rootAab = path.join(projectRoot, 'app-release-v1.2.aab');
+const downloadsAab = path.join(userHome, 'Downloads', 'app-release-v1.2.aab');
 
 if (res.status === 0 && foundAab && fs.existsSync(foundAab)) {
   fs.copyFileSync(foundAab, rootAab);

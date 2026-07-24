@@ -1,7 +1,19 @@
 {
-  "buildCommand": "npm run vercel-build",
+  "buildCommand": "npm run vercel-build && node scripts/copy-public.js",
   "outputDirectory": "dist",
   "rewrites": [
+    {
+      "source": "/privacy-policy.html",
+      "destination": "/privacy-policy.html"
+    },
+    {
+      "source": "/terms-of-service.html",
+      "destination": "/terms-of-service.html"
+    },
+    {
+      "source": "/data-deletion.html",
+      "destination": "/data-deletion.html"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

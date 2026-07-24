@@ -27,11 +27,11 @@ export default function PrivacyPolicyScreen() {
             <Shield size={32} color="#166534" />
           </View>
           <Text className="text-2xl font-bold text-gray-900 text-center">Privacy Policy</Text>
-          <Text className="text-xs text-gray-500 mt-1">Last Updated: June 6, 2026</Text>
+          <Text className="text-xs text-gray-500 mt-1">Last Updated: July 24, 2026</Text>
         </View>
 
         <Text className="text-sm text-gray-600 mb-6 leading-5">
-          Nagpur District Agro Dealers Association (NDADA) ("we", "us", or "our") operates the NDADA mobile application (the "App"). We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our App to register and manage your membership.
+          Nagpur District Agro Dealers Association (NDADA) ("we", "us", or "our") operates the NDADA mobile application (the "App"). We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our App to register and manage your membership with the association.
         </Text>
 
         {/* Section 1: Information Collection */}
@@ -116,11 +116,27 @@ export default function PrivacyPolicyScreen() {
           </Text>
         </View>
 
-        {/* Section 6: Contact Info */}
+        {/* Section 6: Children's Privacy */}
         <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 mb-2">6. Contact Us</Text>
+          <Text className="text-lg font-bold text-gray-900 mb-2">6. Children's Privacy</Text>
           <Text className="text-sm text-gray-600 leading-5">
-            If you have questions about this Privacy Policy or wishes to exercise your data rights, please contact Nagpur District Agro Dealers Association (NDADA) at:
+            The App is intended for professional agro dealers and is not directed at children under the age of 18. We do not knowingly collect personal information from children. If we become aware that a child under 18 has provided us with personal data, we will delete such information immediately.
+          </Text>
+        </View>
+
+        {/* Section 7: Changes */}
+        <View className="mb-6">
+          <Text className="text-lg font-bold text-gray-900 mb-2">7. Changes to This Policy</Text>
+          <Text className="text-sm text-gray-600 leading-5">
+            We may update this Privacy Policy from time to time. Any changes will be reflected by updating the "Last Updated" date at the top of this document. We encourage you to review this policy periodically.
+          </Text>
+        </View>
+
+        {/* Section 8: Contact Info */}
+        <View className="mb-6">
+          <Text className="text-lg font-bold text-gray-900 mb-2">8. Contact Us</Text>
+          <Text className="text-sm text-gray-600 leading-5">
+            If you have questions about this Privacy Policy, wish to exercise your data rights, or want to request account deletion, please contact Nagpur District Agro Dealers Association (NDADA) at:
             {'\n'}Email: support@ndada.org
           </Text>
         </View>

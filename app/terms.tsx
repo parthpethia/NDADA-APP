@@ -27,7 +27,7 @@ export default function TermsScreen() {
             <Scale size={32} color="#166534" />
           </View>
           <Text className="text-2xl font-bold text-gray-900 text-center">Terms of Service</Text>
-          <Text className="text-xs text-gray-500 mt-1">Last Updated: June 6, 2026</Text>
+          <Text className="text-xs text-gray-500 mt-1">Last Updated: July 24, 2026</Text>
         </View>
 
         <Text className="text-sm text-gray-600 mb-6 leading-5">
