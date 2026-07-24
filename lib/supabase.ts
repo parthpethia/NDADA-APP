@@ -153,11 +153,101 @@ const storage = Platform.OS === 'web'
       removeItem: (key: string) => removeItemNative(key),
     };
 
+/**
+ * Robust fetch wrapper with exponential backoff retries.
+ * Automatically retries transient network errors (Failed to fetch, network request failed,
+ * connection drops, offline) and transient gateway/server errors (429, 500, 502, 503, 504) up to maxRetries.
+ */
+const fetchWithRetry: typeof fetch = async (url, options) => {
+  const maxRetries = 4;
+  let delay = 400; // ms
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    let controller: AbortController | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    // Create per-attempt 15-second timeout if signal is not already aborted
+    if (!options?.signal?.aborted && typeof AbortController !== 'undefined') {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => {
+        try { controller?.abort(); } catch {}
+      }, 15000);
+    }
+
+    const effectiveOptions: RequestInit = {
+      ...options,
+      signal: options?.signal || controller?.signal,
+    };
+
+    try {
+      const response = await fetch(url as any, effectiveOptions);
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const isRetryableStatus =
+        response.status === 429 ||
+        response.status === 500 ||
+        response.status === 502 ||
+        response.status === 503 ||
+        response.status === 504;
+
+      if (isRetryableStatus && attempt < maxRetries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2.5;
+        continue;
+      }
+      return response;
+    } catch (err: any) {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // If caller explicitly aborted the request, do not retry
+      if (options?.signal?.aborted) {
+        throw err;
+      }
+
+      const errMsg = String(err?.message || err || '').toLowerCase();
+      const errName = String(err?.name || '');
+      const isTimeout = errName === 'AbortError' || errMsg.includes('aborted') || errMsg.includes('timeout');
+      const isNetworkError =
+        isTimeout ||
+        errName === 'TypeError' ||
+        errName === 'FetchError' ||
+        errName === 'NetworkError' ||
+        errName === 'FunctionsFetchError' ||
+        errMsg.includes('failed to fetch') ||
+        errMsg.includes('network request failed') ||
+        errMsg.includes('network error') ||
+        errMsg.includes('networkerror') ||
+        errMsg.includes('load failed') ||
+        errMsg.includes('offline') ||
+        errMsg.includes('failed to send a request') ||
+        errMsg.includes('econnreset') ||
+        errMsg.includes('enotfound') ||
+        errMsg.includes('etimedout') ||
+        errMsg.includes('net::') ||
+        errMsg.includes('socket');
+
+      if (isNetworkError && attempt < maxRetries - 1) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn(`[Supabase Fetch] Retrying network attempt ${attempt + 1}/${maxRetries} after ${delay}ms:`, errMsg);
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2.5;
+        continue;
+      }
+      throw err;
+    }
+  }
+  return fetch(url as any, options);
+};
+
 const createSupabaseClient = () =>
   createClient(
     supabaseUrl || 'https://placeholder.supabase.co',
     supabaseAnonKey || 'placeholder-key',
     {
+      global: {
+        fetch: fetchWithRetry,
+      },
       auth: {
         storage,
         autoRefreshToken: true,

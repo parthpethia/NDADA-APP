@@ -15,15 +15,33 @@ import { PostgrestError } from '@supabase/supabase-js';
 
 /**
  * Helper to create a PostgrestError from a caught exception.
- * Ensures the `name` property is always set (required by the type).
+ * Ensures the `name` property is always set and detects network failures.
  */
 function toPostgrestError(err: any, fallbackMessage: string): PostgrestError {
+  const errMsg = String(err?.message || err || '').toLowerCase();
+  const errName = String(err?.name || '');
+
+  const isNetworkError =
+    errName === 'TypeError' ||
+    errName === 'FetchError' ||
+    errName === 'NetworkError' ||
+    errMsg.includes('failed to fetch') ||
+    errMsg.includes('network request failed') ||
+    errMsg.includes('network error') ||
+    errMsg.includes('networkerror') ||
+    errMsg.includes('load failed') ||
+    errMsg.includes('offline') ||
+    errMsg.includes('econnreset') ||
+    errMsg.includes('etimedout');
+
   return {
     name: 'PostgrestError',
-    message: err?.message || fallbackMessage,
+    message: isNetworkError
+      ? `Network error (unable to reach server): ${err?.message || fallbackMessage}`
+      : err?.message || fallbackMessage,
     details: err?.details || '',
     hint: err?.hint || '',
-    code: err?.code || 'UNKNOWN',
+    code: isNetworkError ? 'NETWORK_ERROR' : err?.code || 'UNKNOWN',
   };
 }
 

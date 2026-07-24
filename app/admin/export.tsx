@@ -5,6 +5,7 @@ import { Card, Button, StatusBadge, Select } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { confirm } from '@/lib/confirm';
 import { formatDateTime } from '@/lib/utils';
+import { DISTRICT_FILTER_OPTIONS } from '@/constants/districts';
 import { 
   Download, Calendar, AlertTriangle, CheckCircle, 
   Trash2, RefreshCw, FileText, Filter, Clock 
@@ -15,7 +16,7 @@ interface ExportJob {
   admin_id: string;
   export_type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs';
   filters: Record<string, any>;
-  format: 'CSV' | 'XLSX';
+  format: 'CSV' | 'XLSX' | 'PDF';
   status: 'pending' | 'processing' | 'completed' | 'failed';
   file_url: string | null;
   error_message: string | null;
@@ -48,8 +49,8 @@ export default function ExportCenterScreen() {
   const [refreshing, setRefreshing] = useState(false);
   
   // Form States
-  const [exportType, setExportType] = useState<'members' | 'payments' | 'certificates' | 'audit_logs'>('members');
-  const [format, setFormat] = useState<'CSV' | 'XLSX'>('CSV');
+  const [exportType, setExportType] = useState<'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'>('members');
+  const [format, setFormat] = useState<'CSV' | 'XLSX' | 'PDF'>('CSV');
   const [filterDistrict, setFilterDistrict] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -105,8 +106,25 @@ export default function ExportCenterScreen() {
       if (filterDistrict !== 'all') filters.district = filterDistrict;
       
       if (filterStatus !== 'all') {
-        if (exportType === 'members') filters.account_status = filterStatus;
-        else if (exportType === 'payments' || exportType === 'certificates') filters.status = filterStatus;
+        if (exportType === 'members') {
+          if (['received', 'unpaid', 'pending', 'paid', 'failed'].includes(filterStatus)) {
+            filters.payment_status = filterStatus;
+          } else if (['approved', 'rejected'].includes(filterStatus)) {
+            filters.approval_status = filterStatus;
+          } else if (['active', 'suspended', 'deleted'].includes(filterStatus)) {
+            filters.account_status = filterStatus;
+          }
+        } else if (exportType === 'firms') {
+          if (['received', 'unpaid', 'pending', 'paid', 'failed'].includes(filterStatus)) {
+            filters.payment_status = filterStatus;
+          } else if (['approved', 'rejected'].includes(filterStatus)) {
+            filters.approval_status = filterStatus;
+          }
+        } else if (exportType === 'payments') {
+          filters.payment_status = filterStatus;
+        } else if (exportType === 'certificates') {
+          filters.status = filterStatus;
+        }
       }
 
       await callAdminAction('generate-export', {
@@ -169,6 +187,7 @@ export default function ExportCenterScreen() {
                 value={exportType}
                 options={[
                   { label: 'Members / Accounts', value: 'members' },
+                  { label: 'Firms / Business', value: 'firms' },
                   { label: 'Payments logs', value: 'payments' },
                   { label: 'Certificates issued', value: 'certificates' },
                   { label: 'Audit Logs trails', value: 'audit_logs' }
@@ -176,6 +195,7 @@ export default function ExportCenterScreen() {
                 onValueChange={(val: any) => {
                   setExportType(val);
                   setFilterStatus('all');
+                  setFilterDistrict('all');
                 }}
               />
             </View>
@@ -187,39 +207,79 @@ export default function ExportCenterScreen() {
                   value={format}
                   options={[
                     { label: 'CSV format', value: 'CSV' },
-                    { label: 'XLSX Spreadsheet', value: 'XLSX' }
+                    { label: 'XLSX Spreadsheet', value: 'XLSX' },
+                    { label: 'PDF Document', value: 'PDF' }
                   ]}
                   onValueChange={(val: any) => setFormat(val)}
                 />
               </View>
 
-              {exportType === 'members' && (
+              {exportType !== 'audit_logs' && (
                 <View className="flex-1">
                   <Text className="text-xs font-bold text-gray-500 mb-1.5">District Filter</Text>
                   <Select
                     value={filterDistrict}
-                    options={[
-                      { label: 'All Districts', value: 'all' },
-                      { label: 'Nagpur', value: 'Nagpur' },
-                      { label: 'Nagpur Gramin', value: 'Nagpur Gramin' },
-                      { label: 'Hingna', value: 'Hingna' },
-                      { label: 'Kuhi', value: 'Kuhi' },
-                      { label: 'Kalmeshwar', value: 'Kalmeshwar' },
-                      { label: 'Katol', value: 'Katol' },
-                      { label: 'Narkhed', value: 'Narkhed' },
-                      { label: 'Saoner', value: 'Saoner' },
-                      { label: 'Parshivani', value: 'Parshivani' },
-                      { label: 'Kamthi', value: 'Kamthi' },
-                      { label: 'Ramtek', value: 'Ramtek' },
-                      { label: 'Mouda', value: 'Mouda' },
-                      { label: 'Umred', value: 'Umred' },
-                      { label: 'Bhiwapur', value: 'Bhiwapur' }
-                    ]}
+                    options={DISTRICT_FILTER_OPTIONS as any}
                     onValueChange={(val: any) => setFilterDistrict(val)}
                   />
                 </View>
               )}
             </View>
+
+            {/* Dynamic Status Filter based on export type */}
+            {exportType !== 'audit_logs' && (
+              <View>
+                <Text className="text-xs font-bold text-gray-500 mb-1.5">Status Filter</Text>
+                <Select
+                  value={filterStatus}
+                  options={
+                    exportType === 'members'
+                      ? [
+                          { label: 'All Statuses', value: 'all' },
+                          { label: '── Payment Status ──', value: '__divider_pay', disabled: true },
+                          { label: 'Payment Received (Paid)', value: 'received' },
+                          { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
+                          { label: 'Payment Pending', value: 'pending' },
+                          { label: 'Payment Paid', value: 'paid' },
+                          { label: 'Payment Failed', value: 'failed' },
+                          { label: '── Approval Status ──', value: '__divider_appr', disabled: true },
+                          { label: 'Approved', value: 'approved' },
+                          { label: 'Rejected', value: 'rejected' },
+                          { label: '── Account Status ──', value: '__divider_acc', disabled: true },
+                          { label: 'Active', value: 'active' },
+                          { label: 'Suspended', value: 'suspended' },
+                        ]
+                      : exportType === 'firms'
+                      ? [
+                          { label: 'All Statuses', value: 'all' },
+                          { label: 'Payment Received (Paid)', value: 'received' },
+                          { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
+                          { label: 'Payment Pending', value: 'pending' },
+                          { label: 'Payment Paid', value: 'paid' },
+                          { label: 'Approved', value: 'approved' },
+                          { label: 'Rejected', value: 'rejected' },
+                        ]
+                      : exportType === 'payments'
+                      ? [
+                          { label: 'All Statuses', value: 'all' },
+                          { label: 'Payment Received (Paid)', value: 'received' },
+                          { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
+                          { label: 'Paid', value: 'paid' },
+                          { label: 'Pending', value: 'pending' },
+                          { label: 'Failed', value: 'failed' },
+                        ]
+                      : exportType === 'certificates'
+                      ? [
+                          { label: 'All Statuses', value: 'all' },
+                          { label: 'Active', value: 'active' },
+                          { label: 'Revoked', value: 'revoked' },
+                        ]
+                      : [{ label: 'All', value: 'all' }]
+                  }
+                  onValueChange={(val: any) => setFilterStatus(val)}
+                />
+              </View>
+            )}
 
             {triggerLoading ? (
               <ActivityIndicator size="small" color="#15803d" className="py-2" />
@@ -277,12 +337,21 @@ export default function ExportCenterScreen() {
 
                 {/* Download trigger actions */}
                 {job.status === 'completed' && job.file_url ? (
-                  <Button 
-                    title="Download Export File" 
-                    variant="primary" 
-                    size="sm"
-                    onPress={() => handleDownloadFile(job.id)}
-                  />
+                  exp.expired ? (
+                    <View className="flex-row items-center gap-2 bg-gray-100 p-2.5 rounded-lg border border-gray-200">
+                      <Clock size={14} color="#9ca3af" />
+                      <Text className="text-[10px] text-gray-500 font-semibold flex-1">
+                        Export file has expired and is no longer available for download.
+                      </Text>
+                    </View>
+                  ) : (
+                    <Button 
+                      title="Download Export File" 
+                      variant="primary" 
+                      size="sm"
+                      onPress={() => handleDownloadFile(job.id)}
+                    />
+                  )
                 ) : job.status === 'failed' ? (
                   <View className="flex-row items-center gap-2 bg-red-50 p-2.5 rounded-lg border border-red-100">
                     <AlertTriangle size={14} color="#ef4444" />
@@ -293,7 +362,7 @@ export default function ExportCenterScreen() {
                 ) : (
                   <View className="flex-row items-center justify-center gap-2 py-2">
                     <ActivityIndicator size="small" color="#f59e0b" />
-                    <Text className="text-xs font-semibold text-amber-500">Compiling Excel / CSV file...</Text>
+                    <Text className="text-xs font-semibold text-amber-500">Compiling {job.format} file...</Text>
                   </View>
                 )}
               </Card>

@@ -76,27 +76,41 @@ export default function LoginScreen() {
 
     let targetEmail = inputStr;
     if (!inputStr.includes('@')) {
-      // Input is a Member ID (e.g. NDADA-10042 or 10042)
+      // Input is a Phone Number (e.g. 9876543210)
       try {
-        const formattedId = inputStr.toUpperCase().startsWith('NDADA-')
-          ? inputStr.toUpperCase()
-          : `NDADA-${inputStr}`;
+        const { data: lookedUpEmail, error: rpcErr } = await supabase
+          .rpc('lookup_email_by_phone', { p_phone: inputStr });
 
-        const { data: memberAcc } = await supabase
-          .from('accounts')
-          .select('email')
-          .or(`membership_id.eq.${formattedId},membership_id.eq.${inputStr}`)
-          .maybeSingle();
+        if (rpcErr) {
+          console.warn('Phone number lookup RPC error:', rpcErr);
+          const msg = String(rpcErr.message || '').toLowerCase();
+          if (
+            msg.includes('failed to fetch') ||
+            msg.includes('network request failed') ||
+            msg.includes('fetcherror') ||
+            msg.includes('typeerror') ||
+            msg.includes('network error')
+          ) {
+            setError('Network error while looking up phone number (unable to fetch). Please check your internet connection.');
+          } else {
+            setError(rpcErr.message || 'Unable to lookup phone number. Please enter your registered email address.');
+          }
+          setLoading(false);
+          return;
+        }
 
-        if (memberAcc?.email) {
-          targetEmail = memberAcc.email;
+        if (lookedUpEmail) {
+          targetEmail = lookedUpEmail;
         } else {
-          setError(`No account found matching Member ID "${inputStr}". Please check your ID or enter your email.`);
+          setError(`No account found matching phone number "${inputStr}". Please check your phone number or enter your registered email.`);
           setLoading(false);
           return;
         }
       } catch (err) {
-        console.warn('Member ID lookup failed:', err);
+        console.warn('Phone number lookup failed:', err);
+        setError(`Unable to lookup phone number. Please enter your registered email address.`);
+        setLoading(false);
+        return;
       }
     }
 
@@ -262,14 +276,14 @@ export default function LoginScreen() {
                   </View>
                 ) : null}
 
-                {/* Email / Member ID Input */}
+                {/* Email or Phone Number Input */}
                 <Text className="mb-1.5 text-xs font-medium" style={{ color: 'rgba(187,247,208,0.85)' }}>
-                  Email / Member ID
+                  Email or Phone Number
                 </Text>
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="you@example.com or NDADA-10042"
+                  placeholder="you@example.com or 9876543210"
                   placeholderTextColor="rgba(156,163,175,0.6)"
                   keyboardType="email-address"
                   autoCapitalize="none"

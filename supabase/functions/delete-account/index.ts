@@ -92,8 +92,8 @@ serve(async (req) => {
     const memberId = account.id;
     console.log(`📄 Matching member account ID: ${memberId}`);
 
-    // --- 1. Clean Up Uploaded Files (Best-Effort) ---
-    const bucketsToCleanup = ['documents', 'id-proofs', 'payment-proofs'];
+    // --- 1. Clean Up Uploaded Files & Certificate Files (Best-Effort) ---
+    const bucketsToCleanup = ['documents', 'id-proofs', 'payment-proofs', 'certificates'];
     for (const bucket of bucketsToCleanup) {
       try {
         const { data: files, error: listError } = await supabase.storage
@@ -120,6 +120,36 @@ serve(async (req) => {
       } catch (err) {
         console.warn(`⚠️ Unexpected error cleaning up bucket "${bucket}":`, err);
       }
+    }
+
+    // --- 1b. Clean Up Related Database Records (Certificates, Notifications, Queue, Assignments, Drafts) ---
+    try {
+      // Clean certificates storage files referenced directly in certificates table
+      const { data: certs } = await supabase
+        .from('certificates')
+        .select('id, certificate_url')
+        .eq('member_id', memberId);
+
+      if (certs && certs.length > 0) {
+        for (const cert of certs) {
+          if (cert.certificate_url) {
+            await supabase.storage
+              .from('certificates')
+              .remove([cert.certificate_url])
+              .catch((err: any) => console.error('Failed to delete cert file:', err));
+          }
+          await supabase.from('certificate_downloads').delete().eq('certificate_id', cert.id).catch(() => {});
+        }
+      }
+
+      await supabase.from('certificates').delete().eq('member_id', memberId).catch(() => {});
+      await supabase.from('certificate_generation_queue').delete().eq('account_id', memberId).catch(() => {});
+      await supabase.from('notifications').delete().eq('user_id', userId).catch(() => {});
+      await supabase.from('review_assignments').delete().eq('account_id', memberId).catch(() => {});
+      await supabase.from('account_drafts').delete().eq('user_id', userId).catch(() => {});
+      console.log('✅ Cleaned up related records (certificates, notifications, assignments, queue, drafts)');
+    } catch (relErr) {
+      console.warn('⚠️ Error cleaning up related DB records:', relErr);
     }
 
     // --- 2. Anonymize the Accounts Table Entry ---

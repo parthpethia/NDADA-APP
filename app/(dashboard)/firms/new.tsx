@@ -244,14 +244,19 @@ function LicenseCard({
 const formatISOToDDMMYYYY = (isoStr: string | null | undefined): string => {
   if (!isoStr) return '';
   try {
+    const cleanStr = String(isoStr).trim().split('T')[0].split('+')[0].split(' ')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+      const [year, month, day] = cleanStr.split('-').map(Number);
+      return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+    }
     const date = new Date(isoStr);
-    if (isNaN(date.getTime())) return '';
+    if (isNaN(date.getTime())) return isoStr;
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
     return `${day}/${month}/${year}`;
   } catch {
-    return '';
+    return isoStr || '';
   }
 };
 
@@ -262,7 +267,7 @@ const parseDateToISO = (dateStr: string | null | undefined): string | null => {
 
   // If already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
-    return trimmed.split('T')[0];
+    return trimmed.split('T')[0].split('+')[0].split(' ')[0];
   }
 
   // If DD/MM/YYYY
@@ -652,6 +657,13 @@ export default function NewFirmScreen() {
       console.warn('Failed to refresh member profile:', e);
     }
 
+    try {
+      const { cacheInvalidate, cacheKey } = require('@/lib/queryCache');
+      cacheInvalidate(cacheKey('dashboard', member.user_id));
+    } catch (e) {
+      console.warn('Failed to invalidate dashboard cache:', e);
+    }
+
     // Navigate forward appropriately
     if (edit === 'true') {
       router.replace('/(dashboard)/firms');
@@ -920,7 +932,7 @@ export default function NewFirmScreen() {
                   error={getFieldError('pesticide_license_number')}
                 />
                 <Input
-                  label="Expiry Date"
+                  label="Date of Issue"
                   placeholder="DD/MM/YYYY"
                   value={form.pesticide_license_expiry}
                   onChangeText={(v) => update('pesticide_license_expiry', v)}

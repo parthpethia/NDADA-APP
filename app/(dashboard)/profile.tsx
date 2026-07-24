@@ -127,6 +127,12 @@ export default function ProfileScreen() {
       Alert.alert('Error', error.message);
     } else {
       await refreshMember();
+      try {
+        const { cacheInvalidate, cacheKey } = require('@/lib/queryCache');
+        cacheInvalidate(cacheKey('dashboard', member.user_id));
+      } catch (e) {
+        console.warn('Failed to invalidate dashboard cache:', e);
+      }
       setEditing(false);
       Alert.alert('Success', 'Profile updated successfully.');
     }

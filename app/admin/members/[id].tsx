@@ -455,12 +455,14 @@ export default function Member360Screen() {
                 <View className="flex-row items-center gap-3">
                   <View className="flex-1">
                     <Select
+                      size="sm"
                       value={assignment?.assigned_to || 'unassigned'}
                       options={[
                         { label: 'Unassigned / Open Queue', value: 'unassigned' },
                         ...reviewers.map(r => ({ label: `${r.email} (${r.role})`, value: r.id }))
                       ]}
                       onValueChange={handleAssignReviewer}
+                      className="mb-0"
                     />
                   </View>
                   <View className="rounded-lg bg-gray-100 p-2">
@@ -728,7 +730,7 @@ export default function Member360Screen() {
                       <Text className="text-xs font-semibold text-gray-900">{member.pesticide_license_number || 'N/A'}</Text>
                     </View>
                     <View className="flex-row justify-between">
-                      <Text className="text-xs text-gray-500 font-medium">Expiry Date</Text>
+                      <Text className="text-xs text-gray-500 font-medium">Date of Issue</Text>
                       <Text className="text-xs font-semibold text-gray-900">{member.pesticide_license_expiry ? formatDate(member.pesticide_license_expiry) : 'N/A'}</Text>
                     </View>
                   </View>

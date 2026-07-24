@@ -595,15 +595,16 @@ export function useAdmin() {
             export_type: type || 'members',
             format: format || 'CSV',
             filters: filters || {},
-            status: 'completed',
+            status: 'failed',
             file_url: null,
+            error_message: 'Edge function unreachable — export could not be compiled. Please check your network connection and try again.',
             expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           })
           .select('id')
           .single();
 
         if (dbErr) throw new Error(dbErr.message);
-        return { success: true, message: 'Export job created', job_id: data?.id };
+        return { success: true, message: 'Export job created (compilation unavailable — edge function offline)', job_id: data?.id };
       }
 
       case 'cleanup-exports': {
@@ -667,13 +668,25 @@ export function useAdmin() {
         console.error('❌ Admin action error:', anyError);
       }
 
+      const errName = typeof anyError.name === 'string' ? anyError.name : '';
+      const errMsg = typeof anyError.message === 'string' ? anyError.message.toLowerCase() : '';
       const isFetchError =
-        anyError.name === 'FunctionsFetchError' ||
-        (typeof anyError.message === 'string' && (
-          anyError.message.includes('Failed to send a request') ||
-          anyError.message.includes('FunctionsFetchError') ||
-          anyError.message.includes('Failed to fetch')
-        ));
+        errName === 'FunctionsFetchError' ||
+        errName === 'FunctionsRelayError' ||
+        errName === 'TypeError' ||
+        errName === 'FetchError' ||
+        errName === 'NetworkError' ||
+        errMsg.includes('failed to send a request') ||
+        errMsg.includes('functionsfetcherror') ||
+        errMsg.includes('failed to fetch') ||
+        errMsg.includes('network request failed') ||
+        errMsg.includes('network error') ||
+        errMsg.includes('load failed') ||
+        errMsg.includes('offline') ||
+        errMsg.includes('typeerror') ||
+        errMsg.includes('econnreset') ||
+        errMsg.includes('etimedout') ||
+        errMsg.includes('abort');
 
       if (isFetchError) {
         try {

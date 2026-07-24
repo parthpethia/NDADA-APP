@@ -8,7 +8,7 @@ import { confirm } from '@/lib/confirm';
 import { Account } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { DISTRICT_FILTER_OPTIONS } from '@/constants/districts';
-import { Search, Bookmark, BookmarkPlus, Trash2, Plus, X } from 'lucide-react-native';
+import { Search, Bookmark, BookmarkPlus, Trash2, Plus, X, Check } from 'lucide-react-native';
 
 export default function AdminMembersScreen() {
   const { callAdminAction, role } = useAdmin();
@@ -71,8 +71,13 @@ export default function AdminMembersScreen() {
       query = query.eq('district', filterDistrict);
     }
 
-    const { data } = await query.limit(50);
-    setMembers((data || []) as Account[]);
+    const { data, error } = await query.limit(50);
+    if (error) {
+      console.error('Failed to fetch members:', error);
+      Alert.alert('Fetch Error', `Failed to load members: ${error.message}`);
+    } else {
+      setMembers((data || []) as Account[]);
+    }
   }, [search, filterApproval, filterPayment, filterAccount, filterDistrict]);
 
   const fetchSavedFilters = useCallback(async () => {
@@ -163,8 +168,12 @@ export default function AdminMembersScreen() {
 
   useEffect(() => {
     const fetchReviewers = async () => {
-      const { data } = await supabase.from('admin_users').select('id, email, role');
-      setReviewers(data || []);
+      const { data, error } = await supabase.from('admin_users').select('id, email, role');
+      if (error) {
+        console.warn('Failed to fetch reviewers:', error.message);
+      } else {
+        setReviewers(data || []);
+      }
     };
     fetchReviewers();
   }, []);
@@ -232,8 +241,16 @@ export default function AdminMembersScreen() {
   };
 
   const handleAction = async (action: string, accountId: string, label: string) => {
-    const ok = await confirm('Confirm', `Are you sure you want to ${label}?`, {
-      confirmText: 'Confirm',
+    let confirmMsg = `Are you sure you want to ${label}?`;
+    let confirmTitle = 'Confirm';
+
+    if (action === 'delete-member') {
+      confirmTitle = 'Delete Member Account';
+      confirmMsg = 'Are you sure you want to permanently delete this member? All personal data will be anonymized, uploaded documents & certificates will be deleted, and the user account will be locked.';
+    }
+
+    const ok = await confirm(confirmTitle, confirmMsg, {
+      confirmText: action === 'delete-member' ? 'Delete & Anonymize' : 'Confirm',
       destructive: true,
     });
     if (!ok) return;
@@ -348,9 +365,10 @@ export default function AdminMembersScreen() {
         </View>
 
         {/* Manual Selection Dropdown Filters */}
-        <View className="flex-col sm:flex-row gap-2 mt-1">
-          <View className="flex-1">
+        <View className="flex-row flex-wrap gap-2 mt-1">
+          <View className="flex-1 min-w-[140px]">
             <Select
+              size="sm"
               value={filterApproval}
               options={[
                 { label: 'All Approvals', value: 'all' },
@@ -365,8 +383,9 @@ export default function AdminMembersScreen() {
               className="mb-0"
             />
           </View>
-          <View className="flex-1">
+          <View className="flex-1 min-w-[140px]">
             <Select
+              size="sm"
               value={filterPayment}
               options={[
                 { label: 'All Payments', value: 'all' },
@@ -381,8 +400,9 @@ export default function AdminMembersScreen() {
               className="mb-0"
             />
           </View>
-          <View className="flex-1">
+          <View className="flex-1 min-w-[140px]">
             <Select
+              size="sm"
               value={filterAccount}
               options={[
                 { label: 'All Statuses', value: 'all' },
@@ -397,8 +417,9 @@ export default function AdminMembersScreen() {
               className="mb-0"
             />
           </View>
-          <View className="flex-1">
+          <View className="flex-1 min-w-[140px]">
             <Select
+              size="sm"
               value={filterDistrict}
               options={DISTRICT_FILTER_OPTIONS as any}
               onValueChange={(val: any) => {
@@ -638,7 +659,7 @@ export default function AdminMembersScreen() {
                   }}
                 >
                   {selectedIds.includes(m.id) && (
-                    <Text className="text-[10px] font-bold text-white">✓</Text>
+                    <Check size={14} color="#fff" />
                   )}
                 </TouchableOpacity>
               )}
@@ -724,7 +745,7 @@ export default function AdminMembersScreen() {
                 loading={actionLoading === m.id}
               />
 
-              {role === 'super_admin' && (
+              {role === 'super_admin' && m.account_status !== 'deleted' && (
                 <Button
                   title="Delete"
                   variant="destructive"
@@ -790,12 +811,14 @@ export default function AdminMembersScreen() {
           <View className="flex-row items-center gap-2 border-t border-gray-100 pt-2 mt-1">
             <View className="flex-1">
               <Select
+                size="sm"
                 value={bulkReviewerId}
                 options={[
                   { label: 'Choose Reviewer to Assign...', value: 'unassigned' },
                   ...reviewers.map(r => ({ label: `${r.email} (${r.role})`, value: r.id }))
                 ]}
                 onValueChange={(val: any) => setBulkReviewerId(val)}
+                className="mb-0"
               />
             </View>
             <Button

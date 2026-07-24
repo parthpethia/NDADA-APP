@@ -27,17 +27,26 @@ export default function PaymentScreen() {
     cashError,
     handlePayWithRazorpay,
     confirmCashPayment,
+    reconcilePaymentStatus,
     setCashError,
   } = useRazorpayCheckout();
 
   useEffect(() => {
     if (!member) return;
+    if (member.payment_status === 'paid') {
+      router.replace('/(dashboard)/certificate');
+      return;
+    }
     const cashSelected = member.payment_method === 'cash';
-    const cashPending = cashSelected && member.payment_status !== 'paid' && !member.cash_payment_verified;
+    const cashPending = cashSelected && !member.cash_payment_verified;
     if (cashPending) {
       router.replace('/(dashboard)/cash-payment-review');
+      return;
     }
-  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id]);
+    if (member.payment_status === 'processing') {
+      reconcilePaymentStatus();
+    }
+  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id, reconcilePaymentStatus]);
 
   if (!member) return null;
 
@@ -52,7 +61,10 @@ export default function PaymentScreen() {
   const handleRefreshStatus = async () => {
     setRefreshing(true);
     try {
-      await refreshMember();
+      await reconcilePaymentStatus();
+      if (member?.payment_status === 'paid') {
+        router.replace('/(dashboard)/certificate');
+      }
     } finally {
       setRefreshing(false);
     }

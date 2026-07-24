@@ -7,12 +7,16 @@ import { Image, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardLayout() {
-  const { session, loading, adminUser, profileReady } = useAuth();
+  const { session, loading, adminUser, profileReady, member, signOut } = useAuth();
   const insets = useSafeAreaInsets();
 
   if (loading || !profileReady) return <LoadingScreen />;
   if (!session) return <Redirect href="/(auth)/login" />;
   if (adminUser) return <Redirect href="/admin" />;
+  if (member?.account_status === 'deleted') {
+    signOut();
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <Tabs

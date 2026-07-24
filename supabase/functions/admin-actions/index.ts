@@ -3,6 +3,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+import { jsPDF } from 'https://esm.sh/jspdf@2.5.1';
+import autoTable from 'https://esm.sh/jspdf-autotable@3.8.2';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -180,6 +183,8 @@ serve(async (req) => {
       case 'generate-export': {
         if (params.type === 'members') {
           await verifyPermission('manage_members');
+        } else if (params.type === 'firms') {
+          await verifyPermission('manage_firms');
         } else if (params.type === 'payments') {
           await verifyPermission('manage_payments');
         } else if (params.type === 'certificates') {
@@ -388,16 +393,125 @@ async function activateAccount(supabase: any, accountId: string, adminDbId: stri
 }
 
 async function deleteAccount(supabase: any, accountId: string, adminDbId: string) {
-  const { data: updated } = await supabase
+  const { data: account } = await supabase
     .from('accounts')
-    .update({ account_status: 'deleted' })
+    .select('id, user_id, email')
     .eq('id', accountId)
-    .select('id, user_id')
     .single();
 
-  if (!updated) throw new Error('Account not found');
-  await logAudit(supabase, adminDbId, 'account_deleted', updated.user_id, `Deleted account ${accountId}`);
-  return { message: 'Account deleted' };
+  if (!account) throw new Error('Account not found');
+
+  const userId = account.user_id;
+  const memberId = account.id;
+
+  // 1. Storage bucket cleanup
+  const bucketsToCleanup = ['documents', 'id-proofs', 'payment-proofs', 'certificates'];
+  for (const bucket of bucketsToCleanup) {
+    try {
+      const { data: files } = await supabase.storage.from(bucket).list(memberId);
+      if (files && files.length > 0) {
+        const filesToDelete = files.map((f: any) => `${memberId}/${f.name}`);
+        await supabase.storage.from(bucket).remove(filesToDelete).catch(() => {});
+      }
+    } catch (e) {
+      console.warn(`Admin delete: storage cleanup warning for ${bucket}:`, e);
+    }
+  }
+
+  // 2. Clean related database records
+  try {
+    const { data: certs } = await supabase
+      .from('certificates')
+      .select('id, certificate_url')
+      .eq('member_id', memberId);
+
+    if (certs && certs.length > 0) {
+      for (const cert of certs) {
+        if (cert.certificate_url) {
+          await supabase.storage.from('certificates').remove([cert.certificate_url]).catch(() => {});
+        }
+        await supabase.from('certificate_downloads').delete().eq('certificate_id', cert.id).catch(() => {});
+      }
+    }
+
+    await supabase.from('certificates').delete().eq('member_id', memberId).catch(() => {});
+    await supabase.from('certificate_generation_queue').delete().eq('account_id', memberId).catch(() => {});
+    if (userId) {
+      await supabase.from('notifications').delete().eq('user_id', userId).catch(() => {});
+      await supabase.from('account_drafts').delete().eq('user_id', userId).catch(() => {});
+    }
+    await supabase.from('review_assignments').delete().eq('account_id', memberId).catch(() => {});
+  } catch (relErr) {
+    console.warn('Admin delete: related DB cleanup warning:', relErr);
+  }
+
+  // 3. Anonymize the Accounts record
+  const dummyEmail = `deleted_${userId ? userId.substring(0, 8) : memberId.substring(0, 8)}@deleted.invalid`;
+  const { error: updateErr } = await supabase
+    .from('accounts')
+    .update({
+      full_name: 'Deleted User',
+      email: dummyEmail,
+      phone: '',
+      address: '',
+      district: null,
+      id_proof_url: null,
+      applicant_photo_url: null,
+      documents_urls: [],
+
+      firm_name: '',
+      firm_type: 'other',
+      license_number: '',
+      registration_number: '',
+      gst_number: null,
+      firm_address: '',
+      contact_phone: '',
+      contact_email: '',
+      firm_pin_code: null,
+      partner_proprietor_name: null,
+      whatsapp_number: null,
+      aadhaar_card_number: null,
+      ifms_number: null,
+      seed_cotton_license_number: null,
+      seed_cotton_license_expiry: null,
+      sarthi_id_cotton: null,
+      seed_general_license_number: null,
+      seed_general_license_expiry: null,
+      sarthi_id_general: null,
+      pesticide_license_number: null,
+      pesticide_license_expiry: null,
+      fertilizer_license_number: null,
+      fertilizer_license_expiry: null,
+      residence_address: null,
+      residence_pin_code: null,
+
+      account_status: 'deleted',
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', memberId);
+
+  if (updateErr) throw new Error(`Failed to anonymize account profile: ${updateErr.message}`);
+
+  // 4. Anonymize/Lock Auth user record if user_id exists
+  if (userId) {
+    try {
+      const randomPassword = crypto.randomUUID();
+      await supabase.auth.admin.updateUserById(userId, {
+        email: dummyEmail,
+        password: randomPassword,
+        email_confirm: false,
+        phone_confirm: false,
+        user_metadata: {},
+        app_metadata: { deleted: true },
+      });
+    } catch (authErr: any) {
+      console.warn('Admin delete: auth user lockout warning:', authErr?.message);
+    }
+  }
+
+  await logAudit(supabase, adminDbId, 'account_deleted', userId, `Anonymized and deleted account ${accountId}`);
+  return { message: 'Account deleted and data anonymized successfully' };
 }
 
 async function revokeCertificate(supabase: any, accountId: string, adminDbId: string) {
@@ -804,7 +918,7 @@ async function queueJobAction(supabase: any, jobId: string, jobAction: 'retry' |
 
 async function generateBackgroundExport(
   supabase: any,
-  params: { type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'; filters?: Record<string, any>; format: 'CSV' | 'XLSX' },
+  params: { type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'; filters?: Record<string, any>; format: 'CSV' | 'XLSX' | 'PDF' },
   adminDbId: string
 ) {
   const exportType = params.type;
@@ -826,37 +940,92 @@ async function generateBackgroundExport(
 
   if (jobErr) throw jobErr;
 
-  // Compile matching records asynchronously
+  // Compile matching records
   try {
     let rows: any[] = [];
     let headers: string[] = [];
     
     if (exportType === 'members') {
-      headers = ['ID', 'Membership ID', 'Full Name', 'Email', 'Phone', 'District', 'Payment Status', 'Approval Status', 'Account Status', 'Joined Date'];
-      let query = supabase.from('accounts').select('id, membership_id, full_name, email, phone, district, payment_status, approval_status, account_status, created_at');
+      headers = ['ID', 'Membership ID', 'Full Name', 'Email', 'Phone', 'District', 'Payment Status', 'Approval Status', 'Account Status', 'Firm Name', 'Firm Type', 'License No', 'Aadhaar No', 'Joined Date'];
+      let query = supabase.from('accounts').select('id, membership_id, full_name, email, phone, district, payment_status, approval_status, account_status, firm_name, firm_type, license_number, aadhaar_card_number, created_at');
       if (filters.district) query = query.eq('district', filters.district);
-      if (filters.payment_status) query = query.eq('payment_status', filters.payment_status);
+      if (filters.payment_status) {
+        if (filters.payment_status === 'received') {
+          query = query.eq('payment_status', 'paid');
+        } else if (filters.payment_status === 'unpaid') {
+          query = query.in('payment_status', ['pending', 'failed']);
+        } else {
+          query = query.eq('payment_status', filters.payment_status);
+        }
+      }
+      if (filters.approval_status) query = query.eq('approval_status', filters.approval_status);
+      if (filters.account_status) query = query.eq('account_status', filters.account_status);
+      const { data } = await query;
+      rows = (data || []).map((r: any) => [
+        r.id, r.membership_id || '', r.full_name || '', r.email || '', r.phone || '', r.district || '', r.payment_status || '', r.approval_status || '', r.account_status || '', r.firm_name || '', r.firm_type || '', r.license_number || '', r.aadhaar_card_number || '', r.created_at || ''
+      ]);
+    } else if (exportType === 'firms') {
+      headers = ['ID', 'Firm Name', 'Firm Type', 'Owner Name', 'District', 'License Number', 'Registration Number', 'GST Number', 'Contact Phone', 'Contact Email', 'Firm Address', 'Pin Code', 'Payment Status', 'Approval Status', 'Created Date'];
+      let query = supabase.from('accounts').select('id, firm_name, firm_type, full_name, district, license_number, registration_number, gst_number, contact_phone, contact_email, firm_address, firm_pin_code, payment_status, approval_status, created_at');
+      if (filters.district) query = query.eq('district', filters.district);
+      if (filters.payment_status) {
+        if (filters.payment_status === 'received') {
+          query = query.eq('payment_status', 'paid');
+        } else if (filters.payment_status === 'unpaid') {
+          query = query.in('payment_status', ['pending', 'failed']);
+        } else {
+          query = query.eq('payment_status', filters.payment_status);
+        }
+      }
       if (filters.approval_status) query = query.eq('approval_status', filters.approval_status);
       const { data } = await query;
       rows = (data || []).map((r: any) => [
-        r.id, r.membership_id, r.full_name, r.email, r.phone || '', r.district || '', r.payment_status, r.approval_status, r.account_status, r.created_at
+        r.id, r.firm_name || '', r.firm_type || '', r.full_name || '', r.district || '', r.license_number || '', r.registration_number || '', r.gst_number || '', r.contact_phone || '', r.contact_email || '', r.firm_address || '', r.firm_pin_code || '', r.payment_status || '', r.approval_status || '', r.created_at || ''
       ]);
     } else if (exportType === 'payments') {
-      headers = ['ID', 'Member ID', 'Amount', 'Currency', 'Status', 'Payment Method', 'Razorpay ID', 'Created Date'];
-      let query = supabase.from('payments').select('id, member_id, amount, currency, status, payment_method, razorpay_payment_id, created_at');
-      if (filters.status) query = query.eq('status', filters.status);
+      headers = ['Payment ID', 'Member Name', 'Firm Name', 'District', 'Phone', 'Amount (INR)', 'Currency', 'Payment Status', 'Payment Method', 'Razorpay ID', 'Created Date'];
+      const selectFields = filters.district
+        ? 'id, member_id, amount, currency, status, payment_method, razorpay_payment_id, created_at, accounts!inner(full_name, firm_name, district, phone)'
+        : 'id, member_id, amount, currency, status, payment_method, razorpay_payment_id, created_at, accounts(full_name, firm_name, district, phone)';
+      
+      let query = supabase.from('payments').select(selectFields);
+      if (filters.district) query = query.eq('accounts.district', filters.district);
+      
+      const payStatus = filters.payment_status || filters.status;
+      if (payStatus) {
+        if (payStatus === 'received') {
+          query = query.eq('status', 'paid');
+        } else if (payStatus === 'unpaid') {
+          query = query.in('status', ['pending', 'failed']);
+        } else {
+          query = query.eq('status', payStatus);
+        }
+      }
+      
       const { data } = await query;
-      rows = (data || []).map((r: any) => [
-        r.id, r.member_id, r.amount, r.currency, r.status, r.payment_method || 'online', r.razorpay_payment_id || '', r.created_at
-      ]);
+      rows = (data || []).map((r: any) => {
+        const acc = r.accounts || {};
+        return [
+          r.id, acc.full_name || '', acc.firm_name || '', acc.district || '', acc.phone || '', r.amount, r.currency || 'INR', r.status || '', r.payment_method || 'online', r.razorpay_payment_id || '', r.created_at || ''
+        ];
+      });
     } else if (exportType === 'certificates') {
-      headers = ['ID', 'Certificate ID', 'Member ID', 'Issued Date', 'Status', 'URL'];
-      let query = supabase.from('certificates').select('id, certificate_id, member_id, issued_at, status, certificate_url');
+      headers = ['Certificate DB ID', 'Certificate No.', 'Member Name', 'Firm Name', 'District', 'Status', 'Issued Date', 'Certificate URL'];
+      const selectFields = filters.district
+        ? 'id, certificate_id, member_id, issued_at, status, certificate_url, accounts!inner(full_name, firm_name, district)'
+        : 'id, certificate_id, member_id, issued_at, status, certificate_url, accounts(full_name, firm_name, district)';
+
+      let query = supabase.from('certificates').select(selectFields);
+      if (filters.district) query = query.eq('accounts.district', filters.district);
       if (filters.status) query = query.eq('status', filters.status);
+      
       const { data } = await query;
-      rows = (data || []).map((r: any) => [
-        r.id, r.certificate_id, r.member_id, r.issued_at, r.status, r.certificate_url
-      ]);
+      rows = (data || []).map((r: any) => {
+        const acc = r.accounts || {};
+        return [
+          r.id, r.certificate_id || '', acc.full_name || '', acc.firm_name || '', acc.district || '', r.status || '', r.issued_at || '', r.certificate_url || ''
+        ];
+      });
     } else if (exportType === 'audit_logs') {
       headers = ['ID', 'Admin ID', 'Action', 'Target User ID', 'Details', 'Timestamp'];
       const { data } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
@@ -867,39 +1036,94 @@ async function generateBackgroundExport(
       throw new Error(`Unsupported export type: ${exportType}`);
     }
 
-    // 2. Generate standard escaped CSV data stream
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => 
-        row.map((val: any) => {
-          const str = String(val === null || val === undefined ? '' : val);
-          // Escape quotes and wrap in quotes
-          return `"${str.replace(/"/g, '""')}"`;
-        }).join(',')
-      )
-    ].join('\n');
-
-    // 3. Ensure Bucket exists
+    // 2. Ensure Bucket exists
     await supabase.storage.createBucket('secure-exports', { public: false }).catch(() => {});
 
-    // 4. Upload file to Supabase Secure Private Bucket
-    const filename = `${exportType}_export_${job.id}.csv`;
+    let filename: string;
+    let fileContent: Uint8Array | string;
+    let contentType: string;
+
+    if (format === 'XLSX') {
+      // Generate real XLSX using SheetJS
+      const wsData = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      // Auto-size columns based on content width
+      ws['!cols'] = headers.map((h, i) => {
+        const maxLen = Math.max(
+          h.length,
+          ...rows.map(r => String(r[i] ?? '').length)
+        );
+        return { wch: Math.min(maxLen + 2, 50) };
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, exportType.replace(/_/g, ' '));
+      const xlsxBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      fileContent = new Uint8Array(xlsxBuffer);
+      filename = `${exportType}_export_${job.id}.xlsx`;
+      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    } else if (format === 'PDF') {
+      // Generate PDF using jsPDF + autoTable
+      const doc = new jsPDF({ orientation: headers.length > 6 ? 'landscape' : 'portrait' });
+      const title = `${exportType.replace(/_/g, ' ').toUpperCase()} EXPORT REPORT`;
+      doc.setFontSize(14);
+      doc.text(title, 14, 15);
+      doc.setFontSize(8);
+      doc.text(`Generated: ${new Date().toISOString()}  |  Total Records: ${rows.length}`, 14, 22);
+      // Add applied filters info
+      const filterEntries = Object.entries(filters).filter(([, v]) => v && v !== 'all');
+      if (filterEntries.length > 0) {
+        doc.text(`Filters: ${filterEntries.map(([k, v]) => `${k}=${v}`).join(', ')}`, 14, 27);
+      }
+
+      const autoTableFunc = typeof autoTable === 'function' ? autoTable : (autoTable as any)?.default;
+      if (typeof autoTableFunc === 'function') {
+        autoTableFunc(doc, {
+          head: [headers],
+          body: rows.map(row => row.map((val: any) => String(val === null || val === undefined ? '' : val))),
+          startY: filterEntries.length > 0 ? 32 : 27,
+          styles: { fontSize: 7, cellPadding: 2 },
+          headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          margin: { left: 10, right: 10 },
+        });
+      }
+
+      const pdfOutput = doc.output('arraybuffer');
+      fileContent = new Uint8Array(pdfOutput);
+      filename = `${exportType}_export_${job.id}.pdf`;
+      contentType = 'application/pdf';
+    } else {
+      // Default: CSV
+      fileContent = [
+        headers.join(','),
+        ...rows.map(row => 
+          row.map((val: any) => {
+            const str = String(val === null || val === undefined ? '' : val);
+            return `"${str.replace(/"/g, '""')}"`;
+          }).join(',')
+        )
+      ].join('\n');
+      filename = `${exportType}_export_${job.id}.csv`;
+      contentType = 'text/csv';
+    }
+
+    // 3. Upload file to Supabase Secure Private Bucket
     const { error: uploadErr } = await supabase.storage
       .from('secure-exports')
-      .upload(filename, csvContent, {
-        contentType: 'text/csv',
+      .upload(filename, fileContent, {
+        contentType,
         upsert: true
       });
 
     if (uploadErr) throw uploadErr;
 
-    // 5. Save reference & complete job
+    // 4. Save reference & complete job
     await supabase
       .from('export_jobs')
       .update({ status: 'completed', file_url: filename })
       .eq('id', job.id);
 
-    await logAudit(supabase, adminDbId, 'export_generated', null, `Export compiled: ${exportType}`);
+    await logAudit(supabase, adminDbId, 'export_generated', null, `Export compiled: ${exportType} (${format}, ${rows.length} records)`);
     return { message: 'Export compiled successfully', job_id: job.id };
   } catch (err: any) {
     console.error('Export compiler failed:', err.message);

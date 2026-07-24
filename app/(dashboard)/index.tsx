@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { useDashboardData } from '@/lib/useDashboardData';
 import { Card, CardHeader, StatusBadge, Button, LoadingScreen, EmptyState } from '@/components/ui';
 import { TimelineDisplay } from './timeline';
@@ -29,6 +30,23 @@ export default function DashboardHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingProfile, setRefreshingProfile] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [reconcilingPayment, setReconcilingPayment] = useState(false);
+
+  const handleCheckPaymentStatus = async () => {
+    if (!member) return;
+    setReconcilingPayment(true);
+    try {
+      await supabase.functions.invoke('payment-reconciliation', {
+        body: { member_id: member.id, force: true },
+      });
+      await refreshMember();
+      await refreshDashboard();
+    } catch (e) {
+      console.warn('Reconciliation error:', e);
+    } finally {
+      setReconcilingPayment(false);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -193,7 +211,36 @@ export default function DashboardHome() {
       )}
 
       {/* Action based on current step */}
-      {hasFirm && !isPaid && (
+      {hasFirm && member.payment_status === 'processing' && (
+        <Card className="mb-5 border-blue-200 bg-blue-50">
+          <View className="items-center py-3">
+            <View className="mb-2 rounded-full bg-blue-100 p-3">
+              <CreditCard size={32} color="#2563eb" />
+            </View>
+            <Text className="mb-1 text-lg font-bold text-blue-900">
+              Verifying Payment
+            </Text>
+            <Text className="mb-4 max-w-[260px] text-center text-sm text-blue-700">
+              We're confirming your payment status with Razorpay. Your certificate will be issued automatically.
+            </Text>
+            <View className="w-full gap-2">
+              <Button
+                title="Check Payment Status"
+                size="lg"
+                loading={reconcilingPayment}
+                onPress={handleCheckPaymentStatus}
+              />
+              <Button
+                title="View Certificate Status"
+                variant="outline"
+                onPress={() => router.push('/(dashboard)/certificate')}
+              />
+            </View>
+          </View>
+        </Card>
+      )}
+
+      {hasFirm && !isPaid && member.payment_status !== 'processing' && (
         <Card className="mb-5 border-yellow-200 bg-yellow-50">
           <View className="items-center py-3">
             <View className="mb-2 rounded-full bg-yellow-100 p-3">

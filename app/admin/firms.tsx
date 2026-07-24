@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/utils';
 import { maskAadhaar } from '@/lib/aadhaar';
 import { DISTRICT_FILTER_OPTIONS, DISTRICT_EDIT_OPTIONS } from '@/constants/districts';
 
-import { Check, X, ChevronDown, ChevronUp, Edit2, Save, XCircle, FileText } from 'lucide-react-native';
+import { Check, X, ChevronDown, ChevronUp, Edit2, Save, XCircle, FileText, Search } from 'lucide-react-native';
 
 // District options imported from @/constants/districts
 
@@ -399,9 +399,10 @@ export default function AdminFirmsScreen() {
 
       {/* Filter & Sort Bar */}
       <View className="border-b border-gray-200 bg-white px-4 py-3">
-        <View className="mb-3 flex-row items-center gap-2">
+        <View className="mb-3 flex-row items-center rounded-lg border border-gray-300 bg-gray-50 px-3">
+          <Search size={18} color="#9ca3af" />
           <TextInput
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="ml-2 flex-1 py-1.5 text-base text-gray-900"
             placeholder="Search membership ID, email, firm, license..."
             placeholderTextColor="#9ca3af"
             value={searchQuery}
@@ -436,14 +437,19 @@ export default function AdminFirmsScreen() {
         </ScrollView>
 
         {/* District Filter */}
-        <Select
-          label="District"
-          options={DISTRICT_FILTER_OPTIONS as any}
-          value={filterDistrict}
-          onValueChange={setFilterDistrict}
-          placeholder="All Districts"
-          className="mb-0"
-        />
+        <View className="mb-3 flex-row items-center justify-between gap-2">
+          <Text className="text-xs font-semibold text-gray-700">Filter by District:</Text>
+          <View className="flex-1">
+            <Select
+              size="sm"
+              options={DISTRICT_FILTER_OPTIONS as any}
+              value={filterDistrict}
+              onValueChange={setFilterDistrict}
+              placeholder="All Districts"
+              className="mb-0"
+            />
+          </View>
+        </View>
 
         {/* Sort & Bulk Actions */}
         <View className="flex-row items-center justify-between">
@@ -616,13 +622,16 @@ export default function AdminFirmsScreen() {
                         <EditableField label="Firm Name" value={account.firm_name} fieldKey="firm_name" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         {editing ? (
                           <View className="flex-row justify-between items-center py-0.5">
-                            <Text className="text-xs text-gray-500 flex-1">Firm Type</Text>
+                            <Text className="text-xs text-gray-500 w-2/5 pr-1">Firm Type</Text>
                             <View className="flex-1">
                               <Select
+                                size="sm"
                                 value={editData.firm_type || account.firm_type}
                                 options={FIRM_TYPE_OPTIONS as any}
                                 onValueChange={(val) => handleEditChange('firm_type', val)}
                                 className="mb-0"
+                                buttonClassName="py-0.5 px-1 bg-primary-50/30 rounded border-b border-primary-200 min-h-[24px]"
+                                textClassName="text-xs font-semibold text-gray-900 text-right pr-1"
                               />
                             </View>
                           </View>
@@ -649,13 +658,16 @@ export default function AdminFirmsScreen() {
                         <EditableField label="Aadhaar" value={account.aadhaar_card_number || ''} displayValue={maskAadhaar(account.aadhaar_card_number)} fieldKey="aadhaar_card_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         {editing ? (
                           <View className="flex-row justify-between items-center py-0.5">
-                            <Text className="text-xs text-gray-500 flex-1">District</Text>
+                            <Text className="text-xs text-gray-500 w-2/5 pr-1">District</Text>
                             <View className="flex-1">
                               <Select
+                                size="sm"
                                 value={editData.district || account.district || ''}
                                 options={DISTRICT_EDIT_OPTIONS as any}
                                 onValueChange={(val) => handleEditChange('district', val)}
                                 className="mb-0"
+                                buttonClassName="py-0.5 px-1 bg-primary-50/30 rounded border-b border-primary-200 min-h-[24px]"
+                                textClassName="text-xs font-semibold text-gray-900 text-right pr-1"
                               />
                             </View>
                           </View>
@@ -676,7 +688,7 @@ export default function AdminFirmsScreen() {
                         <EditableField label="General License Expiry" value={account.seed_general_license_expiry || ''} displayValue={account.seed_general_license_expiry ? formatDate(account.seed_general_license_expiry) : 'N/A'} fieldKey="seed_general_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Sarthi ID (General)" value={account.sarthi_id_general || ''} fieldKey="sarthi_id_general" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Pesticide License" value={account.pesticide_license_number || ''} fieldKey="pesticide_license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
-                        <EditableField label="Pesticide Expiry" value={account.pesticide_license_expiry || ''} displayValue={account.pesticide_license_expiry ? formatDate(account.pesticide_license_expiry) : 'N/A'} fieldKey="pesticide_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
+                        <EditableField label="Pesticide Date of Issue" value={account.pesticide_license_expiry || ''} displayValue={account.pesticide_license_expiry ? formatDate(account.pesticide_license_expiry) : 'N/A'} fieldKey="pesticide_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Fertilizer License" value={account.fertilizer_license_number || ''} fieldKey="fertilizer_license_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         <EditableField label="Fertilizer Expiry" value={account.fertilizer_license_expiry || ''} displayValue={account.fertilizer_license_expiry ? formatDate(account.fertilizer_license_expiry) : 'N/A'} fieldKey="fertilizer_license_expiry" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                       </View>

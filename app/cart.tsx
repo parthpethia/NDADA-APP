@@ -29,6 +29,7 @@ export default function CartScreen() {
     cashError,
     handlePayWithRazorpay,
     confirmCashPayment,
+    reconcilePaymentStatus,
     setCashError,
   } = useRazorpayCheckout();
 
@@ -53,8 +54,10 @@ export default function CartScreen() {
     const cashPending = cashSelected && member.payment_status !== 'paid' && !member.cash_payment_verified;
     if (cashPending) {
       router.replace('/(dashboard)/cash-payment-review');
+    } else if (member.payment_status === 'processing') {
+      reconcilePaymentStatus();
     }
-  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id]);
+  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id, reconcilePaymentStatus]);
 
   if (!member) return null;
 
@@ -79,6 +82,34 @@ export default function CartScreen() {
             title="Go to Dashboard"
             variant="outline"
             onPress={() => router.replace('/(dashboard)')}
+            className="mt-3"
+          />
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // Payment processing — show verification view
+  if (member.payment_status === 'processing') {
+    return (
+      <ScrollView className="flex-1 bg-gray-50" contentContainerClassName="p-4 pb-8">
+        <View className="mx-auto w-full max-w-lg items-center py-8">
+          <View className="mb-4 rounded-full bg-primary-100 p-5">
+            <CheckCircle size={48} color="#15803d" />
+          </View>
+          <Text className="mb-2 text-2xl font-bold text-primary-900">Verifying Payment...</Text>
+          <Text className="mb-6 text-center text-gray-500">
+            We're confirming your payment with Razorpay. Your certificate will be ready shortly.
+          </Text>
+          <Button
+            title="View Certificate"
+            onPress={() => router.push('/(dashboard)/certificate')}
+            size="lg"
+          />
+          <Button
+            title="Check Payment Status"
+            variant="outline"
+            onPress={() => void reconcilePaymentStatus()}
             className="mt-3"
           />
         </View>

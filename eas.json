@@ -6,13 +6,34 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mtnbscscwijowozhchfi.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bmJzY3Njd2lqb3dvemhjaGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNDM2NTQsImV4cCI6MjA5MDkxOTY1NH0.LaeJTM_jiY7FXEjo9fslXzAYzBwGZzqk0hKXQ4vqq9w",
+        "EXPO_PUBLIC_APP_URL": "http://ndada.in",
+        "EXPO_PUBLIC_MEMBERSHIP_AMOUNT": "300",
+        "EXPO_PUBLIC_MEMBERSHIP_CURRENCY": "INR"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mtnbscscwijowozhchfi.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bmJzY3Njd2lqb3dvemhjaGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNDM2NTQsImV4cCI6MjA5MDkxOTY1NH0.LaeJTM_jiY7FXEjo9fslXzAYzBwGZzqk0hKXQ4vqq9w",
+        "EXPO_PUBLIC_APP_URL": "http://ndada.in",
+        "EXPO_PUBLIC_MEMBERSHIP_AMOUNT": "300",
+        "EXPO_PUBLIC_MEMBERSHIP_CURRENCY": "INR"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mtnbscscwijowozhchfi.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bmJzY3Njd2lqb3dvemhjaGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNDM2NTQsImV4cCI6MjA5MDkxOTY1NH0.LaeJTM_jiY7FXEjo9fslXzAYzBwGZzqk0hKXQ4vqq9w",
+        "EXPO_PUBLIC_APP_URL": "http://ndada.in",
+        "EXPO_PUBLIC_MEMBERSHIP_AMOUNT": "300",
+        "EXPO_PUBLIC_MEMBERSHIP_CURRENCY": "INR"
+      }
     }
   },
   "submit": {

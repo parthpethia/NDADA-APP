@@ -98,15 +98,15 @@ export default function FirmDetailsScreen() {
         />
         <DetailRow label="IFMS Number" value={account.ifms_number || account.registration_number} />
         <DetailRow label="Seed Cotton License Number" value={account.seed_cotton_license_number || account.license_number} />
-        <DetailRow label="Seed Cotton License Expiry" value={account.seed_cotton_license_expiry} />
+        <DetailRow label="Seed Cotton License Expiry" value={account.seed_cotton_license_expiry ? formatDate(account.seed_cotton_license_expiry) : null} />
         <DetailRow label="Sarthi ID Cotton" value={account.sarthi_id_cotton} />
         <DetailRow label="Seed General License Number" value={account.seed_general_license_number} />
-        <DetailRow label="Seed General License Expiry" value={account.seed_general_license_expiry} />
+        <DetailRow label="Seed General License Expiry" value={account.seed_general_license_expiry ? formatDate(account.seed_general_license_expiry) : null} />
         <DetailRow label="Sarthi ID General" value={account.sarthi_id_general} />
         <DetailRow label="Pesticide License Number" value={account.pesticide_license_number} />
-        <DetailRow label="Pesticide License Expiry" value={account.pesticide_license_expiry} />
+        <DetailRow label="Pesticide License Date of Issue" value={account.pesticide_license_expiry ? formatDate(account.pesticide_license_expiry) : null} />
         <DetailRow label="Fertilizer License Number" value={account.fertilizer_license_number} />
-        <DetailRow label="Fertilizer License Expiry" value={account.fertilizer_license_expiry} />
+        <DetailRow label="Fertilizer License Expiry" value={account.fertilizer_license_expiry ? formatDate(account.fertilizer_license_expiry) : null} />
       </Card>
 
       <Card className="mb-4">

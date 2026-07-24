@@ -91,8 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       errorMessage.includes('fetcherror') ||
       errorMessage.includes('network request failed') ||
       errorMessage.includes('failed to fetch') ||
+      errorMessage.includes('network error') ||
+      errorMessage.includes('networkerror') ||
+      errorMessage.includes('load failed') ||
+      errorMessage.includes('offline') ||
       errorMessage.includes('timeout') ||
-      errorMessage.includes('abort')
+      errorMessage.includes('abort') ||
+      errorMessage.includes('econnreset') ||
+      errorMessage.includes('etimedout')
     ) {
       return false;
     }
@@ -422,9 +428,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const rawStored = await AsyncStorage.getItem(sbKey);
               if (rawStored) {
                 const parsedStored = JSON.parse(rawStored);
-                if (parsedStored?.access_token && parsedStored?.user) {
+                if (parsedStored?.access_token && parsedStored?.refresh_token && parsedStored?.user) {
                   console.log('Auth: recovered stored session from AsyncStorage fallback on init');
-                  effectiveSession = parsedStored as Session;
+                  const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
+                    access_token: parsedStored.access_token,
+                    refresh_token: parsedStored.refresh_token,
+                  });
+                  if (!setSessionError && setSessionData?.session) {
+                    effectiveSession = setSessionData.session;
+                  } else {
+                    effectiveSession = parsedStored as Session;
+                  }
                 }
               }
             }
@@ -544,10 +558,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!isSameUser || !profileReadyRef.current) {
               await loadUserProfile(newSession.user.id, newSession.user);
             }
-          } catch (err) {
+          } catch (err: any) {
             console.warn('Auth: onAuthStateChange profile fetch failed:', err);
-            // If profile loading fails due to auth error, clear session
-            await clearInvalidSession();
+            // Only clear session if error is explicitly an invalid session error (not a transient network glitch)
+            if (isInvalidSessionError(err?.message)) {
+              await clearInvalidSession();
+            }
           }
         } else {
           setMember(null);
@@ -575,9 +591,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      return { error: error?.message ?? null };
-    } catch (e) {
+      let result = await supabase.auth.signInWithPassword({ email, password });
+
+      if (result.error) {
+        const msg = String(result.error.message || '').toLowerCase();
+        const isNetworkErr =
+          msg.includes('failed to fetch') ||
+          msg.includes('network request failed') ||
+          msg.includes('fetcherror') ||
+          msg.includes('typeerror') ||
+          msg.includes('network error');
+
+        if (isNetworkErr) {
+          // Pause 800ms and retry signInWithPassword once before returning network error
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          result = await supabase.auth.signInWithPassword({ email, password });
+        }
+      }
+
+      if (result.error) {
+        const msg = String(result.error.message || '').toLowerCase();
+        if (
+          msg.includes('failed to fetch') ||
+          msg.includes('network request failed') ||
+          msg.includes('fetcherror') ||
+          msg.includes('typeerror') ||
+          msg.includes('network error')
+        ) {
+          return {
+            error:
+              'Network error while contacting Supabase (unable to fetch). Please check your internet / mobile data connection and tap Sign In again.',
+          };
+        }
+        return { error: result.error.message };
+      }
+      return { error: null };
+    } catch (e: any) {
       if (!isSupabaseConfigured) {
         return {
           error:
@@ -586,7 +635,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return {
         error:
-          'Network error while contacting Supabase (unable to fetch). Check your internet connection and that your Supabase project URL is reachable.',
+          'Network error while contacting Supabase (unable to fetch). Please check your internet / mobile data connection and tap Sign In again.',
       };
     }
   };

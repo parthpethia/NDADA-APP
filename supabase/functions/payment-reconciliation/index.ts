@@ -35,23 +35,76 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const authHeader = 'Basic ' + btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
 
-    // Fetch payments that are pending or processing, older than 10 minutes (to avoid racing live users), and within the last 7 days
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Parse request body for optional member_id parameter
+    const body = await req.json().catch(() => ({}));
+    const targetMemberId = body?.member_id;
+    const force = !!body?.force;
 
-    const { data: pendingPayments, error: fetchErr } = await supabase
-      .from('payments')
-      .select('*')
-      .in('status', ['pending', 'processing'])
-      .gt('created_at', sevenDaysAgo)
-      .lt('created_at', tenMinutesAgo);
+    let pendingPayments: any[] = [];
 
-    if (fetchErr) {
-      console.error('❌ Error fetching pending payments:', fetchErr.message);
-      throw fetchErr;
+    if (targetMemberId) {
+      console.log(`🎯 Real-time single member reconciliation for member: ${targetMemberId}`);
+      // Reconcile payments for specific member without 10-min delay
+      const { data: memberPayments, error: fetchErr } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('member_id', targetMemberId)
+        .in('status', ['pending', 'processing']);
+
+      if (fetchErr) {
+        console.error('❌ Error fetching member pending payments:', fetchErr.message);
+      } else if (memberPayments) {
+        pendingPayments = memberPayments;
+      }
+
+      // If no payment row exists yet, check orders table for attempted/created orders
+      const { data: memberOrders } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('member_id', targetMemberId)
+        .in('status', ['created', 'attempted']);
+
+      if (memberOrders && memberOrders.length > 0) {
+        for (const ord of memberOrders) {
+          const alreadyInList = pendingPayments.some((p) => p.razorpay_order_id === ord.razorpay_order_id);
+          if (!alreadyInList) {
+            pendingPayments.push({
+              id: ord.id,
+              member_id: ord.member_id,
+              razorpay_order_id: ord.razorpay_order_id,
+              amount: ord.amount,
+              currency: ord.currency,
+              status: 'processing',
+              created_at: ord.created_at,
+            });
+          }
+        }
+      }
+    } else {
+      // Fetch payments that are pending or processing within the last 7 days
+      // If force is true, skip 10-minute age filter; otherwise, apply 10-minute filter
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      let query = supabase
+        .from('payments')
+        .select('*')
+        .in('status', ['pending', 'processing'])
+        .gt('created_at', sevenDaysAgo);
+
+      if (!force) {
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        query = query.lt('created_at', tenMinutesAgo);
+      }
+
+      const { data, error: fetchErr } = await query;
+
+      if (fetchErr) {
+        console.error('❌ Error fetching pending payments:', fetchErr.message);
+        throw fetchErr;
+      }
+      pendingPayments = data || [];
     }
 
-    console.log(`📋 Reconciling ${pendingPayments?.length || 0} pending payments...`);
+    console.log(`📋 Reconciling ${pendingPayments.length} pending payments/orders...`);
     const results = [];
 
     for (const payment of (pendingPayments || [])) {
@@ -119,15 +172,31 @@ serve(async (req) => {
                 }
               }
             } else if (data.status === 'attempted') {
-              // Consider orders expired if they were created more than 30 minutes ago
-              // (expires_at column does not exist; use created_at + window instead)
-              const orderCreatedAt = Date.parse(String(payment.created_at || ''));
-              const ORDER_EXPIRY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
-              const isExpired = Number.isFinite(orderCreatedAt) && (Date.now() - orderCreatedAt) > ORDER_EXPIRY_WINDOW_MS;
-              if (isExpired) {
-                // Order expired in our DB or timeline
-                finalStatus = 'expired';
-                statusUpdated = true;
+              // Check if any payment for this order was captured
+              const payRes = await fetch(`https://api.razorpay.com/v1/orders/${payment.razorpay_order_id}/payments`, {
+                headers: { Authorization: authHeader }
+              });
+              if (payRes.ok) {
+                const payData = await payRes.json();
+                if (payData.items && payData.items.length > 0) {
+                  const capturedPay = payData.items.find((p: any) => p.status === 'captured');
+                  if (capturedPay) {
+                    razorpayPaymentId = capturedPay.id;
+                    finalStatus = 'paid';
+                    statusUpdated = true;
+                  }
+                }
+              }
+
+              if (!statusUpdated) {
+                // Consider orders expired if they were created more than 30 minutes ago
+                const orderCreatedAt = Date.parse(String(payment.created_at || ''));
+                const ORDER_EXPIRY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+                const isExpired = Number.isFinite(orderCreatedAt) && (Date.now() - orderCreatedAt) > ORDER_EXPIRY_WINDOW_MS;
+                if (isExpired) {
+                  finalStatus = 'expired';
+                  statusUpdated = true;
+                }
               }
             }
           } else {
@@ -139,14 +208,51 @@ serve(async (req) => {
         if (statusUpdated) {
           console.log(`   Updating DB: Payment ${payment.id} status is now ${finalStatus}`);
           
-          await supabase
-            .from('payments')
-            .update({ 
-              status: finalStatus,
-              razorpay_payment_id: razorpayPaymentId || null,
-              provider_event: 'reconciliation_job'
-            })
-            .eq('id', payment.id);
+          if (payment.razorpay_order_id) {
+            await supabase
+              .from('orders')
+              .update({ status: finalStatus === 'paid' ? 'paid' : finalStatus })
+              .eq('razorpay_order_id', payment.razorpay_order_id);
+
+            const { data: existingPayment } = await supabase
+              .from('payments')
+              .select('id')
+              .eq('razorpay_order_id', payment.razorpay_order_id)
+              .maybeSingle();
+
+            if (existingPayment) {
+              await supabase
+                .from('payments')
+                .update({ 
+                  status: finalStatus,
+                  razorpay_payment_id: razorpayPaymentId || null,
+                  provider_event: 'reconciliation_job'
+                })
+                .eq('id', existingPayment.id);
+            } else {
+              await supabase
+                .from('payments')
+                .insert({
+                  member_id: payment.member_id,
+                  razorpay_order_id: payment.razorpay_order_id,
+                  razorpay_payment_id: razorpayPaymentId || null,
+                  amount: payment.amount,
+                  currency: payment.currency || 'INR',
+                  status: finalStatus,
+                  provider: 'razorpay',
+                  provider_event: 'reconciliation_job'
+                });
+            }
+          } else {
+            await supabase
+              .from('payments')
+              .update({ 
+                status: finalStatus,
+                razorpay_payment_id: razorpayPaymentId || null,
+                provider_event: 'reconciliation_job'
+              })
+              .eq('id', payment.id);
+          }
           
           if (finalStatus === 'paid') {
             // Update user accounts to paid

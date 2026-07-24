@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge, LoadingScreen, EmptyState } from '@/components/ui';
 import { Certificate } from '@/types';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, getFunctionsErrorMessage } from '@/lib/utils';
 import { APP_NAME, MEMBERSHIP_PLAN_NAME } from '@/constants';
 import { Award } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
@@ -18,15 +18,46 @@ const MAX_POLL_DURATION = 120000; // 2 minutes
 type QueueStatus = 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
 
 export default function CertificateScreen() {
-  const { member, session } = useAuth();
+  const { member, session, refreshMember } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   const [queueStatus, setQueueStatus] = useState<QueueStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
   const isMountedRef = useRef(true);
+
+  const handleReconcile = useCallback(async () => {
+    if (!member) return;
+    setReconciling(true);
+    try {
+      await supabase.functions.invoke('payment-reconciliation', {
+        body: { member_id: member.id, force: true },
+      });
+      await refreshMember();
+    } catch (err) {
+      console.warn('Reconciliation failed:', err);
+    } finally {
+      if (isMountedRef.current) {
+        setReconciling(false);
+      }
+    }
+  }, [member, refreshMember]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (member?.payment_status === 'processing') {
+      handleReconcile();
+      interval = setInterval(() => {
+        handleReconcile();
+      }, 4000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [member?.payment_status, handleReconcile]);
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -155,7 +186,8 @@ export default function CertificateScreen() {
           startPolling();
           return;
         }
-        setError(fnError.message || 'Failed to generate certificate. Please try again.');
+        const errMsg = await getFunctionsErrorMessage(fnError);
+        setError(errMsg || 'Failed to generate certificate. Please try again.');
         setQueueStatus('idle');
       } else if (data?.status === 'queued' || data?.retry_after) {
         // Server returned 429 — generation is queued, start polling
@@ -172,7 +204,8 @@ export default function CertificateScreen() {
       }
     } catch (err: any) {
       console.error('Certificate generation error:', err);
-      setError(err.message || 'An unexpected error occurred.');
+      const errMsg = await getFunctionsErrorMessage(err);
+      setError(errMsg || 'An unexpected error occurred.');
       setQueueStatus('idle');
     }
   }, [member, session, startPolling]);
@@ -266,6 +299,29 @@ export default function CertificateScreen() {
   };
 
   if (loading) return <LoadingScreen />;
+
+  // Payment in processing state — show verification screen
+  if (member?.payment_status === 'processing' || reconciling) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-50 p-8">
+        <ActivityIndicator size="large" color="#15803d" />
+        <Text className="mt-4 text-lg font-semibold text-gray-900">
+          Verifying Payment...
+        </Text>
+        <Text className="mt-2 text-center text-sm text-gray-500">
+          We're confirming your payment status with Razorpay. Your certificate will be generated as soon as verification completes.
+        </Text>
+        <View className="mt-6 w-full max-w-xs gap-2">
+          <Button
+            title="Refresh Status"
+            onPress={handleReconcile}
+            loading={reconciling}
+            size="lg"
+          />
+        </View>
+      </View>
+    );
+  }
 
   // Generation in progress — show queue status
   if (queueStatus === 'queued' || queueStatus === 'processing') {

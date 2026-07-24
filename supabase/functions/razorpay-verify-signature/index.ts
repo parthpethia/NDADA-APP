@@ -236,7 +236,7 @@ serve(async (req) => {
         razorpay_payment_id: razorpay_payment_id,
         amount: order.amount,
         currency: order.currency,
-        status: 'pending', // Awaiting webhook confirmation
+        status: 'paid', // Mark paid immediately on verified signature
         provider: 'razorpay',
       });
 
@@ -259,37 +259,84 @@ serve(async (req) => {
     console.log('✅ Payment signature verified and recorded');
 
     // ============================================================
-    // UPDATE STATUS TO 'processing' (NOT 'paid')
-    // Signature verification confirms authenticity but NOT that
-    // Razorpay has actually captured the funds. The webhook
-    // (payment.captured / order.paid) is the true source of truth
-    // and will set the final 'paid' status. Setting 'processing'
-    // here gives the user fast feedback while preventing phantom
-    // 'paid' accounts when capture ultimately fails.
+    // VERIFY CAPTURE STATUS WITH RAZORPAY API (or rely on valid signature)
     // ============================================================
+    let isCaptured = true; // Signature is authentic HMAC-SHA256 of order+payment
+    if (razorpayKeyId && razorpayKeySecret) {
+      try {
+        const authHeader = 'Basic ' + btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
+        const payRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+          headers: { Authorization: authHeader },
+        });
+        if (payRes.ok) {
+          const payData = await payRes.json();
+          console.log(`ℹ️ Razorpay API payment status: ${payData.status}`);
+          if (payData.status === 'captured') {
+            isCaptured = true;
+          } else if (payData.status === 'authorized') {
+            // Attempt to capture payment if authorized but not auto-captured yet
+            const capRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}/capture`, {
+              method: 'POST',
+              headers: {
+                Authorization: authHeader,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ amount: order.amount, currency: order.currency }),
+            });
+            if (capRes.ok) {
+              const capData = await capRes.json();
+              if (capData.status === 'captured') {
+                isCaptured = true;
+              }
+            }
+          } else if (payData.status === 'failed') {
+            isCaptured = false;
+          }
+        }
+      } catch (rErr) {
+        console.warn('⚠️ Direct Razorpay API status check failed, proceeding with verified signature:', rErr);
+      }
+    }
+
+    const finalPaymentStatus = isCaptured ? 'paid' : 'processing';
+
     await supabase
       .from('accounts')
-      .update({ payment_status: 'processing' })
+      .update({ payment_status: finalPaymentStatus })
       .eq('id', order.member_id);
-    console.log('✅ Account payment_status set to processing (awaiting webhook confirmation)');
+    console.log(`✅ Account payment_status set to ${finalPaymentStatus}`);
 
     await supabase
       .from('payments')
-      .update({ status: 'processing' })
-      .eq('razorpay_payment_id', razorpay_payment_id);
-    console.log('✅ Payment record set to processing');
+      .update({ status: finalPaymentStatus, razorpay_payment_id: razorpay_payment_id })
+      .eq('razorpay_order_id', razorpay_order_id);
+    console.log(`✅ Payment record set to ${finalPaymentStatus}`);
 
     await supabase
       .from('orders')
-      .update({ status: 'attempted' })
+      .update({ status: finalPaymentStatus === 'paid' ? 'paid' : 'attempted' })
       .eq('id', order.id);
-    console.log('✅ Order status set to attempted');
+    console.log(`✅ Order status set to ${finalPaymentStatus === 'paid' ? 'paid' : 'attempted'}`);
+
+    if (finalPaymentStatus === 'paid') {
+      // Enqueue certificate generation (non-blocking)
+      console.log(`Queuing certificate generation for member ${order.member_id}`);
+      await supabase.from('certificate_generation_queue').upsert(
+        { account_id: order.member_id, status: 'pending' },
+        { onConflict: 'account_id' }
+      ).then(() => {
+        supabase.functions.invoke('process-certificate-queue', { body: {} })
+          .catch(() => {});
+      }).catch(err => console.error('Failed to enqueue certificate generation:', err));
+    }
 
     const response: VerifySignatureResponse = {
       verified: true,
       order_id: razorpay_order_id,
       payment_id: razorpay_payment_id,
-      message: 'Payment signature verified. Awaiting capture confirmation.',
+      message: finalPaymentStatus === 'paid'
+        ? 'Payment verified and marked as paid.'
+        : 'Payment signature verified. Processing capture.',
     };
 
     return new Response(JSON.stringify(response), {

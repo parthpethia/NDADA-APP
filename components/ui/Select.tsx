@@ -6,6 +6,7 @@ import { ChevronDown } from 'lucide-react-native';
 interface SelectOption {
   label: string;
   value: string;
+  disabled?: boolean;
 }
 
 interface SelectProps {
@@ -16,6 +17,9 @@ interface SelectProps {
   placeholder?: string;
   error?: string;
   className?: string;
+  size?: 'sm' | 'md';
+  buttonClassName?: string;
+  textClassName?: string;
 }
 
 export function Select({
@@ -26,6 +30,9 @@ export function Select({
   placeholder = 'Select...',
   error,
   className,
+  size = 'md',
+  buttonClassName,
+  textClassName,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const safeOptions = Array.isArray(options) ? options : [];
@@ -39,17 +46,24 @@ export function Select({
       <TouchableOpacity
         onPress={() => setOpen(true)}
         className={cn(
-          'flex-row items-center justify-between rounded-lg border bg-white px-3.5 py-2.5',
-          error ? 'border-red-500' : 'border-gray-300'
+          'flex-row items-center justify-between rounded-lg border bg-white',
+          size === 'sm' ? 'px-2 py-1' : 'px-3.5 py-2.5',
+          error ? 'border-red-500' : 'border-gray-300',
+          buttonClassName
         )}
       >
         <Text
           numberOfLines={1}
-          className={cn('flex-1 pr-2 text-base', selected ? 'text-gray-900' : 'text-gray-400')}
+          className={cn(
+            'flex-1 pr-2',
+            size === 'sm' ? 'text-xs' : 'text-base',
+            selected ? 'text-gray-900' : 'text-gray-400',
+            textClassName
+          )}
         >
           {selected ? selected.label : placeholder}
         </Text>
-        <ChevronDown size={20} color="#6b7280" />
+        <ChevronDown size={size === 'sm' ? 14 : 20} color="#6b7280" />
       </TouchableOpacity>
       {error && <Text className="mt-1 text-sm text-red-600">{error}</Text>}
 
@@ -75,20 +89,25 @@ export function Select({
               }
               renderItem={({ item }) => (
                 <TouchableOpacity
+                  disabled={item.disabled}
                   onPress={() => {
+                    if (item.disabled) return;
                     onValueChange(item.value);
                     setOpen(false);
                   }}
                   className={cn(
                     'rounded-lg px-3 py-2.5',
-                    item.value === value && 'bg-primary-50'
+                    item.value === value && 'bg-primary-50',
+                    item.disabled && 'opacity-60 bg-gray-50'
                   )}
                 >
                   <Text
                     numberOfLines={1}
                     className={cn(
                       'text-base',
-                      item.value === value
+                      item.disabled
+                        ? 'font-bold text-gray-500 text-xs tracking-wider'
+                        : item.value === value
                         ? 'font-semibold text-primary-700'
                         : 'text-gray-900'
                     )}

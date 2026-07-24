@@ -315,19 +315,28 @@ serve(async (req) => {
       color: rgb(0, 0, 0),
     });
 
-    // 1.5. DISTRICT
-    const districtText = member.district ? `AT ${member.district.toUpperCase()}` : '';
-    if (districtText) {
-      const districtSize = Math.round(width * 0.016); // Clean, slightly smaller size
-      const districtWidth = helveticaBold.widthOfTextAtSize(districtText, districtSize);
-      page.drawText(districtText, {
-        x: (width * 0.5083) - (districtWidth / 2),
+    // 1.5. FIRM ADDRESS (Replaces District)
+    const rawAddress = (member.firm_address || member.address || member.district || '').trim();
+    if (rawAddress) {
+      const upperAddr = rawAddress.toUpperCase();
+      const firmAddressText = upperAddr.startsWith('AT ') ? upperAddr : `AT ${upperAddr}`;
+      let addressSize = Math.round(width * 0.016); // Clean, proportioned size
+      const maxAddressWidth = width * 0.75;
+      let addressWidth = helveticaBold.widthOfTextAtSize(firmAddressText, addressSize);
+      while (addressWidth > maxAddressWidth && addressSize > Math.round(width * 0.008)) {
+        addressSize -= 0.5;
+        addressWidth = helveticaBold.widthOfTextAtSize(firmAddressText, addressSize);
+      }
+
+      page.drawText(firmAddressText, {
+        x: (width * 0.5083) - (addressWidth / 2),
         y: height * 0.4327,
-        size: districtSize,
+        size: addressSize,
         font: helveticaBold,
         color: rgb(0, 0, 0),
       });
     }
+
 
     // 2. MEMBERSHIP ID
     const memIdSize = Math.round(width * 0.015); // Increased size

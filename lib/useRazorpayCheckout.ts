@@ -13,6 +13,7 @@ export interface UseRazorpayCheckoutReturn {
   cashError: string | null;
   handlePayWithRazorpay: () => Promise<void>;
   confirmCashPayment: () => Promise<void>;
+  reconcilePaymentStatus: () => Promise<void>;
   setCashError: (err: string | null) => void;
 }
 
@@ -55,6 +56,27 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
     };
   }, []);
 
+  const reconcilePaymentStatus = useCallback(async () => {
+    if (!member) return;
+    try {
+      await supabase.functions.invoke('payment-reconciliation', {
+        body: { member_id: member.id, force: true },
+      });
+    } catch (e) {
+      console.warn('Reconciliation call warning:', e);
+    } finally {
+      await refreshMember();
+      if (session?.user?.id) {
+        try {
+          const { cacheInvalidate, cacheKey } = require('@/lib/queryCache');
+          cacheInvalidate(cacheKey('dashboard', session.user.id));
+        } catch (e) {
+          console.warn('Failed to invalidate dashboard cache:', e);
+        }
+      }
+    }
+  }, [member, refreshMember, session]);
+
   const handlePaymentSuccess = useCallback(async (response: any) => {
     if (__DEV__) {
       console.log('3️⃣ Payment successful, verifying signature...');
@@ -65,16 +87,35 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('razorpay-verify-signature', {
-        body: {
-          razorpay_order_id: response.razorpay_order_id,
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_signature: response.razorpay_signature,
-        },
-      });
+      let data: any = null;
+      let lastError: any = null;
+      const maxVerifyAttempts = 3;
 
-      if (error) {
-        const errMsg = await getFunctionsErrorMessage(error);
+      for (let attempt = 0; attempt < maxVerifyAttempts; attempt++) {
+        try {
+          const res = await supabase.functions.invoke('razorpay-verify-signature', {
+            body: {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            },
+          });
+          if (!res.error) {
+            data = res.data;
+            lastError = null;
+            break;
+          }
+          lastError = res.error;
+        } catch (err: any) {
+          lastError = err;
+        }
+        if (attempt < maxVerifyAttempts - 1) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
+
+      if (lastError) {
+        const errMsg = await getFunctionsErrorMessage(lastError);
         throw new Error(errMsg);
       }
 
@@ -89,24 +130,30 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
       if (__DEV__) {
         console.log('✅ Payment verified successfully');
       }
-      await refreshMember();
-      Alert.alert('Success', 'Payment verified! Your membership is being confirmed.', [
-        { text: 'View Certificate', onPress: () => router.push('/(dashboard)/certificate') },
-      ]);
-      redirectTimerRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          router.push('/(dashboard)/certificate');
-        }
-      }, 3000);
+
+      // Reconcile status with Razorpay API to guarantee 'paid' state immediately
+      await reconcilePaymentStatus();
+
+      router.replace('/(dashboard)/certificate');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
-      Alert.alert('Verification Error', message);
+      Alert.alert(
+        'Verification Delay',
+        `${message}\n\nDon't worry — your payment was recorded with Razorpay. If your status doesn't update within a few minutes, please tap refresh.`,
+        [
+          {
+            text: 'Retry Verification',
+            onPress: () => handlePaymentSuccess(response),
+          },
+          { text: 'OK', style: 'cancel' },
+        ]
+      );
     } finally {
       if (isMountedRef.current) {
         setVerifying(false);
       }
     }
-  }, [refreshMember, router]);
+  }, [member?.id, refreshMember, reconcilePaymentStatus, router, session]);
 
   const handlePaymentFailure = useCallback((error: any) => {
     if (__DEV__) {
@@ -242,6 +289,15 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
         return;
       }
 
+      if (member?.user_id) {
+        try {
+          const { cacheInvalidate, cacheKey } = require('@/lib/queryCache');
+          cacheInvalidate(cacheKey('dashboard', member.user_id));
+        } catch (e) {
+          console.warn('Failed to invalidate dashboard cache:', e);
+        }
+      }
+
       router.replace('/(dashboard)/cash-payment-review');
     } catch (err: any) {
       setCashError(err?.message || 'Failed to process request');
@@ -259,6 +315,7 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
     cashError,
     handlePayWithRazorpay,
     confirmCashPayment,
+    reconcilePaymentStatus,
     setCashError,
   };
 }
