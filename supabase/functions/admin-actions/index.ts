@@ -918,11 +918,11 @@ async function queueJobAction(supabase: any, jobId: string, jobAction: 'retry' |
 
 async function generateBackgroundExport(
   supabase: any,
-  params: { type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'; filters?: Record<string, any>; format: 'CSV' | 'XLSX' | 'PDF' },
+  params: { type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'; filters?: Record<string, any>; format: 'XLSX' | 'PDF' },
   adminDbId: string
 ) {
-  const exportType = params.type;
-  const format = params.format || 'CSV';
+  const exportType = params.type || 'members';
+  const format = params.format === 'PDF' ? 'PDF' : 'XLSX';
   const filters = params.filters || {};
 
   // 1. Initialize DB record to track progress
@@ -943,98 +943,57 @@ async function generateBackgroundExport(
   // Compile matching records
   try {
     let rows: any[] = [];
-    let headers: string[] = [];
-    
-    if (exportType === 'members') {
-      headers = ['ID', 'Membership ID', 'Full Name', 'Email', 'Phone', 'District', 'Payment Status', 'Approval Status', 'Account Status', 'Firm Name', 'Firm Type', 'License No', 'Aadhaar No', 'Joined Date'];
-      let query = supabase.from('accounts').select('id, membership_id, full_name, email, phone, district, payment_status, approval_status, account_status, firm_name, firm_type, license_number, aadhaar_card_number, created_at');
-      if (filters.district) query = query.eq('district', filters.district);
-      if (filters.payment_status) {
-        if (filters.payment_status === 'received') {
-          query = query.eq('payment_status', 'paid');
-        } else if (filters.payment_status === 'unpaid') {
-          query = query.in('payment_status', ['pending', 'failed']);
-        } else {
-          query = query.eq('payment_status', filters.payment_status);
-        }
-      }
-      if (filters.approval_status) query = query.eq('approval_status', filters.approval_status);
-      if (filters.account_status) query = query.eq('account_status', filters.account_status);
-      const { data } = await query;
-      rows = (data || []).map((r: any) => [
-        r.id, r.membership_id || '', r.full_name || '', r.email || '', r.phone || '', r.district || '', r.payment_status || '', r.approval_status || '', r.account_status || '', r.firm_name || '', r.firm_type || '', r.license_number || '', r.aadhaar_card_number || '', r.created_at || ''
-      ]);
-    } else if (exportType === 'firms') {
-      headers = ['ID', 'Firm Name', 'Firm Type', 'Owner Name', 'District', 'License Number', 'Registration Number', 'GST Number', 'Contact Phone', 'Contact Email', 'Firm Address', 'Pin Code', 'Payment Status', 'Approval Status', 'Created Date'];
-      let query = supabase.from('accounts').select('id, firm_name, firm_type, full_name, district, license_number, registration_number, gst_number, contact_phone, contact_email, firm_address, firm_pin_code, payment_status, approval_status, created_at');
-      if (filters.district) query = query.eq('district', filters.district);
-      if (filters.payment_status) {
-        if (filters.payment_status === 'received') {
-          query = query.eq('payment_status', 'paid');
-        } else if (filters.payment_status === 'unpaid') {
-          query = query.in('payment_status', ['pending', 'failed']);
-        } else {
-          query = query.eq('payment_status', filters.payment_status);
-        }
-      }
-      if (filters.approval_status) query = query.eq('approval_status', filters.approval_status);
-      const { data } = await query;
-      rows = (data || []).map((r: any) => [
-        r.id, r.firm_name || '', r.firm_type || '', r.full_name || '', r.district || '', r.license_number || '', r.registration_number || '', r.gst_number || '', r.contact_phone || '', r.contact_email || '', r.firm_address || '', r.firm_pin_code || '', r.payment_status || '', r.approval_status || '', r.created_at || ''
-      ]);
-    } else if (exportType === 'payments') {
-      headers = ['Payment ID', 'Member Name', 'Firm Name', 'District', 'Phone', 'Amount (INR)', 'Currency', 'Payment Status', 'Payment Method', 'Razorpay ID', 'Created Date'];
-      const selectFields = filters.district
-        ? 'id, member_id, amount, currency, status, payment_method, razorpay_payment_id, created_at, accounts!inner(full_name, firm_name, district, phone)'
-        : 'id, member_id, amount, currency, status, payment_method, razorpay_payment_id, created_at, accounts(full_name, firm_name, district, phone)';
-      
-      let query = supabase.from('payments').select(selectFields);
-      if (filters.district) query = query.eq('accounts.district', filters.district);
-      
-      const payStatus = filters.payment_status || filters.status;
-      if (payStatus) {
-        if (payStatus === 'received') {
-          query = query.eq('status', 'paid');
-        } else if (payStatus === 'unpaid') {
-          query = query.in('status', ['pending', 'failed']);
-        } else {
-          query = query.eq('status', payStatus);
-        }
-      }
-      
-      const { data } = await query;
-      rows = (data || []).map((r: any) => {
-        const acc = r.accounts || {};
-        return [
-          r.id, acc.full_name || '', acc.firm_name || '', acc.district || '', acc.phone || '', r.amount, r.currency || 'INR', r.status || '', r.payment_method || 'online', r.razorpay_payment_id || '', r.created_at || ''
-        ];
-      });
-    } else if (exportType === 'certificates') {
-      headers = ['Certificate DB ID', 'Certificate No.', 'Member Name', 'Firm Name', 'District', 'Status', 'Issued Date', 'Certificate URL'];
-      const selectFields = filters.district
-        ? 'id, certificate_id, member_id, issued_at, status, certificate_url, accounts!inner(full_name, firm_name, district)'
-        : 'id, certificate_id, member_id, issued_at, status, certificate_url, accounts(full_name, firm_name, district)';
+    const headers = ['Name of Firm', 'Partner Name', 'Email ID', 'Phone No', 'City', 'District', 'Address'];
 
-      let query = supabase.from('certificates').select(selectFields);
-      if (filters.district) query = query.eq('accounts.district', filters.district);
-      if (filters.status) query = query.eq('status', filters.status);
-      
-      const { data } = await query;
-      rows = (data || []).map((r: any) => {
-        const acc = r.accounts || {};
-        return [
-          r.id, r.certificate_id || '', acc.full_name || '', acc.firm_name || '', acc.district || '', r.status || '', r.issued_at || '', r.certificate_url || ''
-        ];
-      });
-    } else if (exportType === 'audit_logs') {
-      headers = ['ID', 'Admin ID', 'Action', 'Target User ID', 'Details', 'Timestamp'];
-      const { data } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
-      rows = (data || []).map((r: any) => [
-        r.id, r.admin_id, r.action, r.target_user || '', r.details || '', r.created_at
-      ]);
-    } else {
-      throw new Error(`Unsupported export type: ${exportType}`);
+    let query = supabase
+      .from('accounts')
+      .select('id, firm_name, partner_proprietor_name, full_name, contact_email, email, contact_phone, phone, district, firm_address, residence_address, address, payment_status, approval_status, account_status');
+
+    // District filter
+    if (filters.district && filters.district !== 'all') {
+      query = query.eq('district', filters.district);
     }
+
+    // Members vs Non-members filter
+    const memberType = filters.member_type || filters.memberFilter;
+    if (memberType === 'members') {
+      query = query.or('payment_status.eq.paid,approval_status.eq.approved');
+    } else if (memberType === 'non_members') {
+      query = query.neq('payment_status', 'paid').neq('approval_status', 'approved');
+    }
+
+    // Specific status filters if provided
+    if (filters.payment_status && filters.payment_status !== 'all') {
+      if (filters.payment_status === 'received' || filters.payment_status === 'paid') {
+        query = query.eq('payment_status', 'paid');
+      } else if (filters.payment_status === 'unpaid') {
+        query = query.in('payment_status', ['pending', 'failed']);
+      } else {
+        query = query.eq('payment_status', filters.payment_status);
+      }
+    }
+    if (filters.approval_status && filters.approval_status !== 'all') {
+      query = query.eq('approval_status', filters.approval_status);
+    }
+    if (filters.account_status && filters.account_status !== 'all') {
+      query = query.eq('account_status', filters.account_status);
+    }
+
+    const { data, error: fetchErr } = await query;
+    if (fetchErr) throw fetchErr;
+
+    // Clean sanitization for table body (strip unwanted line breaks)
+    const cleanRows = (data && data.length > 0)
+      ? (data || []).map((r: any) => [
+          r.firm_name || '',
+          r.partner_proprietor_name || r.full_name || '',
+          r.contact_email || r.email || '',
+          r.contact_phone || r.phone || '',
+          r.district || '', // City fallback to district
+          r.district || '',
+          r.firm_address || r.residence_address || r.address || ''
+        ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()))
+      : [];
 
     // 2. Ensure Bucket exists
     await supabase.storage.createBucket('secure-exports', { public: false }).catch(() => {});
@@ -1045,66 +1004,138 @@ async function generateBackgroundExport(
 
     if (format === 'XLSX') {
       // Generate real XLSX using SheetJS
-      const wsData = [headers, ...rows];
+      const wsData = [headers, ...(cleanRows.length > 0 ? cleanRows : [['No matching records found', '', '', '', '', '', '']])];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       // Auto-size columns based on content width
       ws['!cols'] = headers.map((h, i) => {
         const maxLen = Math.max(
           h.length,
-          ...rows.map(r => String(r[i] ?? '').length)
+          ...cleanRows.map(r => String(r[i] ?? '').length)
         );
-        return { wch: Math.min(maxLen + 2, 50) };
+        return { wch: Math.min(Math.max(maxLen + 3, 12), 60) };
       });
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, exportType.replace(/_/g, ' '));
+      XLSX.utils.book_append_sheet(wb, ws, 'NDADA Export');
       const xlsxBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
       fileContent = new Uint8Array(xlsxBuffer);
       filename = `${exportType}_export_${job.id}.xlsx`;
       contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    } else if (format === 'PDF') {
-      // Generate PDF using jsPDF + autoTable
-      const doc = new jsPDF({ orientation: headers.length > 6 ? 'landscape' : 'portrait' });
-      const title = `${exportType.replace(/_/g, ' ').toUpperCase()} EXPORT REPORT`;
-      doc.setFontSize(14);
-      doc.text(title, 14, 15);
+    } else {
+      // PDF Format Generation
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const totalPagesExp = '{total_pages_count_string}';
+
+      // Styling Tokens
+      const primaryColor: [number, number, number] = [21, 128, 61]; // NDADA Green #15803d
+      const textColor: [number, number, number] = [31, 41, 55];
+
+      // Header Banner
+      doc.setFillColor(...primaryColor);
+      doc.rect(0, 0, 297, 16, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NDADA - MEMBER & FIRM DIRECTORY EXPORT REPORT', 12, 11);
+
+      // Metadata
+      doc.setTextColor(...textColor);
       doc.setFontSize(8);
-      doc.text(`Generated: ${new Date().toISOString()}  |  Total Records: ${rows.length}`, 14, 22);
-      // Add applied filters info
-      const filterEntries = Object.entries(filters).filter(([, v]) => v && v !== 'all');
-      if (filterEntries.length > 0) {
-        doc.text(`Filters: ${filterEntries.map(([k, v]) => `${k}=${v}`).join(', ')}`, 14, 27);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated On: ${new Date().toLocaleString()}   |   Total Records: ${cleanRows.length}`, 12, 22);
+
+      // Applied Filters Banner
+      const filterSummary: string[] = [];
+      if (memberType && memberType !== 'all') {
+        filterSummary.push(`Member Type: ${memberType === 'members' ? 'Members Only' : 'Non-Members Only'}`);
+      }
+      if (filters.district && filters.district !== 'all') {
+        filterSummary.push(`District: ${filters.district}`);
+      }
+      if (filters.payment_status && filters.payment_status !== 'all') {
+        filterSummary.push(`Payment: ${filters.payment_status}`);
+      }
+      if (filters.approval_status && filters.approval_status !== 'all') {
+        filterSummary.push(`Approval: ${filters.approval_status}`);
       }
 
+      if (filterSummary.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Applied Filters: ${filterSummary.join('   |   ')}`, 12, 27);
+      }
+
+      const startY = filterSummary.length > 0 ? 31 : 26;
+      const pdfBody = cleanRows.length > 0
+        ? cleanRows
+        : [['No matching records found for the applied filter criteria.', '', '', '', '', '', '']];
+
       const autoTableFunc = typeof autoTable === 'function' ? autoTable : (autoTable as any)?.default;
+
       if (typeof autoTableFunc === 'function') {
         autoTableFunc(doc, {
           head: [headers],
-          body: rows.map(row => row.map((val: any) => String(val === null || val === undefined ? '' : val))),
-          startY: filterEntries.length > 0 ? 32 : 27,
-          styles: { fontSize: 7, cellPadding: 2 },
-          headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold' },
-          alternateRowStyles: { fillColor: [245, 245, 245] },
-          margin: { left: 10, right: 10 },
+          body: pdfBody,
+          startY,
+          styles: {
+            fontSize: 7.5,
+            cellPadding: 2.5,
+            overflow: 'linebreak',
+            textColor: [31, 41, 55],
+            lineWidth: 0.1,
+            lineColor: [229, 231, 235]
+          },
+          headStyles: {
+            fillColor: primaryColor,
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 8,
+            halign: 'left'
+          },
+          columnStyles: {
+            0: { cellWidth: 42 }, // Name of Firm
+            1: { cellWidth: 38 }, // Partner Name
+            2: { cellWidth: 42 }, // Email ID
+            3: { cellWidth: 28 }, // Phone No
+            4: { cellWidth: 26 }, // City
+            5: { cellWidth: 26 }, // District
+            6: { cellWidth: 'auto' }, // Address (takes remaining width)
+          },
+          alternateRowStyles: { fillColor: [249, 250, 251] },
+          margin: { left: 10, right: 10, top: 20, bottom: 15 },
+          didDrawPage: (data: any) => {
+            const str = `Page ${data.pageNumber} of ${totalPagesExp}`;
+            doc.setFontSize(7);
+            doc.setTextColor(156, 163, 175);
+            doc.text(str, 297 - 12 - doc.getTextWidth(str), 210 - 6);
+            doc.text('NDADA Official Admin System Export', 12, 210 - 6);
+          }
         });
+      } else {
+        // Fail-safe manual text loop fallback
+        let y = startY + 5;
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text(headers.join(' | '), 12, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal');
+        for (const row of pdfBody) {
+          if (y > 190) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(row.slice(0, 4).join(' | '), 12, y);
+          y += 5;
+        }
+      }
+
+      if (typeof (doc as any).putTotalPages === 'function') {
+        (doc as any).putTotalPages(totalPagesExp);
       }
 
       const pdfOutput = doc.output('arraybuffer');
       fileContent = new Uint8Array(pdfOutput);
       filename = `${exportType}_export_${job.id}.pdf`;
       contentType = 'application/pdf';
-    } else {
-      // Default: CSV
-      fileContent = [
-        headers.join(','),
-        ...rows.map(row => 
-          row.map((val: any) => {
-            const str = String(val === null || val === undefined ? '' : val);
-            return `"${str.replace(/"/g, '""')}"`;
-          }).join(',')
-        )
-      ].join('\n');
-      filename = `${exportType}_export_${job.id}.csv`;
-      contentType = 'text/csv';
     }
 
     // 3. Upload file to Supabase Secure Private Bucket

@@ -593,7 +593,7 @@ export function useAdmin() {
           .insert({
             admin_id: adminUser.id,
             export_type: type || 'members',
-            format: format || 'CSV',
+            format: format || 'XLSX',
             filters: filters || {},
             status: 'failed',
             file_url: null,

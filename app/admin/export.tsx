@@ -50,7 +50,8 @@ export default function ExportCenterScreen() {
   
   // Form States
   const [exportType, setExportType] = useState<'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'>('members');
-  const [format, setFormat] = useState<'CSV' | 'XLSX' | 'PDF'>('CSV');
+  const [format, setFormat] = useState<'XLSX' | 'PDF'>('XLSX');
+  const [memberType, setMemberType] = useState<'all' | 'members' | 'non_members'>('all');
   const [filterDistrict, setFilterDistrict] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -104,21 +105,16 @@ export default function ExportCenterScreen() {
     try {
       const filters: Record<string, any> = {};
       if (filterDistrict !== 'all') filters.district = filterDistrict;
+      if (memberType !== 'all') filters.member_type = memberType;
       
       if (filterStatus !== 'all') {
-        if (exportType === 'members') {
+        if (exportType === 'members' || exportType === 'firms') {
           if (['received', 'unpaid', 'pending', 'paid', 'failed'].includes(filterStatus)) {
             filters.payment_status = filterStatus;
           } else if (['approved', 'rejected'].includes(filterStatus)) {
             filters.approval_status = filterStatus;
           } else if (['active', 'suspended', 'deleted'].includes(filterStatus)) {
             filters.account_status = filterStatus;
-          }
-        } else if (exportType === 'firms') {
-          if (['received', 'unpaid', 'pending', 'paid', 'failed'].includes(filterStatus)) {
-            filters.payment_status = filterStatus;
-          } else if (['approved', 'rejected'].includes(filterStatus)) {
-            filters.approval_status = filterStatus;
           }
         } else if (exportType === 'payments') {
           filters.payment_status = filterStatus;
@@ -181,105 +177,70 @@ export default function ExportCenterScreen() {
           </View>
 
           <View className="gap-3">
-            <View>
-              <Text className="text-xs font-bold text-gray-500 mb-1.5">Category Target</Text>
-              <Select
-                value={exportType}
-                options={[
-                  { label: 'Members / Accounts', value: 'members' },
-                  { label: 'Firms / Business', value: 'firms' },
-                  { label: 'Payments logs', value: 'payments' },
-                  { label: 'Certificates issued', value: 'certificates' },
-                  { label: 'Audit Logs trails', value: 'audit_logs' }
-                ]}
-                onValueChange={(val: any) => {
-                  setExportType(val);
-                  setFilterStatus('all');
-                  setFilterDistrict('all');
-                }}
-              />
+            {/* Active Fields Badge */}
+            <View className="bg-primary-50/60 p-2.5 rounded-lg border border-primary-100">
+              <Text className="text-[10px] font-bold text-primary-900 uppercase tracking-wider mb-1">
+                Included Export Fields (7 Columns)
+              </Text>
+              <Text className="text-xs text-primary-800 font-medium">
+                1. Name of Firm  •  2. Partner Name  •  3. Email ID  •  4. Phone No  •  5. City  •  6. District  •  7. Address
+              </Text>
             </View>
 
             <View className="flex-col sm:flex-row gap-2">
               <View className="flex-1">
-                <Text className="text-xs font-bold text-gray-500 mb-1.5">Format</Text>
+                <Text className="text-xs font-bold text-gray-500 mb-1.5">Format Target</Text>
                 <Select
                   value={format}
                   options={[
-                    { label: 'CSV format', value: 'CSV' },
-                    { label: 'XLSX Spreadsheet', value: 'XLSX' },
-                    { label: 'PDF Document', value: 'PDF' }
+                    { label: 'Excel Spreadsheet (.xlsx)', value: 'XLSX' },
+                    { label: 'PDF Document (.pdf)', value: 'PDF' }
                   ]}
                   onValueChange={(val: any) => setFormat(val)}
                 />
               </View>
 
-              {exportType !== 'audit_logs' && (
-                <View className="flex-1">
-                  <Text className="text-xs font-bold text-gray-500 mb-1.5">District Filter</Text>
-                  <Select
-                    value={filterDistrict}
-                    options={DISTRICT_FILTER_OPTIONS as any}
-                    onValueChange={(val: any) => setFilterDistrict(val)}
-                  />
-                </View>
-              )}
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-gray-500 mb-1.5">Member Status Filter</Text>
+                <Select
+                  value={memberType}
+                  options={[
+                    { label: 'All (Members & Non-Members)', value: 'all' },
+                    { label: 'Members Only (Paid/Approved)', value: 'members' },
+                    { label: 'Non-Members Only (Unpaid/Pending)', value: 'non_members' }
+                  ]}
+                  onValueChange={(val: any) => setMemberType(val)}
+                />
+              </View>
             </View>
 
-            {/* Dynamic Status Filter based on export type */}
-            {exportType !== 'audit_logs' && (
-              <View>
-                <Text className="text-xs font-bold text-gray-500 mb-1.5">Status Filter</Text>
+            <View className="flex-col sm:flex-row gap-2">
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-gray-500 mb-1.5">District Filter</Text>
+                <Select
+                  value={filterDistrict}
+                  options={DISTRICT_FILTER_OPTIONS as any}
+                  onValueChange={(val: any) => setFilterDistrict(val)}
+                />
+              </View>
+
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-gray-500 mb-1.5">Detailed Status Filter</Text>
                 <Select
                   value={filterStatus}
-                  options={
-                    exportType === 'members'
-                      ? [
-                          { label: 'All Statuses', value: 'all' },
-                          { label: '── Payment Status ──', value: '__divider_pay', disabled: true },
-                          { label: 'Payment Received (Paid)', value: 'received' },
-                          { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
-                          { label: 'Payment Pending', value: 'pending' },
-                          { label: 'Payment Paid', value: 'paid' },
-                          { label: 'Payment Failed', value: 'failed' },
-                          { label: '── Approval Status ──', value: '__divider_appr', disabled: true },
-                          { label: 'Approved', value: 'approved' },
-                          { label: 'Rejected', value: 'rejected' },
-                          { label: '── Account Status ──', value: '__divider_acc', disabled: true },
-                          { label: 'Active', value: 'active' },
-                          { label: 'Suspended', value: 'suspended' },
-                        ]
-                      : exportType === 'firms'
-                      ? [
-                          { label: 'All Statuses', value: 'all' },
-                          { label: 'Payment Received (Paid)', value: 'received' },
-                          { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
-                          { label: 'Payment Pending', value: 'pending' },
-                          { label: 'Payment Paid', value: 'paid' },
-                          { label: 'Approved', value: 'approved' },
-                          { label: 'Rejected', value: 'rejected' },
-                        ]
-                      : exportType === 'payments'
-                      ? [
-                          { label: 'All Statuses', value: 'all' },
-                          { label: 'Payment Received (Paid)', value: 'received' },
-                          { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
-                          { label: 'Paid', value: 'paid' },
-                          { label: 'Pending', value: 'pending' },
-                          { label: 'Failed', value: 'failed' },
-                        ]
-                      : exportType === 'certificates'
-                      ? [
-                          { label: 'All Statuses', value: 'all' },
-                          { label: 'Active', value: 'active' },
-                          { label: 'Revoked', value: 'revoked' },
-                        ]
-                      : [{ label: 'All', value: 'all' }]
-                  }
+                  options={[
+                    { label: 'All Statuses', value: 'all' },
+                    { label: 'Payment Received (Paid)', value: 'received' },
+                    { label: 'Payment Not Received (Unpaid)', value: 'unpaid' },
+                    { label: 'Approved', value: 'approved' },
+                    { label: 'Rejected', value: 'rejected' },
+                    { label: 'Active Account', value: 'active' },
+                    { label: 'Suspended Account', value: 'suspended' },
+                  ]}
                   onValueChange={(val: any) => setFilterStatus(val)}
                 />
               </View>
-            )}
+            </View>
 
             {triggerLoading ? (
               <ActivityIndicator size="small" color="#15803d" className="py-2" />
