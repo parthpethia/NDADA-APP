@@ -627,7 +627,18 @@ export function useAdmin() {
           .single();
 
         if (dbErr) throw new Error(dbErr.message);
-        return { success: true, download_url: data?.file_url };
+        if (!data?.file_url) throw new Error('Export file link not found or expired');
+
+        const { data: signedData, error: signedErr } = await supabase.storage
+          .from('secure-exports')
+          .createSignedUrl(data.file_url, 3600);
+
+        if (signedErr || !signedData?.signedUrl) {
+          const { data: publicData } = supabase.storage.from('secure-exports').getPublicUrl(data.file_url);
+          return { success: true, download_url: publicData?.publicUrl || data.file_url };
+        }
+
+        return { success: true, download_url: signedData.signedUrl };
       }
 
       default:
