@@ -957,9 +957,9 @@ async function generateBackgroundExport(
     // Members vs Non-members filter
     const memberType = filters.member_type || filters.memberFilter;
     if (memberType === 'members') {
-      query = query.or('payment_status.eq.paid,approval_status.eq.approved');
+      query = query.eq('payment_status', 'paid').eq('approval_status', 'approved');
     } else if (memberType === 'non_members') {
-      query = query.neq('payment_status', 'paid').neq('approval_status', 'approved');
+      query = query.or('payment_status.neq.paid,approval_status.neq.approved');
     }
 
     // Specific status filters if provided

@@ -111,9 +111,9 @@ export default function ExportCenterScreen() {
 
     const mType = filters.member_type || memberType;
     if (mType === 'members') {
-      query = query.or('payment_status.eq.paid,approval_status.eq.approved');
+      query = query.eq('payment_status', 'paid').eq('approval_status', 'approved');
     } else if (mType === 'non_members') {
-      query = query.neq('payment_status', 'paid').neq('approval_status', 'approved');
+      query = query.or('payment_status.neq.paid,approval_status.neq.approved');
     }
 
     if (filters.payment_status && filters.payment_status !== 'all') {
@@ -201,16 +201,36 @@ export default function ExportCenterScreen() {
       `;
       fileBlob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
     } else {
-      const csvLines = [
-        headers.join(','),
-        ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-      ];
-      fileBlob = new Blob(['\uFEFF' + csvLines.join('\n')], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const xmlHeader = headers.map(h => `<Cell ss:StyleID="Header"><Data ss:Type="String">${h}</Data></Cell>`).join('');
+      const xmlRows = rows.map(r =>
+        `<Row>` + r.map(val => `<Cell><Data ss:Type="String">${String(val || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</Data></Cell>`).join('') + `</Row>`
+      ).join('\n');
+
+      const excelXml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#15803D" ss:Pattern="Solid"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="NDADA Export">
+  <Table>
+   <Row>${xmlHeader}</Row>
+   ${xmlRows}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+      fileBlob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8' });
     }
 
     try {
       const { error: uploadErr } = await supabase.storage.from('secure-exports').upload(filename, fileBlob, {
-        contentType: exportFormat === 'PDF' ? 'text/html' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        contentType: exportFormat === 'PDF' ? 'text/html' : 'application/vnd.ms-excel',
         upsert: true
       });
 
