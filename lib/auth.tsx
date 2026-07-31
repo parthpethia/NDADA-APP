@@ -618,6 +618,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           msg.includes('typeerror') ||
           msg.includes('network error')
         ) {
+          // On Android, the auth request may have reached the server and the
+          // session was created, but the HTTP response never arrived at the
+          // client.  Supabase's internal auth state listener may have already
+          // picked up the session and persisted it.  Before returning a
+          // misleading network error, check if we actually have a valid session.
+          try {
+            const { data: { session: recoveredSession } } = await supabase.auth.getSession();
+            if (recoveredSession?.user) {
+              // Session exists — the sign-in actually succeeded despite the
+              // network error on the response side.  Return success so the UI
+              // navigates to the dashboard instead of showing an error.
+              return { error: null };
+            }
+          } catch {
+            // getSession itself failed — fall through to the error below.
+          }
           return {
             error:
               'Network error while contacting Supabase (unable to fetch). Please check your internet / mobile data connection and tap Sign In again.',
@@ -632,6 +648,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           error:
             'Supabase is not configured for this deployment. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in Vercel Environment Variables, then redeploy.',
         };
+      }
+      // Same recovery check for catch-level network errors
+      try {
+        const { data: { session: recoveredSession } } = await supabase.auth.getSession();
+        if (recoveredSession?.user) {
+          return { error: null };
+        }
+      } catch {
+        // getSession itself failed — fall through to the error below.
       }
       return {
         error:

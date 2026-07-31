@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Text, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { Card, CardHeader, Button } from '@/components/ui';
@@ -21,16 +21,11 @@ import {
 export default function CartScreen() {
   const { member, refreshMember } = useAuth();
   const params = useLocalSearchParams<{ success?: string; cancelled?: string }>();
-  const [showCashConfirm, setShowCashConfirm] = useState(false);
 
   const {
     paymentLoading,
-    cashSubmitting,
-    cashError,
     handlePayWithRazorpay,
-    confirmCashPayment,
     reconcilePaymentStatus,
-    setCashError,
   } = useRazorpayCheckout();
 
   const refreshedOnMountRef = useRef(false);
@@ -50,18 +45,16 @@ export default function CartScreen() {
 
   useEffect(() => {
     if (!member) return;
-    const cashSelected = member.payment_method === 'cash';
-    const cashPending = cashSelected && member.payment_status !== 'paid' && !member.cash_payment_verified;
-    if (cashPending) {
-      router.replace('/(dashboard)/cash-payment-review');
+    if (member.payment_status === 'paid') {
+      router.replace('/(dashboard)/payment-success');
     } else if (member.payment_status === 'processing') {
       reconcilePaymentStatus();
     }
-  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id, reconcilePaymentStatus]);
+  }, [member?.payment_status, member?.id, reconcilePaymentStatus]);
 
   if (!member) return null;
 
-  // Payment complete — show success
+  // Payment complete — redirect or show success
   if (member.payment_status === 'paid') {
     return (
       <ScrollView className="flex-1 bg-gray-50" contentContainerClassName="p-4 pb-8">
@@ -71,7 +64,7 @@ export default function CartScreen() {
           </View>
           <Text className="mb-2 text-2xl font-bold text-green-800">Payment Complete!</Text>
           <Text className="mb-6 text-center text-gray-500">
-            Your registration fee payment is confirmed. Your certificate will be generated automatically.
+            Your registration fee payment is confirmed.
           </Text>
           <Button
             title="View Certificate"
@@ -117,12 +110,6 @@ export default function CartScreen() {
     );
   }
 
-  const handlePayInCash = () => {
-    setCashError(null);
-    setShowCashConfirm(true);
-  };
-
-  // With consolidated schema, the member record IS the firm
   const hasFirmData = !!member.firm_name;
 
   return (
@@ -234,60 +221,25 @@ export default function CartScreen() {
           </View>
         </Card>
 
-        {/* Payment Method Buttons */}
+        {/* Online Payment Button */}
         <Card className="mb-4">
           <CardHeader
-            title="Choose Payment Method"
-            subtitle="Select how you'd like to pay"
+            title="Pay Online"
+            subtitle="Fast & secure online checkout via Razorpay"
           />
           <View className="gap-3">
             <Button
-              title="Pay Online"
+              title="Pay Registration Fee"
               onPress={handlePayWithRazorpay}
               loading={paymentLoading}
               size="lg"
               className="w-full"
             />
-            <Button
-              title="Pay in Cash"
-              variant="outline"
-              onPress={handlePayInCash}
-              size="lg"
-              className="w-full"
-            />
-
-            {showCashConfirm && (
-              <View className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
-                <Text className="font-semibold text-yellow-900">Confirm Cash Payment</Text>
-                <Text className="mt-1 text-sm text-yellow-800">
-                  Are you sure you want to pay {formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?
-                  {'\n\n'}An admin will verify and process your payment.
-                </Text>
-                {cashError ? (
-                  <Text className="mt-2 text-sm text-red-700">{cashError}</Text>
-                ) : null}
-                <View className="mt-3 flex-row gap-2">
-                  <Button
-                    title="Cancel"
-                    variant="outline"
-                    onPress={() => setShowCashConfirm(false)}
-                    className="flex-1"
-                    disabled={cashSubmitting}
-                  />
-                  <Button
-                    title="Confirm"
-                    onPress={() => void confirmCashPayment()}
-                    loading={cashSubmitting}
-                    className="flex-1"
-                  />
-                </View>
-              </View>
-            )}
           </View>
         </Card>
 
         <Text className="text-center text-xs text-gray-400">
-          Choose your preferred payment method above
+          Secure checkout powered by Razorpay
         </Text>
       </View>
     </ScrollView>

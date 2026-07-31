@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
@@ -15,68 +15,46 @@ import { CheckCircle, Clock, XCircle } from 'lucide-react-native';
 
 export default function PaymentScreen() {
   const router = useRouter();
-  const { member, refreshMember } = useAuth();
+  const { member } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [showPaymentMethodSelection, setShowPaymentMethodSelection] = useState(true);
-  const [showCashConfirm, setShowCashConfirm] = useState(false);
+  const reconciledRef = useRef(false);
 
   const {
     paymentLoading,
     verifying,
-    cashSubmitting,
-    cashError,
     handlePayWithRazorpay,
-    confirmCashPayment,
     reconcilePaymentStatus,
-    setCashError,
   } = useRazorpayCheckout();
 
   useEffect(() => {
     if (!member) return;
+
     if (member.payment_status === 'paid') {
-      router.replace('/(dashboard)/certificate');
+      router.replace('/(dashboard)/payment-success');
       return;
     }
-    const cashSelected = member.payment_method === 'cash';
-    const cashPending = cashSelected && !member.cash_payment_verified;
-    if (cashPending) {
-      router.replace('/(dashboard)/cash-payment-review');
-      return;
-    }
-    if (member.payment_status === 'processing') {
+
+    if (member.payment_status === 'processing' && !reconciledRef.current) {
+      reconciledRef.current = true;
       reconcilePaymentStatus();
     }
-  }, [member?.payment_method, member?.payment_status, member?.cash_payment_verified, member?.id, reconcilePaymentStatus]);
+  }, [member?.payment_status, member?.id, reconcilePaymentStatus, router]);
 
   if (!member) return null;
 
-  const shouldShowPaymentMethods =
+  // Crucial Fix (Bug 1): 'processing' is explicitly EXCLUDED from showing pay buttons!
+  const shouldShowPayButton =
     member.payment_status !== 'paid' &&
-    (member.payment_status === 'pending' ||
-     member.payment_status === 'failed' ||
-     member.payment_status === 'expired' ||
-     member.payment_status === 'abandoned' ||
-     member.payment_status === 'processing');
+    member.payment_status !== 'processing';
 
   const handleRefreshStatus = async () => {
     setRefreshing(true);
     try {
       await reconcilePaymentStatus();
-      if (member?.payment_status === 'paid') {
-        router.replace('/(dashboard)/certificate');
-      }
+      // The useEffect watching member.payment_status will automatically redirect if status is now 'paid'
     } finally {
       setRefreshing(false);
     }
-  };
-
-  const handlePayOnline = () => {
-    setShowPaymentMethodSelection(false);
-  };
-
-  const handlePayInCash = () => {
-    setCashError(null);
-    setShowCashConfirm(true);
   };
 
   return (
@@ -122,7 +100,7 @@ export default function PaymentScreen() {
                 </View>
                 <Text className="text-xl font-bold text-orange-700">Payment Link Expired</Text>
                 <Text className="mt-1 text-center text-sm text-gray-500">
-                  Your payment link has expired. Generate a new one below.
+                  Your payment link has expired. Try again below.
                 </Text>
               </>
             ) : member.payment_status === 'abandoned' ? (
@@ -132,7 +110,7 @@ export default function PaymentScreen() {
                 </View>
                 <Text className="text-xl font-bold text-gray-700">Payment Abandoned</Text>
                 <Text className="mt-1 text-center text-sm text-gray-500">
-                  You didn't complete payment. Create a new payment link to continue.
+                  You didn't complete payment. Click below to try again.
                 </Text>
               </>
             ) : (
@@ -179,7 +157,7 @@ export default function PaymentScreen() {
         <Card className="mb-4 border-primary-100 bg-primary-50">
           <CardHeader title="After Payment" subtitle="What happens next" />
           <View className="gap-2">
-            <Text className="text-sm text-primary-800">1. Your payment is confirmed securely.</Text>
+            <Text className="text-sm text-primary-800">1. Your payment is confirmed securely via Razorpay.</Text>
             <Text className="text-sm text-primary-800">2. Your firm application moves into review.</Text>
             <Text className="text-sm text-primary-800">3. Your certificate becomes available after approval.</Text>
             <Text className="pt-1 text-xs text-primary-700">
@@ -188,139 +166,59 @@ export default function PaymentScreen() {
           </View>
         </Card>
 
-        {/* Payment Method Selection */}
-        {showPaymentMethodSelection && shouldShowPaymentMethods && (
+        {/* Razorpay Action Area */}
+        {member.payment_status === 'processing' || verifying ? (
           <Card className="mb-4">
             <CardHeader
-              title="Choose Payment Method"
-              subtitle="Select how you'd like to pay"
+              title="Verify Payment"
+              subtitle="Confirming your payment status"
             />
             <View className="gap-3">
               <Button
-                title="Pay Online"
-                onPress={handlePayOnline}
-                size="lg"
-                className="w-full"
-              />
-              <Button
-                title="Pay in Cash"
-                variant="outline"
-                onPress={handlePayInCash}
+                title={verifying ? "Verifying Signature..." : "Refresh Payment Status"}
+                onPress={handleRefreshStatus}
+                loading={refreshing || verifying}
                 size="lg"
                 className="w-full"
               />
               <Text className="text-center text-xs text-gray-500">
-                Choose your preferred payment method above
+                We're checking your payment status. This usually takes a few seconds.
               </Text>
-
-              {showCashConfirm && (
-                <View className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
-                  <Text className="font-semibold text-yellow-900">Confirm Cash Payment</Text>
-                  <Text className="mt-1 text-sm text-yellow-800">
-                    Are you sure you want to pay {formatCurrency(MEMBERSHIP_AMOUNT)} in cash to NDADA?
-                    {'\n\n'}An admin will verify and process your payment.
-                  </Text>
-                  {cashError ? (
-                    <Text className="mt-2 text-sm text-red-700">{cashError}</Text>
-                  ) : null}
-                  <View className="mt-3 flex-row gap-2">
-                    <Button
-                      title="Cancel"
-                      variant="outline"
-                      onPress={() => setShowCashConfirm(false)}
-                      className="flex-1"
-                      disabled={cashSubmitting}
-                    />
-                    <Button
-                      title="Confirm"
-                      onPress={() => void confirmCashPayment()}
-                      loading={cashSubmitting}
-                      className="flex-1"
-                    />
-                  </View>
-                </View>
-              )}
             </View>
           </Card>
-        )}
-
-        {/* Razorpay */}
-        {!showPaymentMethodSelection && shouldShowPaymentMethods && (
+        ) : shouldShowPayButton ? (
           <Card className="mb-4">
             <CardHeader
-              title={member.payment_status === 'processing' || verifying ? 'Verify Payment' : 'Pay with Razorpay'}
-              subtitle={member.payment_status === 'processing' || verifying ? 'Confirming your payment status' : 'Fast, secure online payment'}
+              title="Pay Registration Fee"
+              subtitle="Fast, secure online payment powered by Razorpay"
             />
             <View className="gap-3">
-              {member.payment_status === 'processing' || verifying ? (
-                <>
-                  <Button
-                    title={verifying ? "Verifying Signature..." : "Refresh Payment Status"}
-                    onPress={handleRefreshStatus}
-                    loading={refreshing || verifying}
-                    size="lg"
-                    className="w-full"
-                  />
-                  <Text className="text-center text-xs text-gray-500">
-                    We're checking your payment status. This usually takes a few seconds.
-                  </Text>
-                </>
-              ) : member.payment_status === 'failed' || member.payment_status === 'expired' || member.payment_status === 'abandoned' ? (
-                <>
-                  <Button
-                    title="Pay Online Now"
-                    onPress={handlePayWithRazorpay}
-                    loading={paymentLoading}
-                    size="lg"
-                    className="w-full"
-                  />
-                  <Button
-                    title="Check Status"
-                    variant="outline"
-                    onPress={handleRefreshStatus}
-                    loading={refreshing}
-                    className="w-full"
-                  />
-                  <Button
-                    title="Back to Payment Method Selection"
-                    variant="outline"
-                    onPress={() => setShowPaymentMethodSelection(true)}
-                    className="w-full"
-                  />
-                  <Text className="text-center text-xs text-gray-500">
-                    You can try making the payment again.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Button
-                    title="Pay Now"
-                    onPress={handlePayWithRazorpay}
-                    loading={paymentLoading}
-                    size="lg"
-                    className="w-full"
-                  />
-                  <Button
-                    title="Refresh Status"
-                    variant="outline"
-                    onPress={handleRefreshStatus}
-                    loading={refreshing}
-                    className="w-full"
-                  />
-                  <Button
-                    title="Back to Payment Method Selection"
-                    variant="outline"
-                    onPress={() => setShowPaymentMethodSelection(true)}
-                    className="w-full"
-                  />
-                  <Text className="text-center text-xs text-gray-500">
-                    Secure online checkout.
-                  </Text>
-                </>
-              )}
+              <Button
+                title={
+                  member.payment_status === 'failed' ||
+                  member.payment_status === 'expired' ||
+                  member.payment_status === 'abandoned'
+                    ? 'Retry Online Payment'
+                    : 'Pay Online Now'
+                }
+                onPress={handlePayWithRazorpay}
+                loading={paymentLoading}
+                size="lg"
+                className="w-full"
+              />
+              <Button
+                title="Refresh Status"
+                variant="outline"
+                onPress={handleRefreshStatus}
+                loading={refreshing}
+                className="w-full"
+              />
+              <Text className="text-center text-xs text-gray-500">
+                Secure online payment via UPI, Credit/Debit Cards, Net Banking, or Wallets.
+              </Text>
             </View>
           </Card>
-        )}
+        ) : null}
       </View>
     </ScrollView>
   );

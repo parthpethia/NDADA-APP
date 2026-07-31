@@ -354,7 +354,7 @@ export default function CertificateScreen() {
         message={
           error
             ? error
-            : member?.payment_status !== 'paid' && !member?.cash_payment_verified
+            : member?.payment_status !== 'paid'
             ? 'Complete your registration fee payment first.'
             : 'Your certificate is being prepared. Tap below to generate it now.'
         }

@@ -6,6 +6,34 @@ const projectRoot = path.resolve(__dirname, '..');
 const androidDir = path.join(projectRoot, 'android');
 const userHome = process.env.USERPROFILE || 'C:\\Users\\Atul';
 
+// Load .env into process.env if available
+const envPath = path.join(projectRoot, '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+      const idx = trimmed.indexOf('=');
+      const key = trimmed.substring(0, idx).trim();
+      const val = trimmed.substring(idx + 1).trim();
+      if (key && !process.env[key]) {
+        process.env[key] = val;
+      }
+    }
+  });
+}
+
+// Clean system temp metro cache to prevent ENOTEMPTY rmdir errors on Windows
+const tempMetroCache = path.join(process.env.TEMP || 'C:\\Users\\Atul\\AppData\\Local\\Temp', 'metro-cache');
+if (fs.existsSync(tempMetroCache)) {
+  console.log(`Cleaning temp metro cache: ${tempMetroCache}`);
+  try {
+    fs.rmSync(tempMetroCache, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch (e) {
+    console.warn(`Warning: Could not clear temp metro cache: ${e.message}`);
+  }
+}
+
 console.log('=== [1/2] Cleaning stale C++ CMake build caches (.cxx) ===');
 function deleteCxxDirs(dir) {
   if (!fs.existsSync(dir)) return;
@@ -37,6 +65,7 @@ deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-gesture-handl
 console.log('=== [2/2] Building Signed Release Android App Bundle (AAB) ===');
 
 process.env.GRADLE_USER_HOME = path.join(projectRoot, '.gradle-user-home');
+process.env.METRO_CACHE_DIR = path.join(projectRoot, '.metro-cache');
 process.env.NODE_ENV = 'production';
 process.env.NODE_OPTIONS = '--max-old-space-size=4096';
 process.env.CMAKE_BUILD_PARALLEL_LEVEL = '1';
@@ -80,8 +109,20 @@ function findAabFile(dir) {
 const defaultAab = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab');
 const foundAab = fs.existsSync(defaultAab) ? defaultAab : findAabFile(path.join(androidDir, 'app', 'build'));
 
-const rootAab = path.join(projectRoot, 'app-release-v1.2.aab');
-const downloadsAab = path.join(userHome, 'Downloads', 'app-release-v1.2.aab');
+const pkgJsonPath = path.join(projectRoot, 'package.json');
+let pkgVersion = '1.3';
+if (fs.existsSync(pkgJsonPath)) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+    if (pkg.version) {
+      const parts = pkg.version.split('.');
+      pkgVersion = parts.slice(0, 2).join('.');
+    }
+  } catch (e) {}
+}
+
+const rootAab = path.join(projectRoot, `app-release-v${pkgVersion}.aab`);
+const downloadsAab = path.join(userHome, 'Downloads', `app-release-v${pkgVersion}.aab`);
 
 if (res.status === 0 && foundAab && fs.existsSync(foundAab)) {
   fs.copyFileSync(foundAab, rootAab);

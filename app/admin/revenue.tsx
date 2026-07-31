@@ -9,7 +9,7 @@ interface FinancialMetrics {
   revenue_today: number;
   revenue_month: number;
   revenue_year: number;
-  cash_revenue: number;
+  cash_revenue?: number;
   online_revenue: number;
   pending_payments: number;
   failed_payments: number;
@@ -72,11 +72,6 @@ export default function RevenueDashboardScreen() {
     );
   }
 
-  // Calculate percentages
-  const totalCollected = metrics.cash_revenue + metrics.online_revenue;
-  const cashPct = totalCollected > 0 ? ((metrics.cash_revenue / totalCollected) * 100).toFixed(1) : '0';
-  const onlinePct = totalCollected > 0 ? ((metrics.online_revenue / totalCollected) * 100).toFixed(1) : '0';
-
   return (
     <View className="flex-1 bg-gray-50">
       <ScrollView
@@ -114,32 +109,22 @@ export default function RevenueDashboardScreen() {
           </View>
         </View>
 
-        {/* Payment Methods splits */}
-        <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Payment Method Split</Text>
+        {/* Online Payment Summary */}
+        <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Payment Metrics</Text>
         <Card className="mb-4">
           <View className="flex-row justify-between items-center border-b border-gray-100 pb-2 mb-3">
             <CreditCard size={16} color="#15803d" />
-            <Text className="text-[10px] uppercase font-bold text-primary-900">Breakdown Metrics</Text>
+            <Text className="text-[10px] uppercase font-bold text-primary-900">Online Transactions</Text>
           </View>
 
           <View className="gap-3">
             <View>
               <View className="flex-row justify-between mb-1">
-                <Text className="text-xs font-medium text-gray-600">Online Transactions</Text>
-                <Text className="text-xs font-bold text-gray-900">₹{metrics.online_revenue.toLocaleString('en-IN')} ({onlinePct}%)</Text>
+                <Text className="text-xs font-medium text-gray-600">Online Revenue Collected</Text>
+                <Text className="text-xs font-bold text-gray-900">₹{(metrics.online_revenue || metrics.revenue_year).toLocaleString('en-IN')}</Text>
               </View>
               <View className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <View className="h-2 bg-primary-600 rounded-full" style={{ width: `${onlinePct}%` as any }} />
-              </View>
-            </View>
-
-            <View>
-              <View className="flex-row justify-between mb-1">
-                <Text className="text-xs font-medium text-gray-600">Verified Cash Payments</Text>
-                <Text className="text-xs font-bold text-gray-900">₹{metrics.cash_revenue.toLocaleString('en-IN')} ({cashPct}%)</Text>
-              </View>
-              <View className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <View className="h-2 bg-green-600 rounded-full" style={{ width: `${cashPct}%` as any }} />
+                <View className="h-2 bg-primary-600 rounded-full w-full" />
               </View>
             </View>
           </View>

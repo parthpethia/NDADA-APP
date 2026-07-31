@@ -531,12 +531,12 @@ export default function AdminMembersScreen() {
 
           <TouchableOpacity
             className={`px-3 py-1.5 rounded-full border ${
-              activeFilterId === 'cash_backlog' ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200'
+              activeFilterId === 'pending_payments' ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200'
             }`}
-            onPress={() => applyFilterPreset('cash_backlog', { payment_status: 'pending' })}
+            onPress={() => applyFilterPreset('pending_payments', { payment_status: 'pending' })}
           >
-            <Text className={`text-xs font-bold ${activeFilterId === 'cash_backlog' ? 'text-primary-800' : 'text-gray-600'}`}>
-              Cash Backlog
+            <Text className={`text-xs font-bold ${activeFilterId === 'pending_payments' ? 'text-primary-800' : 'text-gray-600'}`}>
+              Pending Payments
             </Text>
           </TouchableOpacity>
 

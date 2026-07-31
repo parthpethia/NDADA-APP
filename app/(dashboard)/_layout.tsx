@@ -79,11 +79,19 @@ export default function DashboardLayout() {
         }}
       />
 
-      {/* Cash payment review (hidden, navigated to from Cart/Payment) */}
+      {/* Transaction Success page (hidden, navigated to after successful payment) */}
       <Tabs.Screen
-        name="cash-payment-review"
+        name="payment-success"
         options={{
-          title: 'Cash Payment Review',
+          title: 'Transaction Successful',
+          href: null,
+        }}
+      />
+      {/* Transaction Failed page (hidden, navigated to on failure/cancel) */}
+      <Tabs.Screen
+        name="payment-failed"
+        options={{
+          title: 'Transaction Unsuccessful',
           href: null,
         }}
       />

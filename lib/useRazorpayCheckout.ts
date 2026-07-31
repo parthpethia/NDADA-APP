@@ -9,12 +9,8 @@ import * as WebBrowser from 'expo-web-browser';
 export interface UseRazorpayCheckoutReturn {
   paymentLoading: boolean;
   verifying: boolean;
-  cashSubmitting: boolean;
-  cashError: string | null;
   handlePayWithRazorpay: () => Promise<void>;
-  confirmCashPayment: () => Promise<void>;
   reconcilePaymentStatus: () => Promise<void>;
-  setCashError: (err: string | null) => void;
 }
 
 export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
@@ -22,20 +18,14 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
   const { member, refreshMember, session } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [cashSubmitting, setCashSubmitting] = useState(false);
-  const [cashError, setCashError] = useState<string | null>(null);
 
   const checkoutRef = useRef<any>(null);
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-      }
     };
   }, []);
 
@@ -76,6 +66,20 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
       }
     }
   }, [member, refreshMember, session]);
+
+  const handlePaymentFailure = useCallback((error: any) => {
+    if (__DEV__) {
+      console.error('❌ Payment failed:', error);
+    }
+    if (isMountedRef.current) {
+      setPaymentLoading(false);
+    }
+    const errorMessage = error?.description || error?.message || 'Payment was cancelled or failed.';
+    router.push({
+      pathname: '/(dashboard)/payment-failed',
+      params: { reason: errorMessage },
+    });
+  }, [router]);
 
   const handlePaymentSuccess = useCallback(async (response: any) => {
     if (__DEV__) {
@@ -120,10 +124,10 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
       }
 
       if (!data?.verified) {
-        Alert.alert(
-          'Security Alert',
-          'Payment signature verification failed. This payment has not been processed for security reasons.'
-        );
+        router.push({
+          pathname: '/(dashboard)/payment-failed',
+          params: { reason: 'Payment signature verification failed. Please try again or contact support.' },
+        });
         return;
       }
 
@@ -134,7 +138,8 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
       // Reconcile status with Razorpay API to guarantee 'paid' state immediately
       await reconcilePaymentStatus();
 
-      router.replace('/(dashboard)/certificate');
+      // Navigate to the Transaction Successful page
+      router.replace('/(dashboard)/payment-success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Verification failed';
       Alert.alert(
@@ -155,20 +160,6 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
     }
   }, [member?.id, refreshMember, reconcilePaymentStatus, router, session]);
 
-  const handlePaymentFailure = useCallback((error: any) => {
-    if (__DEV__) {
-      console.error('❌ Payment failed:', error);
-    }
-    if (isMountedRef.current) {
-      setPaymentLoading(false);
-    }
-    const errorMessage = error?.description || error?.message || 'Payment failed';
-    Alert.alert('Payment Failed', errorMessage, [
-      { text: 'Retry', onPress: () => void handlePayWithRazorpay() },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, []);
-
   const handlePayWithRazorpay = useCallback(async () => {
     if (!member) {
       Alert.alert('Error', 'Member data not found');
@@ -182,11 +173,6 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
 
     setPaymentLoading(true);
     try {
-      await supabase
-        .from('accounts')
-        .update({ payment_method: 'online' })
-        .eq('id', member.id);
-
       const { data: orderData, error: orderError } = await supabase.functions.invoke('razorpay-create-order', {
         body: { member_id: member.id },
       });
@@ -237,6 +223,10 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
           modal: {
             ondismiss: () => {
               if (isMountedRef.current) setPaymentLoading(false);
+              router.push({
+                pathname: '/(dashboard)/payment-failed',
+                params: { reason: 'Payment window was closed before completion.' },
+              });
             },
           },
         });
@@ -272,50 +262,12 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
         setPaymentLoading(false);
       }
     }
-  }, [member, session, handlePaymentSuccess, handlePaymentFailure]);
-
-  const confirmCashPayment = useCallback(async () => {
-    if (!member) return;
-    setCashSubmitting(true);
-    setCashError(null);
-    try {
-      const { error } = await supabase
-        .from('accounts')
-        .update({ payment_method: 'cash' })
-        .eq('id', member.id);
-
-      if (error) {
-        setCashError(error.message || 'Failed to process cash payment request');
-        return;
-      }
-
-      if (member?.user_id) {
-        try {
-          const { cacheInvalidate, cacheKey } = require('@/lib/queryCache');
-          cacheInvalidate(cacheKey('dashboard', member.user_id));
-        } catch (e) {
-          console.warn('Failed to invalidate dashboard cache:', e);
-        }
-      }
-
-      router.replace('/(dashboard)/cash-payment-review');
-    } catch (err: any) {
-      setCashError(err?.message || 'Failed to process request');
-    } finally {
-      if (isMountedRef.current) {
-        setCashSubmitting(false);
-      }
-    }
-  }, [member, router]);
+  }, [member, session, handlePaymentSuccess, handlePaymentFailure, router]);
 
   return {
     paymentLoading,
     verifying,
-    cashSubmitting,
-    cashError,
     handlePayWithRazorpay,
-    confirmCashPayment,
     reconcilePaymentStatus,
-    setCashError,
   };
 }
