@@ -665,7 +665,9 @@ export default function AdminMembersScreen() {
               )}
               <View className="flex-1">
                 <Text className="text-lg font-semibold text-gray-900">{m.full_name || 'N/A'}</Text>
-                <Text className="text-xs text-gray-500">{m.membership_id || 'N/A'}</Text>
+                <Text className="text-xs text-gray-500">
+                  {m.membership_id ? (m.membership_id.startsWith('NDADA') ? m.membership_id : `NDADA/MAH/NAG/${m.membership_id}`) : 'Pending'}
+                </Text>
               </View>
               <StatusBadge status={m.account_status} />
             </View>

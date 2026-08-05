@@ -8,6 +8,17 @@ import { fetchUserProfile, UserProfileResponse } from './queries';
 import { cacheClear } from './queryCache';
 import { warmStaticDataCache } from './staticDataCache';
 
+// ── Forensic Diagnostic Logging ───────────────────────────────────────────────
+// Prefix: [AUTH-FORENSIC HH:MM:SS.mmm] — filter with `adb logcat | grep AUTH-FORENSIC`
+const authLog = (msg: string, data?: unknown) => {
+  const ts = new Date().toISOString().slice(11, 23);
+  if (data !== undefined) {
+    console.log(`[AUTH-FORENSIC ${ts}] ${msg}`, typeof data === 'object' ? JSON.stringify(data) : data);
+  } else {
+    console.log(`[AUTH-FORENSIC ${ts}] ${msg}`);
+  }
+};
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -168,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * 4. If no account exists and currentUser is provided, fall back to account creation.
    */
   const loadUserProfileCore = useCallback(async (userId: string, currentUser?: User | null) => {
+    authLog('loadUserProfileCore START', { userId: userId.slice(0, 8) });
     // Try the unified RPC first
     const { data: profile, error: rpcError } = await fetchUserProfile(userId);
 
@@ -186,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cachedAdmin = profile?.admin ?? null;
     adminCacheRef.current.set(userId, cachedAdmin);
     setAdminUser(cachedAdmin);
+    authLog('loadUserProfileCore COMPLETE', { hasAccount: !!profile?.account, isAdmin: !!cachedAdmin });
 
     if (profile?.account) {
       // Merge lightweight fields into the Account type.
@@ -395,6 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const initializeAuth = async () => {
+      authLog('initializeAuth START');
       try {
         // Wrap getSession in a timeout — if the SDK's internal token refresh
         // hangs (e.g. stale refresh token + lock contention), fail fast rather
@@ -447,6 +461,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        authLog('initializeAuth session resolved', { hasSession: !!effectiveSession, userId: effectiveSession?.user?.id?.slice(0, 8) || null });
         setSession(effectiveSession);
         setUser(effectiveSession?.user ?? null);
 
@@ -468,6 +483,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         initialized = true;
         setProfileReady(true);
         setLoading(false);
+        authLog('initializeAuth COMPLETE — loading=false, profileReady=true');
       }
     };
 
@@ -477,7 +493,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // so the user at least sees the login screen instead of infinite spinner
     const safetyTimer = setTimeout(() => {
       if (!initialized) {
-        console.warn('Auth: initialization timed out after 10s, forcing loading=false');
+        console.warn('Auth: initialization timed out after 10s, forcing loading=false & profileReady=true');
+        setProfileReady(true);
         setLoading(false);
       }
     }, 10_000);
@@ -487,6 +504,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const previousUserId = userRef.current?.id;
         const newUserId = newSession?.user?.id;
         const isSameUser = !!(previousUserId && newUserId && previousUserId === newUserId);
+        authLog(`onAuthStateChange: ${event}`, {
+          isSameUser,
+          hasSession: !!newSession,
+          prevUser: previousUserId?.slice(0, 8),
+          newUser: newUserId?.slice(0, 8),
+          profileReady: profileReadyRef.current,
+          sessionAccessToken: newSession?.access_token?.slice(0, 12),
+          sessionExpiresAt: newSession?.expires_at,
+        });
+
+
 
         // Skip profile fetch for INITIAL_SESSION if initializeAuth already loaded it.
         // This prevents the double-fetch that fires 4 queries instead of 2.
@@ -544,6 +572,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // where session is set but adminUser is still null (admin login race condition).
         // This ensures routing guards see profileReady=false in the same render batch.
         if (newSession?.user && (!isSameUser || !profileReadyRef.current)) {
+          authLog('onAuthStateChange: setting profileReady=false (new user or profile not ready)');
           setProfileReady(false);
         }
 
@@ -551,12 +580,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
-        // Load profile directly (no setTimeout needed — GoTrue locks are already bypassed
-        // in supabase.ts via the custom lock implementation).
+        // Load profile directly with a 4s fail-safe timeout to prevent hanging UI
         if (newSession?.user) {
           try {
             if (!isSameUser || !profileReadyRef.current) {
-              await loadUserProfile(newSession.user.id, newSession.user);
+              await Promise.race([
+                loadUserProfile(newSession.user.id, newSession.user),
+                new Promise((resolve) => setTimeout(resolve, 4000)),
+              ]);
             }
           } catch (err: any) {
             console.warn('Auth: onAuthStateChange profile fetch failed:', err);
@@ -564,20 +595,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isInvalidSessionError(err?.message)) {
               await clearInvalidSession();
             }
+          } finally {
+            // Profile loading complete or timed out — allow routing guards to proceed
+            authLog('onAuthStateChange: profile load done — setting profileReady=true');
+            setProfileReady(true);
+            if (!initialized) {
+              initialized = true;
+              setLoading(false);
+            }
           }
         } else {
           setMember(null);
           setAdminUser(null);
-        }
-
-        // Profile loading is done — allow routing guards to proceed
-        setProfileReady(true);
-
-        // If the listener fires before initializeAuth finishes,
-        // make sure we also stop the loading spinner
-        if (!initialized) {
-          initialized = true;
-          setLoading(false);
+          setProfileReady(true);
+          if (!initialized) {
+            initialized = true;
+            setLoading(false);
+          }
         }
       }
     );
@@ -590,6 +624,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    authLog('signIn() START');
     try {
       let result = await supabase.auth.signInWithPassword({ email, password });
 
@@ -700,6 +735,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    authLog('signOut() START');
     try {
       await supabase.auth.signOut();
     } catch (error) {
@@ -719,6 +755,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileRequestRef.current = null;
       // Clear query cache to prevent stale data for the next user
       cacheClear();
+      authLog('signOut() COMPLETE — all state cleared');
     }
   };
 

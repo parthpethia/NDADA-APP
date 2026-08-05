@@ -5,7 +5,7 @@ import { Card, Button, StatusBadge } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { confirm } from '@/lib/confirm';
 import { Certificate } from '@/types';
-import { formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import { Award, Search, Trash2, RefreshCw, Download } from 'lucide-react-native';
 
 interface CertificateWithMember extends Certificate {
@@ -275,11 +275,13 @@ export default function AdminCertificatesScreen() {
                 </View>
                 <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-500">Membership ID</Text>
-                  <Text className="text-xs text-gray-700">{cert.membership_id}</Text>
+                  <Text className="text-xs text-gray-700">
+                    {cert.membership_id ? (cert.membership_id.startsWith('NDADA') ? cert.membership_id : `NDADA/MAH/NAG/${cert.membership_id}`) : 'Pending'}
+                  </Text>
                 </View>
                 <View className="flex-row justify-between">
                   <Text className="text-xs text-gray-500">Issued</Text>
-                  <Text className="text-xs text-gray-700">{formatDateTime(cert.issued_at)}</Text>
+                  <Text className="text-xs text-gray-700">{formatDate(cert.issued_at)}</Text>
                 </View>
               </View>
 

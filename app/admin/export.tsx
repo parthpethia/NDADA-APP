@@ -4,8 +4,9 @@ import { supabase } from '@/lib/supabase';
 import { Card, Button, StatusBadge, Select } from '@/components/ui';
 import { useAdmin } from '@/hooks/useAdmin';
 import { confirm } from '@/lib/confirm';
-import { formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime, formatPureDate } from '@/lib/utils';
 import { DISTRICT_FILTER_OPTIONS } from '@/constants/districts';
+import { jsPDF } from 'jspdf';
 import { 
   Download, Calendar, AlertTriangle, CheckCircle, 
   Trash2, RefreshCw, FileText, Filter, Clock 
@@ -50,7 +51,7 @@ export default function ExportCenterScreen() {
   
   // Form States
   const [exportType, setExportType] = useState<'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'>('members');
-  const [format, setFormat] = useState<'XLSX' | 'PDF'>('XLSX');
+  const [format, setFormat] = useState<'CSV' | 'XLSX' | 'PDF'>('XLSX');
   const [memberType, setMemberType] = useState<'all' | 'members' | 'non_members'>('all');
   const [filterDistrict, setFilterDistrict] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -100,106 +101,273 @@ export default function ExportCenterScreen() {
     setRefreshing(false);
   };
 
-  const compileExportClientSide = async (type: string, exportFormat: 'XLSX' | 'PDF', filters: Record<string, any>) => {
-    let query = supabase
-      .from('accounts')
-      .select('id, firm_name, partner_proprietor_name, full_name, contact_email, email, contact_phone, phone, district, firm_address, residence_address, address, payment_status, approval_status, account_status');
+  const compileExportClientSide = async (type: string, exportFormat: 'CSV' | 'XLSX' | 'PDF', filters: Record<string, any>) => {
+    console.log(`[Export Compiler Fallback] Compiling ${exportFormat} export for type=${type}`);
+    let headers: string[] = [];
+    let rows: string[][] = [];
 
-    if (filters.district && filters.district !== 'all') {
-      query = query.eq('district', filters.district);
-    }
+    if (type === 'payments') {
+      headers = ['Payment ID', 'Membership ID', 'Firm / Member Name', 'Email', 'Phone', 'Amount (₹)', 'Payment Status', 'Provider', 'Razorpay Payment ID', 'Created Date'];
+      let query = supabase
+        .from('payments')
+        .select('id, amount, currency, status, provider, razorpay_payment_id, created_at, member_id, accounts:member_id(full_name, firm_name, email, phone, membership_id)')
+        .order('created_at', { ascending: false });
 
-    const mType = filters.member_type || memberType;
-    if (mType === 'members') {
-      query = query.eq('payment_status', 'paid').eq('approval_status', 'approved');
-    } else if (mType === 'non_members') {
-      query = query.or('payment_status.neq.paid,approval_status.neq.approved');
-    }
-
-    if (filters.payment_status && filters.payment_status !== 'all') {
-      if (filters.payment_status === 'received' || filters.payment_status === 'paid') {
-        query = query.eq('payment_status', 'paid');
-      } else if (filters.payment_status === 'unpaid') {
-        query = query.in('payment_status', ['pending', 'failed']);
-      } else {
-        query = query.eq('payment_status', filters.payment_status);
+      if (filters.payment_status && filters.payment_status !== 'all') {
+        query = query.eq('status', filters.payment_status);
       }
+
+      const { data, error: dbErr } = await query;
+      if (dbErr) throw dbErr;
+
+      rows = (data || []).map((r: any) => [
+        r.id || '',
+        r.accounts?.membership_id ? `NDADA/MAH/NAG/${r.accounts.membership_id}` : '-',
+        r.accounts?.firm_name || r.accounts?.full_name || '',
+        r.accounts?.email || '',
+        r.accounts?.phone || '',
+        r.amount !== undefined ? String(r.amount) : '0',
+        String(r.status || '').toUpperCase(),
+        r.provider || 'Razorpay',
+        r.razorpay_payment_id || '-',
+        r.created_at ? formatPureDate(r.created_at, 'DD/MM/YYYY') : ''
+      ]);
+    } else if (type === 'certificates') {
+      headers = ['Certificate ID', 'Membership ID', 'Member Name', 'Firm Name', 'Email', 'Phone', 'District', 'Status', 'Issued Date'];
+      let query = supabase
+        .from('certificates')
+        .select('id, certificate_id, status, issued_at, member_id, accounts:member_id(full_name, firm_name, email, phone, district, membership_id)')
+        .order('issued_at', { ascending: false });
+
+      if (filters.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+      }
+
+      const { data, error: dbErr } = await query;
+      if (dbErr) throw dbErr;
+
+      rows = (data || []).map((r: any) => [
+        r.certificate_id || '',
+        r.accounts?.membership_id ? `NDADA/MAH/NAG/${r.accounts.membership_id}` : '-',
+        r.accounts?.full_name || '',
+        r.accounts?.firm_name || '',
+        r.accounts?.email || '',
+        r.accounts?.phone || '',
+        r.accounts?.district || '',
+        String(r.status || '').toUpperCase(),
+        r.issued_at ? formatPureDate(r.issued_at, 'DD/MM/YYYY') : ''
+      ]);
+    } else if (type === 'audit_logs') {
+      headers = ['Log ID', 'Timestamp', 'Admin Email', 'Admin Role', 'Action', 'Target User ID', 'Details'];
+      let query = supabase
+        .from('audit_logs')
+        .select('id, action, target_user, details, created_at, admin_id, admin_users:admin_id(email, role)')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+
+      const { data, error: dbErr } = await query;
+      if (dbErr) throw dbErr;
+
+      rows = (data || []).map((r: any) => [
+        r.id || '',
+        r.created_at ? formatDate(r.created_at) : '',
+        r.admin_users?.email || 'System',
+        r.admin_users?.role || 'system',
+        r.action || '',
+        r.target_user || '-',
+        r.details || ''
+      ]);
+    } else {
+      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'District', 'Address', 'Payment Status', 'Approval Status'];
+      let query = supabase
+        .from('accounts')
+        .select('id, membership_id, firm_name, partner_proprietor_name, full_name, contact_email, email, contact_phone, phone, district, firm_address, residence_address, address, payment_status, approval_status, account_status');
+
+      if (filters.district && filters.district !== 'all') {
+        query = query.eq('district', filters.district);
+      }
+
+      const mType = filters.member_type || memberType;
+      if (mType === 'members') {
+        query = query.eq('payment_status', 'paid').eq('approval_status', 'approved');
+      } else if (mType === 'non_members') {
+        query = query.or('payment_status.neq.paid,approval_status.neq.approved');
+      }
+
+      if (filters.payment_status && filters.payment_status !== 'all') {
+        if (filters.payment_status === 'received' || filters.payment_status === 'paid') {
+          query = query.eq('payment_status', 'paid');
+        } else if (filters.payment_status === 'unpaid') {
+          query = query.in('payment_status', ['pending', 'failed']);
+        } else {
+          query = query.eq('payment_status', filters.payment_status);
+        }
+      }
+
+      const { data: records, error: dbErr } = await query;
+      if (dbErr) throw dbErr;
+
+      rows = (records || []).map((r: any) => [
+        r.membership_id ? `NDADA/MAH/NAG/${r.membership_id}` : '-',
+        r.firm_name || '',
+        r.partner_proprietor_name || r.full_name || '',
+        r.contact_email || r.email || '',
+        r.contact_phone || r.phone || '',
+        r.district || '',
+        r.firm_address || r.residence_address || r.address || '',
+        String(r.payment_status || 'unpaid').toUpperCase(),
+        String(r.approval_status || 'pending').toUpperCase()
+      ]);
     }
-
-    const { data: records, error: dbErr } = await query;
-    if (dbErr) throw dbErr;
-
-    const headers = ['Name of Firm', 'Partner Name', 'Email ID', 'Phone No', 'City', 'District', 'Address'];
-    const rows = (records || []).map((r: any) => [
-      r.firm_name || '',
-      r.partner_proprietor_name || r.full_name || '',
-      r.contact_email || r.email || '',
-      r.contact_phone || r.phone || '',
-      r.district || '',
-      r.district || '',
-      r.firm_address || r.residence_address || r.address || ''
-    ]);
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const extension = exportFormat === 'PDF' ? 'pdf' : 'xlsx';
+    const extension = exportFormat === 'PDF' ? 'pdf' : exportFormat === 'CSV' ? 'csv' : 'xlsx';
     const filename = `${type}_export_${timestamp}.${extension}`;
 
     let fileBlob: Blob;
-    if (exportFormat === 'PDF') {
-      const htmlDoc = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>NDADA Export Report</title>
-          <style>
-            body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 24px; color: #1f2937; }
-            .header { background-color: #15803d; color: white; padding: 18px 24px; border-radius: 8px; margin-bottom: 20px; }
-            .header h1 { margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .header p { margin: 4px 0 0 0; font-size: 12px; opacity: 0.9; }
-            .meta { font-size: 12px; margin-bottom: 16px; color: #4b5563; background: #f9fafb; padding: 10px 14px; border-radius: 6px; border: 1px solid #e5e7eb; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-            th { background-color: #15803d; color: white; text-align: left; padding: 10px 12px; font-weight: bold; border: 1px solid #15803d; }
-            td { padding: 9px 12px; border: 1px solid #e5e7eb; word-break: break-word; }
-            tr:nth-child(even) { background-color: #f9fafb; }
-            .footer { margin-top: 32px; font-size: 11px; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 14px; }
-            @media print {
-              body { padding: 0; }
-              @page { size: landscape; margin: 10mm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>NDADA Member & Firm Directory Report</h1>
-            <p>Official System Export &bull; Generated: ${new Date().toLocaleString()}</p>
-          </div>
-          <div class="meta">
-            <strong>Total Records:</strong> ${rows.length} &nbsp;|&nbsp; 
-            <strong>Member Filter:</strong> ${mType === 'members' ? 'Members Only' : mType === 'non_members' ? 'Non-Members Only' : 'All Records'}
-            ${filters.district && filters.district !== 'all' ? ` &nbsp;|&nbsp; <strong>District:</strong> ${filters.district}` : ''}
-          </div>
-          <table>
-            <thead>
-              <tr>
-                ${headers.map(h => `<th>${h}</th>`).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.length > 0 ? rows.map(r => `
-                <tr>
-                  ${r.map(val => `<td>${val || '-'}</td>`).join('')}
-                </tr>
-              `).join('') : `<tr><td colspan="7" style="text-align:center; padding: 24px; color:#9ca3af;">No matching records found for the applied filter criteria</td></tr>`}
-            </tbody>
-          </table>
-          <div class="footer">
-            NDADA Official Admin Export &bull; File: ${filename}
-          </div>
-        </body>
-        </html>
-      `;
-      fileBlob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+    let uploadContentType: string;
+
+    if (exportFormat === 'CSV') {
+      const csvHeader = headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',');
+      const csvBody = rows.map(row => 
+        row.map(val => `"${String(val || '').replace(/"/g, '""').replace(/[\r\n\t]+/g, ' ').trim()}"`).join(',')
+      ).join('\n');
+      const csvContent = '\uFEFF' + csvHeader + '\n' + csvBody;
+      uploadContentType = 'text/csv;charset=utf-8';
+      fileBlob = new Blob([csvContent], { type: uploadContentType });
+    } else if (exportFormat === 'PDF') {
+      uploadContentType = 'application/pdf';
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = 297;
+      const pageHeight = 210;
+      const marginX = 10;
+      const usableWidth = pageWidth - (2 * marginX);
+
+      const primaryColor: [number, number, number] = [21, 128, 61];
+      const textColor: [number, number, number] = [31, 41, 55];
+      const borderLineColor: [number, number, number] = [229, 231, 235];
+      const altRowColor: [number, number, number] = [249, 250, 251];
+
+      const drawHeaderBanner = (pageDoc: any, titleText: string) => {
+        pageDoc.setFillColor(...primaryColor);
+        pageDoc.rect(0, 0, pageWidth, 16, 'F');
+        pageDoc.setTextColor(255, 255, 255);
+        pageDoc.setFontSize(11);
+        pageDoc.setFont('helvetica', 'bold');
+        pageDoc.text(titleText, marginX, 11);
+      };
+
+      const titleBannerText = `NDADA - ${type.toUpperCase().replace(/_/g, ' ')} EXPORT REPORT`;
+      drawHeaderBanner(doc, titleBannerText);
+
+      doc.setTextColor(...textColor);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated On: ${formatPureDate(new Date().toISOString(), 'readable')}   |   Total Records: ${rows.length}`, marginX, 22);
+
+      const filterSummary: string[] = [];
+      if (filters.district && filters.district !== 'all') filterSummary.push(`District: ${filters.district}`);
+      if (filters.payment_status && filters.payment_status !== 'all') filterSummary.push(`Payment: ${filters.payment_status}`);
+      if (filters.approval_status && filters.approval_status !== 'all') filterSummary.push(`Approval: ${filters.approval_status}`);
+      if (filters.status && filters.status !== 'all') filterSummary.push(`Status: ${filters.status}`);
+
+      if (filterSummary.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Applied Filters: ${filterSummary.join('   |   ')}`, marginX, 27);
+      }
+
+      const startY = filterSummary.length > 0 ? 31 : 26;
+
+      const colWidths: number[] = [];
+      let totalWeight = 0;
+      headers.forEach((h) => {
+        let weight = Math.max(h.length, 10);
+        if (h.toLowerCase().includes('address') || h.toLowerCase().includes('name') || h.toLowerCase().includes('firm')) {
+          weight = Math.max(weight, 22);
+        } else if (h.toLowerCase().includes('id') || h.toLowerCase().includes('status') || h.toLowerCase().includes('phone')) {
+          weight = Math.min(weight, 16);
+        }
+        colWidths.push(weight);
+        totalWeight += weight;
+      });
+
+      const finalColWidths = colWidths.map(w => (w / totalWeight) * usableWidth);
+
+      const rowHeight = 7;
+      const cellPadding = 1.5;
+
+      const drawTableHeader = (currentY: number) => {
+        doc.setFillColor(...primaryColor);
+        doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'bold');
+
+        let x = marginX;
+        headers.forEach((h, i) => {
+          const colW = finalColWidths[i];
+          let text = h;
+          if (doc.getTextWidth(text) > colW - 2) {
+            text = text.substring(0, Math.floor(colW / 2)) + '..';
+          }
+          doc.text(text, x + cellPadding, currentY + 5);
+          x += colW;
+        });
+        return currentY + rowHeight;
+      };
+
+      let currentY = drawTableHeader(startY);
+      const pdfBody = rows.length > 0 ? rows : [Array(headers.length).fill('-')];
+
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+
+      pdfBody.forEach((row, rowIndex) => {
+        if (currentY + rowHeight > pageHeight - 15) {
+          doc.addPage();
+          drawHeaderBanner(doc, `${titleBannerText} (Contd.)`);
+          currentY = drawTableHeader(22);
+        }
+
+        if (rowIndex % 2 === 1) {
+          doc.setFillColor(...altRowColor);
+          doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+        }
+
+        doc.setDrawColor(...borderLineColor);
+        doc.setLineWidth(0.1);
+        doc.line(marginX, currentY + rowHeight, marginX + usableWidth, currentY + rowHeight);
+
+        doc.setTextColor(...textColor);
+        let x = marginX;
+        row.forEach((val, i) => {
+          const colW = finalColWidths[i];
+          let cellText = String(val || '-');
+          while (cellText.length > 1 && doc.getTextWidth(cellText) > colW - (cellPadding * 2)) {
+            cellText = cellText.slice(0, -1);
+          }
+          if (cellText !== String(val || '-')) {
+            cellText = cellText.slice(0, -2) + '..';
+          }
+          doc.text(cellText, x + cellPadding, currentY + 4.8);
+          x += colW;
+        });
+
+        currentY += rowHeight;
+      });
+
+      const totalPages = (doc.internal as any).getNumberOfPages ? (doc.internal as any).getNumberOfPages() : 1;
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(156, 163, 175);
+        doc.text(`Page ${p} of ${totalPages}`, pageWidth - marginX, pageHeight - 6, { align: 'right' });
+        doc.text('NDADA Official Admin System Export', marginX, pageHeight - 6);
+      }
+
+      const pdfArrayBuffer = doc.output('arraybuffer');
+      fileBlob = new Blob([pdfArrayBuffer], { type: uploadContentType });
     } else {
       const xmlHeader = headers.map(h => `<Cell ss:StyleID="Header"><Data ss:Type="String">${h}</Data></Cell>`).join('');
       const xmlRows = rows.map(r =>
@@ -225,12 +393,13 @@ export default function ExportCenterScreen() {
   </Table>
  </Worksheet>
 </Workbook>`;
+      uploadContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       fileBlob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8' });
     }
 
     try {
       const { error: uploadErr } = await supabase.storage.from('secure-exports').upload(filename, fileBlob, {
-        contentType: exportFormat === 'PDF' ? 'text/html' : 'application/vnd.ms-excel',
+        contentType: uploadContentType,
         upsert: true
       });
 
@@ -256,16 +425,16 @@ export default function ExportCenterScreen() {
     }
 
     const blobUrl = URL.createObjectURL(fileBlob);
-    if (typeof window !== 'undefined' && typeof window.open === 'function') {
-      const printWin = window.open(blobUrl, '_blank');
-      if (printWin && exportFormat === 'PDF') {
-        printWin.focus();
-        setTimeout(() => {
-          try { printWin.print(); } catch (pe) {}
-        }, 500);
-      } else {
-        Linking.openURL(blobUrl);
-      }
+    if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.createElement) {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 1000);
     } else {
       Linking.openURL(blobUrl);
     }
@@ -323,27 +492,44 @@ export default function ExportCenterScreen() {
   // Secure download trigger using private signed URL API
   const handleDownloadFile = async (job: ExportJob) => {
     try {
+      let downloadUrl = '';
       if (job.file_url) {
         const { data: signedData } = await supabase.storage
           .from('secure-exports')
           .createSignedUrl(job.file_url, 3600);
 
         if (signedData?.signedUrl) {
-          Linking.openURL(signedData.signedUrl);
-          return;
+          downloadUrl = signedData.signedUrl;
         }
       }
 
-      const result = await callAdminAction('get-export-download', { job_id: job.id });
-      if (result?.download_url) {
-        let url = result.download_url;
-        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('blob:')) {
-          const { data: publicData } = supabase.storage.from('secure-exports').getPublicUrl(url);
-          url = publicData?.publicUrl || url;
+      if (!downloadUrl) {
+        const result = await callAdminAction('get-export-download', { job_id: job.id });
+        if (result?.download_url) {
+          downloadUrl = result.download_url;
+          if (!downloadUrl.startsWith('http://') && !downloadUrl.startsWith('https://') && !downloadUrl.startsWith('blob:')) {
+            const { data: publicData } = supabase.storage.from('secure-exports').getPublicUrl(downloadUrl);
+            downloadUrl = publicData?.publicUrl || downloadUrl;
+          }
         }
-        Linking.openURL(url);
-      } else {
+      }
+
+      if (!downloadUrl) {
         throw new Error('Download URL token expired or unreachable');
+      }
+
+      if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.createElement) {
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = job.file_url || `${job.export_type}_export.${job.format.toLowerCase()}`;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+        }, 1000);
+      } else {
+        Linking.openURL(downloadUrl);
       }
     } catch (err: any) {
       Alert.alert('Download Error', err.message);
@@ -375,13 +561,39 @@ export default function ExportCenterScreen() {
           </View>
 
           <View className="gap-3">
+            {/* Export Type Selector */}
+            <View>
+              <Text className="text-xs font-bold text-gray-500 mb-1.5">Export Target Dataset</Text>
+              <Select
+                value={exportType}
+                options={[
+                  { label: 'Members & Firms Directory', value: 'members' },
+                  { label: 'Payments & Transactions', value: 'payments' },
+                  { label: 'Member Certificates', value: 'certificates' },
+                  { label: 'System Audit Logs', value: 'audit_logs' }
+                ]}
+                onValueChange={(val: any) => setExportType(val)}
+              />
+            </View>
+
             {/* Active Fields Badge */}
             <View className="bg-primary-50/60 p-2.5 rounded-lg border border-primary-100">
               <Text className="text-[10px] font-bold text-primary-900 uppercase tracking-wider mb-1">
-                Included Export Fields (7 Columns)
+                Included Export Fields ({
+                  exportType === 'payments' ? '10 Columns' :
+                  exportType === 'certificates' ? '9 Columns' :
+                  exportType === 'audit_logs' ? '7 Columns' : '9 Columns'
+                })
               </Text>
               <Text className="text-xs text-primary-800 font-medium">
-                1. Name of Firm  •  2. Partner Name  •  3. Email ID  •  4. Phone No  •  5. City  •  6. District  •  7. Address
+                {exportType === 'payments'
+                  ? '1. Payment ID  •  2. Membership ID  •  3. Firm / Member Name  •  4. Email  •  5. Phone  •  6. Amount (₹)  •  7. Status  •  8. Provider  •  9. Razorpay ID  •  10. Date'
+                  : exportType === 'certificates'
+                  ? '1. Certificate ID  •  2. Membership ID  •  3. Member Name  •  4. Firm Name  •  5. Email  •  6. Phone  •  7. District  •  8. Status  •  9. Issued Date'
+                  : exportType === 'audit_logs'
+                  ? '1. Log ID  •  2. Timestamp  •  3. Admin Email  •  4. Admin Role  •  5. Action  •  6. Target User ID  •  7. Details'
+                  : '1. Membership ID  •  2. Name of Firm  •  3. Partner Name  •  4. Email ID  •  5. Phone No  •  6. District  •  7. Address  •  8. Payment Status  •  9. Approval Status'
+                }
               </Text>
             </View>
 
@@ -391,6 +603,7 @@ export default function ExportCenterScreen() {
                 <Select
                   value={format}
                   options={[
+                    { label: 'CSV Text File (.csv)', value: 'CSV' },
                     { label: 'Excel Spreadsheet (.xlsx)', value: 'XLSX' },
                     { label: 'PDF Document (.pdf)', value: 'PDF' }
                   ]}

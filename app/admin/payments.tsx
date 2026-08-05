@@ -83,7 +83,7 @@ export default function AdminPaymentsScreen() {
             <View className="flex-row justify-between">
               <Text className="text-xs text-gray-500">Amount</Text>
               <Text className="text-xs font-medium text-gray-700">
-                {formatCurrency(p.amount / 100, (p.currency || 'INR').toUpperCase())}
+                {formatCurrency(p.amount > 1000 ? p.amount / 100 : p.amount, (p.currency || 'INR').toUpperCase())}
               </Text>
             </View>
 

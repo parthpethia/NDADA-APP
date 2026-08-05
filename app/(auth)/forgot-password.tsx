@@ -1,39 +1,22 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { Link, router } from 'expo-router';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Button, Input } from '@/components/ui';
 import { APP_NAME } from '@/constants';
 
 export default function ForgotPasswordScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const { resetPassword } = useAuth();
+  const [inputVal, setInputVal] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [successEmail, setSuccessEmail] = useState('');
 
   const handleResetPassword = async () => {
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setError('Please enter your email address');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (!password || !confirmPassword) {
-      setError('Please fill in all fields');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    const inputStr = inputVal.trim();
+    if (!inputStr) {
+      setError('Please enter your email address or phone number');
       return;
     }
 
@@ -41,33 +24,66 @@ export default function ForgotPasswordScreen() {
     setError('');
 
     try {
-      const { data: successResult, error: rpcError } = await supabase.rpc('reset_password_bypass', {
-        p_email: trimmedEmail,
-        p_new_password: password,
-      });
+      let targetEmail = inputStr;
 
-      if (rpcError) {
-        setError(rpcError.message);
-        return;
-      }
-      if (!successResult) {
-        setError('User not found. Please enter the correct email.');
-        return;
+      if (!inputStr.includes('@')) {
+        // Look up registered email by phone number
+        const { data: lookedUpEmail, error: rpcErr } = await supabase
+          .rpc('lookup_email_by_phone', { p_phone: inputStr });
+
+        if (rpcErr) {
+          console.warn('Phone lookup error during password reset:', rpcErr);
+          const msg = String(rpcErr.message || '').toLowerCase();
+          if (
+            msg.includes('failed to fetch') ||
+            msg.includes('network request failed') ||
+            msg.includes('fetcherror') ||
+            msg.includes('typeerror') ||
+            msg.includes('network error')
+          ) {
+            setError('Network error while looking up phone number. Please check your internet connection.');
+          } else {
+            setError('Unable to find account matching phone number. Please enter your registered email.');
+          }
+          setLoading(false);
+          return;
+        }
+
+        if (lookedUpEmail) {
+          targetEmail = lookedUpEmail;
+        } else {
+          setError(`No account found matching phone number "${inputStr}". Please check your phone number or enter your registered email.`);
+          setLoading(false);
+          return;
+        }
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(inputStr)) {
+          setError('Please enter a valid email address');
+          setLoading(false);
+          return;
+        }
+        targetEmail = inputStr.toLowerCase();
       }
 
-      setSuccess(true);
-    } catch (e) {
-      setError('An unexpected error occurred. Please try again.');
+      const { error: resetErr } = await resetPassword(targetEmail);
+      if (resetErr) {
+        setError(resetErr);
+      } else {
+        setSuccessEmail(targetEmail);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (success) {
+  if (successEmail) {
     return (
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-12"
@@ -85,18 +101,18 @@ export default function ForgotPasswordScreen() {
 
             <View className="rounded-2xl bg-white p-6 shadow-sm">
               <View className="mb-4 items-center">
-                <Text className="text-5xl mb-4">✅</Text>
+                <Text className="text-5xl mb-4">📧</Text>
                 <Text className="text-xl font-bold text-gray-800 text-center">
-                  Password Updated!
+                  Check Your Email
                 </Text>
               </View>
 
-              <Text className="text-center text-gray-600 mb-6">
-                Your password has been successfully reset. You can now sign in with your new password.
+              <Text className="text-center text-gray-600 mb-6 leading-5">
+                We've sent a password reset link to <Text className="font-semibold text-gray-900">{successEmail}</Text>. Tap the link in the email to set your new password.
               </Text>
 
               <Button
-                title="Go to Sign In"
+                title="Return to Sign In"
                 onPress={() => router.replace('/(auth)/login')}
               />
             </View>
@@ -109,7 +125,7 @@ export default function ForgotPasswordScreen() {
   return (
     <KeyboardAvoidingView
       className="flex-1"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerClassName="flex-grow justify-center px-6 py-12"
@@ -124,7 +140,7 @@ export default function ForgotPasswordScreen() {
             />
             <Text className="text-3xl font-bold text-primary-800">{APP_NAME}</Text>
             <Text className="mt-1 text-center text-gray-500">
-              Enter your email address and new password to reset directly.
+              Enter your registered email address or phone number to receive a password reset link.
             </Text>
           </View>
 
@@ -136,32 +152,16 @@ export default function ForgotPasswordScreen() {
             ) : null}
 
             <Input
-              label="Email"
-              placeholder="you@example.com"
-              value={email}
-              onChangeText={setEmail}
+              label="Email or Phone Number"
+              placeholder="you@example.com or 9876543210"
+              value={inputVal}
+              onChangeText={setInputVal}
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
-            <Input
-              label="New Password"
-              placeholder="Min 6 characters"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            <Input
-              label="Confirm New Password"
-              placeholder="Re-enter password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-            />
-
             <Button
-              title="Reset Password"
+              title="Send Reset Link"
               onPress={handleResetPassword}
               loading={loading}
               className="mt-2"

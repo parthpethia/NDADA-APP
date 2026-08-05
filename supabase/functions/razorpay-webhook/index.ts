@@ -194,6 +194,27 @@ serve(async (req) => {
       if (accountErr) throw new Error(accountErr.message);
       console.log('✅ Account payment_status updated to paid');
 
+      // Dispatch payment_received email notification
+      const { data: memberAcc } = await supabase
+        .from('accounts')
+        .select('full_name, email, membership_id')
+        .eq('id', memberId)
+        .maybeSingle();
+
+      if (memberAcc?.email) {
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: memberAcc.email,
+            template_name: 'payment_received',
+            data: {
+              name: memberAcc.full_name || 'Member',
+              amount: '300',
+              membership_id: memberAcc.membership_id ? `NDADA/MAH/NAG/${memberAcc.membership_id}` : memberId,
+            },
+          },
+        }).catch((e: any) => console.warn('Failed to dispatch payment_received email from webhook:', e));
+      }
+
       // Enqueue certificate generation (non-blocking)
       console.log(`Queuing certificate generation for member ${memberId}`);
       await supabase.from('certificate_generation_queue').upsert(
@@ -283,7 +304,7 @@ serve(async (req) => {
       if (memberId) {
         const { data: account } = await supabase
           .from('accounts')
-          .select('payment_status')
+          .select('full_name, email, payment_status')
           .eq('id', memberId)
           .single();
 
@@ -293,6 +314,19 @@ serve(async (req) => {
             .update({ payment_status: 'failed' })
             .eq('id', memberId);
           console.log('✅ Account payment_status updated to failed');
+
+          if (account.email) {
+            supabase.functions.invoke('send-email', {
+              body: {
+                to: account.email,
+                template_name: 'payment_failed',
+                data: {
+                  name: account.full_name || 'Member',
+                  reason: failureReason,
+                },
+              },
+            }).catch((e: any) => console.warn('Failed to dispatch payment_failed email from webhook:', e));
+          }
         }
       }
 

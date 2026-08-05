@@ -2,7 +2,7 @@
   "expo": {
     "name": "NDADA",
     "slug": "ndada-app",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ndada.app",
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +25,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.ndada.app",
-      "versionCode": 4
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/favicon.png",

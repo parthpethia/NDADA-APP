@@ -10,10 +10,24 @@ export default function DashboardLayout() {
   const { session, loading, adminUser, profileReady, member, signOut } = useAuth();
   const insets = useSafeAreaInsets();
 
-  if (loading || !profileReady) return <LoadingScreen />;
-  if (!session) return <Redirect href="/(auth)/login" />;
-  if (adminUser) return <Redirect href="/admin" />;
+  // Diagnostic: trace every render of the dashboard layout with full state
+  const ts = new Date().toISOString().slice(11, 23);
+  console.log(`[AUTH-FORENSIC ${ts}] DashboardLayout render: session=${!!session} loading=${loading} profileReady=${profileReady} adminUser=${!!adminUser} member=${!!member}`);
+
+  if (loading || !profileReady) {
+    console.log(`[AUTH-FORENSIC ${ts}] DashboardLayout: loading/!profileReady → LoadingScreen`);
+    return <LoadingScreen />;
+  }
+  if (!session) {
+    console.log(`[AUTH-FORENSIC ${ts}] DashboardLayout: no session → Redirect to login`);
+    return <Redirect href="/(auth)/login" />;
+  }
+  if (adminUser) {
+    console.log(`[AUTH-FORENSIC ${ts}] DashboardLayout: adminUser detected → Redirect to /admin`);
+    return <Redirect href="/admin" />;
+  }
   if (member?.account_status === 'deleted') {
+    console.log(`[AUTH-FORENSIC ${ts}] DashboardLayout: account deleted → signOut + Redirect to login`);
     signOut();
     return <Redirect href="/(auth)/login" />;
   }

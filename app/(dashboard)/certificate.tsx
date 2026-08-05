@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Card, CardHeader, Button, StatusBadge, LoadingScreen, EmptyState } from '@/components/ui';
 import { Certificate } from '@/types';
-import { formatDateTime, getFunctionsErrorMessage } from '@/lib/utils';
+import { formatDate, formatDateTime, getFunctionsErrorMessage } from '@/lib/utils';
 import { APP_NAME, MEMBERSHIP_PLAN_NAME } from '@/constants';
 import { Award } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
@@ -405,12 +405,14 @@ export default function CertificateScreen() {
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-500">Membership ID</Text>
-              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">{member?.membership_id || 'N/A'}</Text>
+              <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">
+                {member?.membership_id ? (member.membership_id.startsWith('NDADA') ? member.membership_id : `NDADA/MAH/NAG/${member.membership_id}`) : 'Pending'}
+              </Text>
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm text-gray-500">Issued</Text>
               <Text className="flex-1 text-right ml-2 text-sm font-medium text-gray-900">
-                {formatDateTime(certificate.issued_at)}
+                {formatDate(certificate.issued_at)}
               </Text>
             </View>
             <View className="flex-row items-center justify-between">

@@ -339,10 +339,23 @@ async function approveAccount(supabase: any, accountId: string, authAdminId: str
       reviewed_at: new Date().toISOString() 
     })
     .eq('id', accountId)
-    .select('id, user_id')
+    .select('id, user_id, full_name, email, membership_id')
     .single();
 
   if (!updated) throw new Error('Account not found');
+
+  if (updated.email) {
+    supabase.functions.invoke('send-email', {
+      body: {
+        to: updated.email,
+        template_name: 'application_approved',
+        data: {
+          name: updated.full_name || 'Member',
+          membership_id: updated.membership_id ? `NDADA/MAH/NAG/${updated.membership_id}` : updated.id,
+        },
+      },
+    }).catch((e: any) => console.warn('Failed to dispatch application_approved email:', e));
+  }
 
   await logAudit(supabase, adminDbId, 'account_approved', updated.user_id, `Account ${accountId} approved`);
   return { message: 'Account approved' };
@@ -358,10 +371,24 @@ async function rejectAccount(supabase: any, accountId: string, reason: string, a
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', accountId)
-    .select('id, user_id')
+    .select('id, user_id, full_name, email')
     .single();
 
   if (!updated) throw new Error('Account not found');
+
+  if (updated.email) {
+    supabase.functions.invoke('send-email', {
+      body: {
+        to: updated.email,
+        template_name: 'application_rejected',
+        data: {
+          name: updated.full_name || 'Member',
+          reason: reason || 'Information mismatch or missing document',
+        },
+      },
+    }).catch((e: any) => console.warn('Failed to dispatch application_rejected email:', e));
+  }
+
   await logAudit(supabase, adminDbId, 'account_rejected', updated.user_id, `Account ${accountId} rejected: ${reason}`);
   return { message: 'Account rejected' };
 }
@@ -916,14 +943,29 @@ async function queueJobAction(supabase: any, jobId: string, jobAction: 'retry' |
 // EXPORT CENTER COMPILERS & PHYSICAL STORAGE PURGES
 // =========================================================================
 
+function formatPureDateEdge(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const str = String(dateStr).trim();
+  if (!str) return '';
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return str;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 async function generateBackgroundExport(
   supabase: any,
-  params: { type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'; filters?: Record<string, any>; format: 'XLSX' | 'PDF' },
+  params: { type: 'members' | 'firms' | 'payments' | 'certificates' | 'audit_logs'; filters?: Record<string, any>; format: 'CSV' | 'XLSX' | 'PDF' },
   adminDbId: string
 ) {
   const exportType = params.type || 'members';
-  const format = params.format === 'PDF' ? 'PDF' : 'XLSX';
+  const format: 'CSV' | 'XLSX' | 'PDF' = (['CSV', 'XLSX', 'PDF'].includes(params.format) ? params.format : 'XLSX') as any;
   const filters = params.filters || {};
+
+  console.log(`🚀 [Export Engine] Initiating compilation. Requested Type: "${exportType}", Format: "${format}", Filters:`, filters);
 
   // 1. Initialize DB record to track progress
   const { data: job, error: jobErr } = await supabase
@@ -940,73 +982,161 @@ async function generateBackgroundExport(
 
   if (jobErr) throw jobErr;
 
-  // Compile matching records
+  // Compile matching records based on exportType
   try {
-    let rows: any[] = [];
-    const headers = ['Name of Firm', 'Partner Name', 'Email ID', 'Phone No', 'City', 'District', 'Address'];
+    let headers: string[] = [];
+    let cleanRows: string[][] = [];
 
-    let query = supabase
-      .from('accounts')
-      .select('id, firm_name, partner_proprietor_name, full_name, contact_email, email, contact_phone, phone, district, firm_address, residence_address, address, payment_status, approval_status, account_status');
+    if (exportType === 'payments') {
+      headers = ['Payment ID', 'Membership ID', 'Firm / Member Name', 'Email', 'Phone', 'Amount (₹)', 'Payment Status', 'Provider', 'Razorpay Payment ID', 'Created Date'];
+      let query = supabase
+        .from('payments')
+        .select('id, amount, currency, status, provider, razorpay_payment_id, created_at, member_id, accounts:member_id(full_name, firm_name, email, phone, membership_id)')
+        .order('created_at', { ascending: false });
 
-    // District filter
-    if (filters.district && filters.district !== 'all') {
-      query = query.eq('district', filters.district);
-    }
-
-    // Members vs Non-members filter
-    const memberType = filters.member_type || filters.memberFilter;
-    if (memberType === 'members') {
-      query = query.eq('payment_status', 'paid').eq('approval_status', 'approved');
-    } else if (memberType === 'non_members') {
-      query = query.or('payment_status.neq.paid,approval_status.neq.approved');
-    }
-
-    // Specific status filters if provided
-    if (filters.payment_status && filters.payment_status !== 'all') {
-      if (filters.payment_status === 'received' || filters.payment_status === 'paid') {
-        query = query.eq('payment_status', 'paid');
-      } else if (filters.payment_status === 'unpaid') {
-        query = query.in('payment_status', ['pending', 'failed']);
-      } else {
-        query = query.eq('payment_status', filters.payment_status);
+      if (filters.payment_status && filters.payment_status !== 'all') {
+        query = query.eq('status', filters.payment_status);
       }
-    }
-    if (filters.approval_status && filters.approval_status !== 'all') {
-      query = query.eq('approval_status', filters.approval_status);
-    }
-    if (filters.account_status && filters.account_status !== 'all') {
-      query = query.eq('account_status', filters.account_status);
-    }
 
-    const { data, error: fetchErr } = await query;
-    if (fetchErr) throw fetchErr;
+      const { data, error: fetchErr } = await query;
+      if (fetchErr) throw fetchErr;
 
-    // Clean sanitization for table body (strip unwanted line breaks)
-    const cleanRows = (data && data.length > 0)
-      ? (data || []).map((r: any) => [
-          r.firm_name || '',
-          r.partner_proprietor_name || r.full_name || '',
-          r.contact_email || r.email || '',
-          r.contact_phone || r.phone || '',
-          r.district || '', // City fallback to district
-          r.district || '',
-          r.firm_address || r.residence_address || r.address || ''
-        ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()))
-      : [];
+      cleanRows = (data || []).map((r: any) => [
+        r.id || '',
+        r.accounts?.membership_id ? `NDADA/MAH/NAG/${r.accounts.membership_id}` : '',
+        r.accounts?.firm_name || r.accounts?.full_name || '',
+        r.accounts?.email || '',
+        r.accounts?.phone || '',
+        r.amount !== undefined ? String(r.amount) : '0',
+        String(r.status || '').toUpperCase(),
+        r.provider || 'Razorpay',
+        r.razorpay_payment_id || '-',
+        r.created_at ? formatPureDateEdge(r.created_at) : ''
+      ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()));
+
+    } else if (exportType === 'certificates') {
+      headers = ['Certificate ID', 'Membership ID', 'Member Name', 'Firm Name', 'Email', 'Phone', 'District', 'Status', 'Issued Date'];
+      let query = supabase
+        .from('certificates')
+        .select('id, certificate_id, status, issued_at, member_id, accounts:member_id(full_name, firm_name, email, phone, district, membership_id)')
+        .order('issued_at', { ascending: false });
+
+      if (filters.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+      }
+
+      const { data, error: fetchErr } = await query;
+      if (fetchErr) throw fetchErr;
+
+      cleanRows = (data || []).map((r: any) => [
+        r.certificate_id || '',
+        r.accounts?.membership_id ? `NDADA/MAH/NAG/${r.accounts.membership_id}` : '',
+        r.accounts?.full_name || '',
+        r.accounts?.firm_name || '',
+        r.accounts?.email || '',
+        r.accounts?.phone || '',
+        r.accounts?.district || '',
+        String(r.status || '').toUpperCase(),
+        r.issued_at ? formatPureDateEdge(r.issued_at) : ''
+      ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()));
+
+    } else if (exportType === 'audit_logs') {
+      headers = ['Log ID', 'Timestamp', 'Admin Email', 'Admin Role', 'Action', 'Target User ID', 'Details'];
+      let query = supabase
+        .from('audit_logs')
+        .select('id, action, target_user, details, created_at, admin_id, admin_users:admin_id(email, role)')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+
+      const { data, error: fetchErr } = await query;
+      if (fetchErr) throw fetchErr;
+
+      cleanRows = (data || []).map((r: any) => [
+        r.id || '',
+        r.created_at ? formatPureDateEdge(r.created_at) : '',
+        r.admin_users?.email || 'System',
+        r.admin_users?.role || 'system',
+        r.action || '',
+        r.target_user || '-',
+        r.details || ''
+      ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()));
+
+    } else {
+      // Default: 'members' | 'firms'
+      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'District', 'Address', 'Payment Status', 'Approval Status'];
+
+      let query = supabase
+        .from('accounts')
+        .select('id, membership_id, firm_name, partner_proprietor_name, full_name, contact_email, email, contact_phone, phone, district, firm_address, residence_address, address, payment_status, approval_status, account_status')
+        .order('created_at', { ascending: false });
+
+      if (filters.district && filters.district !== 'all') {
+        query = query.eq('district', filters.district);
+      }
+
+      const memberType = filters.member_type || filters.memberFilter;
+      if (memberType === 'members') {
+        query = query.eq('payment_status', 'paid').eq('approval_status', 'approved');
+      } else if (memberType === 'non_members') {
+        query = query.or('payment_status.neq.paid,approval_status.neq.approved');
+      }
+
+      if (filters.payment_status && filters.payment_status !== 'all') {
+        if (filters.payment_status === 'received' || filters.payment_status === 'paid') {
+          query = query.eq('payment_status', 'paid');
+        } else if (filters.payment_status === 'unpaid') {
+          query = query.in('payment_status', ['pending', 'failed']);
+        } else {
+          query = query.eq('payment_status', filters.payment_status);
+        }
+      }
+      if (filters.approval_status && filters.approval_status !== 'all') {
+        query = query.eq('approval_status', filters.approval_status);
+      }
+      if (filters.account_status && filters.account_status !== 'all') {
+        query = query.eq('account_status', filters.account_status);
+      }
+
+      const { data, error: fetchErr } = await query;
+      if (fetchErr) throw fetchErr;
+
+      cleanRows = (data || []).map((r: any) => [
+        r.membership_id ? `NDADA/MAH/NAG/${r.membership_id}` : '-',
+        r.firm_name || '',
+        r.partner_proprietor_name || r.full_name || '',
+        r.contact_email || r.email || '',
+        r.contact_phone || r.phone || '',
+        r.district || '',
+        r.firm_address || r.residence_address || r.address || '',
+        String(r.payment_status || 'unpaid').toUpperCase(),
+        String(r.approval_status || 'pending').toUpperCase()
+      ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()));
+    }
 
     // 2. Ensure Bucket exists
     await supabase.storage.createBucket('secure-exports', { public: false }).catch(() => {});
 
     let filename: string;
-    let fileContent: Uint8Array | string;
+    let fileContent: Uint8Array;
     let contentType: string;
 
-    if (format === 'XLSX') {
-      // Generate real XLSX using SheetJS
-      const wsData = [headers, ...(cleanRows.length > 0 ? cleanRows : [['No matching records found', '', '', '', '', '', '']])];
+    if (format === 'CSV') {
+      console.log('📝 [CSV Compiler] CSV compilation start');
+      const csvHeader = headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',');
+      const csvBody = (cleanRows.length > 0 ? cleanRows : [headers.map(() => '')]).map(row =>
+        row.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
+      
+      // Prepend UTF-8 BOM (\uFEFF) for Marathi/Unicode compatibility in Excel & text viewers
+      const csvString = '\uFEFF' + csvHeader + '\n' + csvBody;
+      fileContent = new TextEncoder().encode(csvString);
+      filename = `${exportType}_export_${job.id}.csv`;
+      contentType = 'text/csv;charset=utf-8';
+      console.log('✅ [CSV Compiler] CSV success. Output bytes:', fileContent.length);
+    } else if (format === 'XLSX') {
+      console.log('📊 [XLSX Compiler] XLSX compilation start');
+      const wsData = [headers, ...(cleanRows.length > 0 ? cleanRows : [headers.map(() => '')])];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      // Auto-size columns based on content width
       ws['!cols'] = headers.map((h, i) => {
         const maxLen = Math.max(
           h.length,
@@ -1020,122 +1150,145 @@ async function generateBackgroundExport(
       fileContent = new Uint8Array(xlsxBuffer);
       filename = `${exportType}_export_${job.id}.xlsx`;
       contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      console.log('✅ [XLSX Compiler] XLSX success. Output bytes:', fileContent.length);
     } else {
-      // PDF Format Generation
+      console.log('📄 [PDF Compiler] PDF compilation start');
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const totalPagesExp = '{total_pages_count_string}';
+      const pageWidth = 297;
+      const pageHeight = 210;
+      const marginX = 10;
+      const usableWidth = pageWidth - (2 * marginX);
 
-      // Styling Tokens
       const primaryColor: [number, number, number] = [21, 128, 61]; // NDADA Green #15803d
       const textColor: [number, number, number] = [31, 41, 55];
+      const borderLineColor: [number, number, number] = [229, 231, 235];
+      const altRowColor: [number, number, number] = [249, 250, 251];
 
-      // Header Banner
-      doc.setFillColor(...primaryColor);
-      doc.rect(0, 0, 297, 16, 'F');
+      const drawHeaderBanner = (pageDoc: any, titleText: string) => {
+        pageDoc.setFillColor(...primaryColor);
+        pageDoc.rect(0, 0, pageWidth, 16, 'F');
+        pageDoc.setTextColor(255, 255, 255);
+        pageDoc.setFontSize(11);
+        pageDoc.setFont('helvetica', 'bold');
+        pageDoc.text(titleText, marginX, 11);
+      };
 
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('NDADA - MEMBER & FIRM DIRECTORY EXPORT REPORT', 12, 11);
+      const titleBannerText = `NDADA - ${exportType.toUpperCase().replace(/_/g, ' ')} EXPORT REPORT`;
+      drawHeaderBanner(doc, titleBannerText);
 
-      // Metadata
+      // Metadata block
       doc.setTextColor(...textColor);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generated On: ${new Date().toLocaleString()}   |   Total Records: ${cleanRows.length}`, 12, 22);
+      doc.text(`Generated On: ${new Date().toLocaleString()}   |   Total Records: ${cleanRows.length}`, marginX, 22);
 
-      // Applied Filters Banner
       const filterSummary: string[] = [];
-      if (memberType && memberType !== 'all') {
-        filterSummary.push(`Member Type: ${memberType === 'members' ? 'Members Only' : 'Non-Members Only'}`);
-      }
-      if (filters.district && filters.district !== 'all') {
-        filterSummary.push(`District: ${filters.district}`);
-      }
-      if (filters.payment_status && filters.payment_status !== 'all') {
-        filterSummary.push(`Payment: ${filters.payment_status}`);
-      }
-      if (filters.approval_status && filters.approval_status !== 'all') {
-        filterSummary.push(`Approval: ${filters.approval_status}`);
-      }
+      if (filters.district && filters.district !== 'all') filterSummary.push(`District: ${filters.district}`);
+      if (filters.payment_status && filters.payment_status !== 'all') filterSummary.push(`Payment: ${filters.payment_status}`);
+      if (filters.approval_status && filters.approval_status !== 'all') filterSummary.push(`Approval: ${filters.approval_status}`);
+      if (filters.status && filters.status !== 'all') filterSummary.push(`Status: ${filters.status}`);
 
       if (filterSummary.length > 0) {
         doc.setFont('helvetica', 'bold');
-        doc.text(`Applied Filters: ${filterSummary.join('   |   ')}`, 12, 27);
+        doc.text(`Applied Filters: ${filterSummary.join('   |   ')}`, marginX, 27);
       }
 
       const startY = filterSummary.length > 0 ? 31 : 26;
-      const pdfBody = cleanRows.length > 0
-        ? cleanRows
-        : [['No matching records found for the applied filter criteria.', '', '', '', '', '', '']];
 
-      const autoTableFunc = typeof autoTable === 'function' ? autoTable : (autoTable as any)?.default;
-
-      if (typeof autoTableFunc === 'function') {
-        autoTableFunc(doc, {
-          head: [headers],
-          body: pdfBody,
-          startY,
-          styles: {
-            fontSize: 7.5,
-            cellPadding: 2.5,
-            overflow: 'linebreak',
-            textColor: [31, 41, 55],
-            lineWidth: 0.1,
-            lineColor: [229, 231, 235]
-          },
-          headStyles: {
-            fillColor: primaryColor,
-            textColor: 255,
-            fontStyle: 'bold',
-            fontSize: 8,
-            halign: 'left'
-          },
-          columnStyles: {
-            0: { cellWidth: 42 }, // Name of Firm
-            1: { cellWidth: 38 }, // Partner Name
-            2: { cellWidth: 42 }, // Email ID
-            3: { cellWidth: 28 }, // Phone No
-            4: { cellWidth: 26 }, // City
-            5: { cellWidth: 26 }, // District
-            6: { cellWidth: 'auto' }, // Address (takes remaining width)
-          },
-          alternateRowStyles: { fillColor: [249, 250, 251] },
-          margin: { left: 10, right: 10, top: 20, bottom: 15 },
-          didDrawPage: (data: any) => {
-            const str = `Page ${data.pageNumber} of ${totalPagesExp}`;
-            doc.setFontSize(7);
-            doc.setTextColor(156, 163, 175);
-            doc.text(str, 297 - 12 - doc.getTextWidth(str), 210 - 6);
-            doc.text('NDADA Official Admin System Export', 12, 210 - 6);
-          }
-        });
-      } else {
-        // Fail-safe manual text loop fallback
-        let y = startY + 5;
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.text(headers.join(' | '), 12, y);
-        y += 6;
-        doc.setFont('helvetica', 'normal');
-        for (const row of pdfBody) {
-          if (y > 190) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(row.slice(0, 4).join(' | '), 12, y);
-          y += 5;
+      // Calculate dynamic column widths
+      const colWidths: number[] = [];
+      let totalWeight = 0;
+      headers.forEach((h) => {
+        let weight = Math.max(h.length, 10);
+        if (h.toLowerCase().includes('address') || h.toLowerCase().includes('name') || h.toLowerCase().includes('firm')) {
+          weight = Math.max(weight, 22);
+        } else if (h.toLowerCase().includes('id') || h.toLowerCase().includes('status') || h.toLowerCase().includes('phone')) {
+          weight = Math.min(weight, 16);
         }
-      }
+        colWidths.push(weight);
+        totalWeight += weight;
+      });
 
-      if (typeof (doc as any).putTotalPages === 'function') {
-        (doc as any).putTotalPages(totalPagesExp);
+      const finalColWidths = colWidths.map(w => (w / totalWeight) * usableWidth);
+
+      const rowHeight = 7;
+      const cellPadding = 1.5;
+
+      const drawTableHeader = (currentY: number) => {
+        doc.setFillColor(...primaryColor);
+        doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'bold');
+
+        let x = marginX;
+        headers.forEach((h, i) => {
+          const colW = finalColWidths[i];
+          let text = h;
+          if (doc.getTextWidth(text) > colW - 2) {
+            text = text.substring(0, Math.floor(colW / 2)) + '..';
+          }
+          doc.text(text, x + cellPadding, currentY + 5);
+          x += colW;
+        });
+        return currentY + rowHeight;
+      };
+
+      let currentY = drawTableHeader(startY);
+      const pdfBody = cleanRows.length > 0 ? cleanRows : [Array(headers.length).fill('-')];
+
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+
+      pdfBody.forEach((row, rowIndex) => {
+        if (currentY + rowHeight > pageHeight - 15) {
+          doc.addPage();
+          drawHeaderBanner(doc, `${titleBannerText} (Contd.)`);
+          currentY = drawTableHeader(22);
+        }
+
+        if (rowIndex % 2 === 1) {
+          doc.setFillColor(...altRowColor);
+          doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+        }
+
+        doc.setDrawColor(...borderLineColor);
+        doc.setLineWidth(0.1);
+        doc.line(marginX, currentY + rowHeight, marginX + usableWidth, currentY + rowHeight);
+
+        doc.setTextColor(...textColor);
+        let x = marginX;
+        row.forEach((val, i) => {
+          const colW = finalColWidths[i];
+          let cellText = String(val || '-');
+          while (cellText.length > 1 && doc.getTextWidth(cellText) > colW - (cellPadding * 2)) {
+            cellText = cellText.slice(0, -1);
+          }
+          if (cellText !== String(val || '-')) {
+            cellText = cellText.slice(0, -2) + '..';
+          }
+          doc.text(cellText, x + cellPadding, currentY + 4.8);
+          x += colW;
+        });
+
+        currentY += rowHeight;
+      });
+
+      const totalPages = (doc.internal as any).getNumberOfPages ? (doc.internal as any).getNumberOfPages() : 1;
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(156, 163, 175);
+        doc.text(`Page ${p} of ${totalPages}`, pageWidth - marginX, pageHeight - 6, { align: 'right' });
+        doc.text('NDADA Official Admin System Export', marginX, pageHeight - 6);
       }
 
       const pdfOutput = doc.output('arraybuffer');
       fileContent = new Uint8Array(pdfOutput);
       filename = `${exportType}_export_${job.id}.pdf`;
       contentType = 'application/pdf';
+      console.log('✅ [PDF Compiler] PDF success. Output bytes:', fileContent.length);
     }
 
     // 3. Upload file to Supabase Secure Private Bucket
@@ -1154,7 +1307,7 @@ async function generateBackgroundExport(
       .update({ status: 'completed', file_url: filename })
       .eq('id', job.id);
 
-    await logAudit(supabase, adminDbId, 'export_generated', null, `Export compiled: ${exportType} (${format}, ${rows.length} records)`);
+    await logAudit(supabase, adminDbId, 'export_generated', null, `Export compiled: ${exportType} (${format}, ${cleanRows.length} records)`);
     return { message: 'Export compiled successfully', job_id: job.id };
   } catch (err: any) {
     console.error('Export compiler failed:', err.message);

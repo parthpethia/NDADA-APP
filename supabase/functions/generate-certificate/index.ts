@@ -270,7 +270,7 @@ serve(async (req) => {
     console.log(`Certificate record created: id=${certRecord.id}, certificate_id=${certRecord.certificate_id}`);
 
     const now = new Date();
-    const issueDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+    const issueDateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
     // Generate QR code verification URL (uses secure_token if available, falls back to certificate_id)
     const verificationToken = certRecord.secure_token || certRecord.certificate_id;

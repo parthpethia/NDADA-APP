@@ -7,6 +7,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
+// ── Forensic Diagnostic Logging ───────────────────────────────────────────────
+// Traces storage adapter latency, HTTP requests/responses, and Supabase client state.
+const sbLog = (msg: string, data?: unknown) => {
+  const ts = new Date().toISOString().slice(11, 23);
+  if (data !== undefined) {
+    console.log(`[SB-FORENSIC ${ts}] ${msg}`, typeof data === 'object' ? JSON.stringify(data) : data);
+  } else {
+    console.log(`[SB-FORENSIC ${ts}] ${msg}`);
+  }
+};
+
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 if (!isSupabaseConfigured) {
@@ -83,16 +94,19 @@ const removeSecureStoreLegacy = async (key: string): Promise<void> => {
  * 2. Fallback: SecureStore (migrates existing stored sessions to AsyncStorage automatically).
  */
 const getItemNative = async (key: string): Promise<string | null> => {
+  const t0 = Date.now();
   try {
     // 1. Try AsyncStorage first (authoritative storage engine for native APK)
     const value = await AsyncStorage.getItem(key);
     if (value && value !== 'NDADA_CHUNKED_SESSION' && !value.startsWith('NDADA_CHUNKED')) {
+      sbLog(`storage.getItem(${key}) → ${value.length} chars in ${Date.now() - t0}ms [AsyncStorage]`);
       return value;
     }
 
     // 2. Fallback to SecureStore for legacy sessions (one-time migration)
     const legacyValue = await getSecureStoreLegacy(key);
     if (legacyValue) {
+      sbLog(`storage.getItem(${key}) → ${legacyValue.length} chars in ${Date.now() - t0}ms [SecureStore MIGRATION]`);
       // Migrate to AsyncStorage for fast, reliable access on next boot
       try {
         await AsyncStorage.setItem(key, legacyValue);
@@ -102,29 +116,37 @@ const getItemNative = async (key: string): Promise<string | null> => {
       return legacyValue;
     }
 
+    sbLog(`storage.getItem(${key}) → null in ${Date.now() - t0}ms`);
     return null;
   } catch (err) {
+    sbLog(`storage.getItem(${key}) → ERROR in ${Date.now() - t0}ms`, err);
     console.warn('[Storage] getItem error:', err);
     return await getSecureStoreLegacy(key);
   }
 };
 
 const setItemNative = async (key: string, value: string): Promise<void> => {
+  const t0 = Date.now();
   try {
     // Save to AsyncStorage (primary authoritative storage)
     await AsyncStorage.setItem(key, value);
+    sbLog(`storage.setItem(${key}) → ${value.length} chars written in ${Date.now() - t0}ms`);
 
     // Clean up any stale legacy SecureStore entries to prevent future token collisions
     await removeSecureStoreLegacy(key);
   } catch (err) {
+    sbLog(`storage.setItem(${key}) → ERROR in ${Date.now() - t0}ms`, err);
     console.warn('[Storage] setItem error:', err);
   }
 };
 
 const removeItemNative = async (key: string): Promise<void> => {
+  const t0 = Date.now();
   try {
     await AsyncStorage.removeItem(key);
+    sbLog(`storage.removeItem(${key}) in ${Date.now() - t0}ms`);
   } catch (err) {
+    sbLog(`storage.removeItem(${key}) → ERROR in ${Date.now() - t0}ms`, err);
     console.warn('[Storage] removeItem error:', err);
   }
   await removeSecureStoreLegacy(key);
@@ -161,6 +183,12 @@ const storage = Platform.OS === 'web'
 const fetchWithRetry: typeof fetch = async (url, options) => {
   const maxRetries = 4;
   let delay = 400; // ms
+  const urlStr = String(url);
+  const isAuthRequest = urlStr.includes('/auth/') || urlStr.includes('/token');
+  const t0 = Date.now();
+  if (isAuthRequest) {
+    sbLog(`fetch START: ${(options as any)?.method || 'GET'} ${urlStr.split('?')[0]}`);
+  }
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     let controller: AbortController | null = null;
@@ -194,6 +222,9 @@ const fetchWithRetry: typeof fetch = async (url, options) => {
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay *= 2.5;
         continue;
+      }
+      if (isAuthRequest) {
+        sbLog(`fetch COMPLETE: ${response.status} in ${Date.now() - t0}ms — ${urlStr.split('?')[0]}`);
       }
       return response;
     } catch (err: any) {
@@ -267,10 +298,10 @@ type GlobalWithSupabase = typeof globalThis & {
 
 const globalScope = globalThis as GlobalWithSupabase;
 
-export const supabase =
-  Platform.OS === 'web'
-    ? (globalScope.__ndadaSupabase__ ??= createSupabaseClient())
-    : createSupabaseClient();
+// Global singleton: ensures exactly ONE Supabase client exists across all modules
+// and hot-reloads on BOTH web and native. Previously native created a new client
+// per module load, risking duplicate auth listeners and token refresh conflicts.
+export const supabase = (globalScope.__ndadaSupabase__ ??= createSupabaseClient());
 
 // When landing on a password-recovery URL, clear any stale session from
 // localStorage BEFORE the AuthProvider calls getSession(). This prevents

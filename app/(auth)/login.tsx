@@ -33,26 +33,54 @@ import {
   EyeOff,
 } from 'lucide-react-native';
 
+import { ACTIVE_NAVIGATION_STRATEGY } from '@/lib/navigationStrategy';
+import { navLog, renderLog } from '@/lib/utils';
+
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, session, profileReady, adminUser } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [contentHeight, setContentHeight] = useState(360);
+  const [loginOpen, setLoginOpen] = useState(true);
+  const [contentHeight, setContentHeight] = useState(380);
+  const [animFinished, setAnimFinished] = useState(true);
+
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+
+  renderLog('LoginScreen', renderCountRef.current, {
+    session: !!session,
+    loading,
+    profileReady,
+    adminUser: !!adminUser,
+  });
+
+  // Fallback reactive navigation guard: replaces route once session is active and profile is ready
+  const navigatedRef = useRef(false);
+  useEffect(() => {
+    if (session && profileReady && !navigatedRef.current) {
+      navigatedRef.current = true;
+      const target = adminUser ? '/admin' : '/(dashboard)';
+      navLog('LoginScreen', `State Settled (session=true, profileReady=true) → router.replace(${target})`);
+      router.replace(target);
+    }
+  }, [session, profileReady, adminUser]);
 
   // Animation value for dropdown
-  const dropdownAnim = useRef(new Animated.Value(0)).current;
+  const dropdownAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    setAnimFinished(false);
     Animated.timing(dropdownAnim, {
       toValue: loginOpen ? 1 : 0,
       duration: 350,
       useNativeDriver: false,
-    }).start();
+    }).start(({ finished }) => {
+      if (finished) setAnimFinished(true);
+    });
   }, [loginOpen]);
 
   const dropdownHeight = dropdownAnim.interpolate({
@@ -74,49 +102,69 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
 
-    let targetEmail = inputStr;
-    if (!inputStr.includes('@')) {
-      // Input is a Phone Number (e.g. 9876543210)
-      try {
-        const { data: lookedUpEmail, error: rpcErr } = await supabase
-          .rpc('lookup_email_by_phone', { p_phone: inputStr });
+    try {
+      let targetEmail = inputStr;
+      if (!inputStr.includes('@')) {
+        // Input is a Phone Number (e.g. 9876543210)
+        try {
+          const { data: lookedUpEmail, error: rpcErr } = await supabase
+            .rpc('lookup_email_by_phone', { p_phone: inputStr });
 
-        if (rpcErr) {
-          console.warn('Phone number lookup RPC error:', rpcErr);
-          const msg = String(rpcErr.message || '').toLowerCase();
-          if (
-            msg.includes('failed to fetch') ||
-            msg.includes('network request failed') ||
-            msg.includes('fetcherror') ||
-            msg.includes('typeerror') ||
-            msg.includes('network error')
-          ) {
-            setError('Network error while looking up phone number (unable to fetch). Please check your internet connection.');
-          } else {
-            setError(rpcErr.message || 'Unable to lookup phone number. Please enter your registered email address.');
+          if (rpcErr) {
+            console.warn('Phone number lookup RPC error:', rpcErr);
+            const msg = String(rpcErr.message || '').toLowerCase();
+            if (
+              msg.includes('failed to fetch') ||
+              msg.includes('network request failed') ||
+              msg.includes('fetcherror') ||
+              msg.includes('typeerror') ||
+              msg.includes('network error')
+            ) {
+              setError('Network error while looking up phone number (unable to fetch). Please check your internet connection.');
+            } else {
+              setError(rpcErr.message || 'Unable to lookup phone number. Please enter your registered email address.');
+            }
+            setLoading(false);
+            return;
           }
-          setLoading(false);
-          return;
-        }
 
-        if (lookedUpEmail) {
-          targetEmail = lookedUpEmail;
-        } else {
-          setError(`No account found matching phone number "${inputStr}". Please check your phone number or enter your registered email.`);
+          if (lookedUpEmail) {
+            targetEmail = lookedUpEmail.trim().toLowerCase();
+          } else {
+            setError(`No account found matching phone number "${inputStr}". Please check your phone number or enter your registered email.`);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Phone number lookup failed:', err);
+          setError(`Unable to lookup phone number. Please enter your registered email address.`);
           setLoading(false);
           return;
         }
-      } catch (err) {
-        console.warn('Phone number lookup failed:', err);
-        setError(`Unable to lookup phone number. Please enter your registered email address.`);
-        setLoading(false);
-        return;
+      } else {
+        targetEmail = inputStr.toLowerCase();
       }
-    }
 
-    const { error: err } = await signIn(targetEmail, password);
-    if (err) setError(err);
-    setLoading(false);
+      navLog('LoginScreen', `signIn() START`, { email: targetEmail });
+      const { error: err } = await signIn(targetEmail, password);
+      if (err) {
+        navLog('LoginScreen', `signIn() ERROR: ${err}`);
+        setError(err);
+        setLoading(false);
+      } else {
+        navLog('LoginScreen', 'signIn() SUCCESS → navigating immediately');
+        navigatedRef.current = true;
+        const target = adminUser ? '/admin' : '/(dashboard)';
+        router.replace(target);
+      }
+    } catch (e: any) {
+      navLog('LoginScreen', 'Login submit exception', e);
+      setError(e?.message || 'An unexpected error occurred during login. Please try again.');
+      setLoading(false);
+    } finally {
+      // Safety timeout: ensure loading spinner is reset if screen remains mounted
+      setTimeout(() => setLoading(false), 3000);
+    }
   };
 
   const toggleLogin = () => {
@@ -134,7 +182,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       className="flex-1"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Head>
         <title>NDADA - Nagpur District Agro Dealers Association</title>
@@ -247,9 +295,10 @@ export default function LoginScreen() {
             {/* ===== LOGIN DROPDOWN ===== */}
             <Animated.View
               style={{
-                height: dropdownHeight,
+                height: (loginOpen && animFinished) ? undefined : dropdownHeight,
+                minHeight: loginOpen ? contentHeight : 0,
                 opacity: dropdownOpacity,
-                overflow: 'hidden',
+                overflow: (loginOpen && animFinished) ? 'visible' : 'hidden',
                 width: '100%',
                 maxWidth: 400,
               }}
@@ -258,7 +307,7 @@ export default function LoginScreen() {
                 onLayout={(e) => {
                   const h = e.nativeEvent.layout.height;
                   if (h > 0 && Math.abs(h - contentHeight) > 2) {
-                    setContentHeight(h + 8);
+                    setContentHeight(h + 12);
                   }
                 }}
                 className="mt-4 rounded-2xl p-5"

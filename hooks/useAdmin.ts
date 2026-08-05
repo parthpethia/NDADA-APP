@@ -588,12 +588,13 @@ export function useAdmin() {
       case 'generate-export': {
         const { type, format, filters } = params;
         if (!adminUser?.id) throw new Error('Admin profile missing');
+        const validFormat = (['CSV', 'XLSX', 'PDF'].includes(format) ? format : 'XLSX') as 'CSV' | 'XLSX' | 'PDF';
         const { data, error: dbErr } = await supabase
           .from('export_jobs')
           .insert({
             admin_id: adminUser.id,
             export_type: type || 'members',
-            format: format || 'XLSX',
+            format: validFormat,
             filters: filters || {},
             status: 'failed',
             file_url: null,

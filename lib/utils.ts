@@ -12,13 +12,42 @@ export function formatCurrency(amount: number, currency = 'INR') {
   }).format(amount);
 }
 
-export function formatDate(date: string) {
+export function formatPureDate(
+  date: string | null | undefined,
+  format: 'readable' | 'DD/MM/YYYY' | 'YYYY-MM-DD' = 'readable'
+): string {
   if (!date) return '';
-  const trimmed = String(date).trim();
-  if (!trimmed) return '';
-  const cleanStr = trimmed.split('T')[0].split('+')[0].split(' ')[0];
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
-    const [year, month, day] = cleanStr.split('-').map(Number);
+  const str = String(date).trim();
+  if (!str) return '';
+
+  // Extract year, month, day directly using regex to prevent timezone shift & strip ISO noise (00:00:00, .000+00:00, T00:00:00.000Z)
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+
+  let year: number, month: number, day: number;
+
+  if (isoMatch) {
+    year = parseInt(isoMatch[1], 10);
+    month = parseInt(isoMatch[2], 10);
+    day = parseInt(isoMatch[3], 10);
+  } else if (slashMatch) {
+    day = parseInt(slashMatch[1], 10);
+    month = parseInt(slashMatch[2], 10);
+    year = parseInt(slashMatch[3], 10);
+  } else {
+    const cleanDateStr = str.split('T')[0].split('+')[0].split(' ')[0];
+    const parsed = new Date(cleanDateStr || str);
+    if (isNaN(parsed.getTime())) return str;
+    year = parsed.getFullYear();
+    month = parsed.getMonth() + 1;
+    day = parsed.getDate();
+  }
+
+  if (format === 'DD/MM/YYYY') {
+    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+  } else if (format === 'YYYY-MM-DD') {
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  } else {
     const d = new Date(year, month - 1, day);
     return d.toLocaleDateString('en-IN', {
       year: 'numeric',
@@ -26,26 +55,31 @@ export function formatDate(date: string) {
       day: 'numeric',
     });
   }
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(cleanStr)) {
-    const [day, month, year] = cleanStr.split('/').map(Number);
-    const d = new Date(year, month - 1, day);
-    return d.toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  }
-  const d = new Date(trimmed);
-  if (isNaN(d.getTime())) return trimmed;
-  return d.toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 }
 
-export function formatDateTime(date: string) {
-  return new Date(date).toLocaleString('en-IN', {
+export function formatDate(date: string | null | undefined): string {
+  return formatPureDate(date, 'readable');
+}
+
+export function formatDateTime(date: string | null | undefined): string {
+  if (!date) return '';
+  const str = String(date).trim();
+  if (!str) return '';
+
+  // Check if date has no explicit non-zero time component (e.g. 00:00:00, T00:00:00.000Z, or pure YYYY-MM-DD)
+  const isPureDate =
+    /^\d{4}-\d{2}-\d{2}$/.test(str) ||
+    str.includes('T00:00:00') ||
+    str.includes(' 00:00:00');
+
+  if (isPureDate) {
+    return formatPureDate(str, 'readable');
+  }
+
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return formatPureDate(str, 'readable');
+
+  return d.toLocaleString('en-IN', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -108,3 +142,17 @@ export async function getFunctionsErrorMessage(error: any): Promise<string> {
   return error.message || String(error);
 }
 
+// ── Navigation & Render Forensic Loggers ─────────────────────────────────────
+export function navLog(requester: string, action: string, details?: unknown) {
+  const ts = new Date().toISOString().slice(11, 23);
+  if (details !== undefined) {
+    console.log(`[NAV-FORENSIC ${ts}] [${requester}] ${action}`, typeof details === 'object' ? JSON.stringify(details) : details);
+  } else {
+    console.log(`[NAV-FORENSIC ${ts}] [${requester}] ${action}`);
+  }
+}
+
+export function renderLog(component: string, renderCount: number, state: { pathname?: string; session?: boolean; loading?: boolean; profileReady?: boolean; adminUser?: boolean; member?: boolean }) {
+  const ts = new Date().toISOString().slice(11, 23);
+  console.log(`[RENDER-FORENSIC ${ts}] [${component} #${renderCount}]`, JSON.stringify(state));
+}

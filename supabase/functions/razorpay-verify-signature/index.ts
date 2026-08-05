@@ -319,6 +319,27 @@ serve(async (req) => {
     console.log(`✅ Order status set to ${finalPaymentStatus === 'paid' ? 'paid' : 'attempted'}`);
 
     if (finalPaymentStatus === 'paid') {
+      // Fetch member email details to send payment receipt
+      const { data: memberAcc } = await supabase
+        .from('accounts')
+        .select('full_name, email, membership_id')
+        .eq('id', order.member_id)
+        .maybeSingle();
+
+      if (memberAcc?.email) {
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: memberAcc.email,
+            template_name: 'payment_received',
+            data: {
+              name: memberAcc.full_name || 'Member',
+              amount: String((order.amount / 100).toFixed(0) || '300'),
+              membership_id: memberAcc.membership_id ? `NDADA/MAH/NAG/${memberAcc.membership_id}` : order.member_id,
+            },
+          },
+        }).catch((e: any) => console.warn('Failed to dispatch payment_received email:', e));
+      }
+
       // Enqueue certificate generation (non-blocking)
       console.log(`Queuing certificate generation for member ${order.member_id}`);
       await supabase.from('certificate_generation_queue').upsert(

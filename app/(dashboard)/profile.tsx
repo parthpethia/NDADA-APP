@@ -252,7 +252,9 @@ export default function ProfileScreen() {
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Membership ID</Text>
-              <Text className="font-medium text-gray-900">{member.membership_id || 'Pending'}</Text>
+              <Text className="font-medium text-gray-900">
+                {member.membership_id ? (member.membership_id.startsWith('NDADA') ? member.membership_id : `NDADA/MAH/NAG/${member.membership_id}`) : 'Pending'}
+              </Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Validity</Text>
