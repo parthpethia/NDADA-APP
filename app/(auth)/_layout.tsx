@@ -29,11 +29,17 @@ export default function AuthLayout() {
 
   // Intercept recovery links landing on non-reset routes (e.g. / or /login) and route to /reset-password
   const hasRecoveryToken = Platform.OS === 'web' && typeof window !== 'undefined'
-    ? (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery') || window.location.hash.includes('access_token'))
+    ? (
+        window.location.hash.includes('type=recovery') ||
+        window.location.search.includes('type=recovery') ||
+        window.location.hash.includes('access_token') ||
+        window.location.hash.includes('error=') ||
+        window.location.search.includes('error=')
+      )
     : false;
 
   if (hasRecoveryToken && !isResetPassword) {
-    navLog('AuthLayout', 'Recovery token detected in URL → REDIRECT to reset-password');
+    navLog('AuthLayout', 'Recovery token or error detected in URL → REDIRECT to reset-password');
     return <Redirect href="/(auth)/reset-password" />;
   }
 

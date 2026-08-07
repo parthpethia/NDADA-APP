@@ -55,6 +55,16 @@ export default function ResetPasswordScreen() {
         const code = params.get('code');
         const tokenHash = params.get('token_hash') || params.get('token');
         const type = params.get('type');
+        const errorCode = params.get('error_code') || params.get('error');
+        const errorDesc = params.get('error_description');
+
+        if (errorCode || errorDesc) {
+          const displayMsg = errorDesc
+            ? decodeURIComponent(errorDesc.replace(/\+/g, ' '))
+            : 'This reset link has expired or was already used';
+          setError(`${displayMsg}. Please request a new password reset link.`);
+          return false;
+        }
 
         if (code) {
           const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -251,7 +261,15 @@ export default function ResetPasswordScreen() {
 
             {error ? (
               <View className="mb-4 rounded-lg bg-red-50 p-3">
-                <Text className="text-sm text-red-600">{error}</Text>
+                <Text className="text-sm text-red-600 mb-2">{error}</Text>
+                {error.includes('expired') || error.includes('invalid') || error.includes('used') ? (
+                  <Button
+                    title="Request New Reset Link →"
+                    variant="outline"
+                    onPress={() => router.replace('/(auth)/forgot-password')}
+                    className="mt-1 border-red-200"
+                  />
+                ) : null}
               </View>
             ) : null}
 
