@@ -235,6 +235,10 @@ serve(async (req) => {
         await verifyPermission('view_audit_logs');
         result = await getExportDownloadLink(supabase, params.job_id, adminUser.id);
         break;
+      case 'delete-export':
+        await verifyPermission('view_audit_logs');
+        result = await deleteExportJob(supabase, params.job_id, adminUser.id);
+        break;
 
       // Announcement & Notification Campaign Actions
       case 'create-announcement':
@@ -1063,7 +1067,7 @@ async function generateBackgroundExport(
 
     } else {
       // Default: 'members' | 'firms'
-      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'District', 'Address', 'Payment Status', 'Approval Status'];
+      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'District', 'Address', 'Payment Status'];
 
       let query = supabase
         .from('accounts')
@@ -1100,16 +1104,25 @@ async function generateBackgroundExport(
       const { data, error: fetchErr } = await query;
       if (fetchErr) throw fetchErr;
 
-      cleanRows = (data || []).map((r: any) => [
-        r.membership_id ? `NDADA/MAH/NAG/${r.membership_id}` : '-',
+      // Sort: paid members first (ascending membership_id), then unpaid (ascending membership_id)
+      const sortedData = (data || []).sort((a: any, b: any) => {
+        const aPaid = (a.payment_status || '').toLowerCase() === 'paid' ? 0 : 1;
+        const bPaid = (b.payment_status || '').toLowerCase() === 'paid' ? 0 : 1;
+        if (aPaid !== bPaid) return aPaid - bPaid;
+        const aId = parseInt(String(a.membership_id || '0'), 10) || 0;
+        const bId = parseInt(String(b.membership_id || '0'), 10) || 0;
+        return aId - bId;
+      });
+
+      cleanRows = sortedData.map((r: any) => [
+        r.membership_id ? `****${String(r.membership_id).slice(-4)}` : '-',
         r.firm_name || '',
         r.partner_proprietor_name || r.full_name || '',
         r.contact_email || r.email || '',
         r.contact_phone || r.phone || '',
         r.district || '',
         r.firm_address || r.residence_address || r.address || '',
-        String(r.payment_status || 'unpaid').toUpperCase(),
-        String(r.approval_status || 'pending').toUpperCase()
+        String(r.payment_status || 'unpaid').toUpperCase()
       ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()));
     }
 
@@ -1199,10 +1212,14 @@ async function generateBackgroundExport(
       const colWidths: number[] = [];
       let totalWeight = 0;
       headers.forEach((h) => {
+        const hLower = h.toLowerCase();
         let weight = Math.max(h.length, 10);
-        if (h.toLowerCase().includes('address') || h.toLowerCase().includes('name') || h.toLowerCase().includes('firm')) {
+        if (hLower.includes('address') || hLower.includes('name') || hLower.includes('firm')) {
           weight = Math.max(weight, 22);
-        } else if (h.toLowerCase().includes('id') || h.toLowerCase().includes('status') || h.toLowerCase().includes('phone')) {
+        } else if (hLower === 'membership id' || hLower === 'payment status') {
+          // These columns have short content — keep them compact
+          weight = 10;
+        } else if (hLower.includes('id') || hLower.includes('status') || hLower.includes('phone')) {
           weight = Math.min(weight, 16);
         }
         colWidths.push(weight);
@@ -1211,12 +1228,27 @@ async function generateBackgroundExport(
 
       const finalColWidths = colWidths.map(w => (w / totalWeight) * usableWidth);
 
-      const rowHeight = 7;
+      const baseRowHeight = 7;
       const cellPadding = 1.5;
+      const lineHeight = 3.2; // mm per line of text at font size 7
+
+      // Helper: calculate the dynamic row height for a given row based on text wrapping
+      const calcRowHeight = (row: string[]) => {
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        let maxLines = 1;
+        row.forEach((val, i) => {
+          const colW = finalColWidths[i];
+          const cellText = String(val || '-');
+          const splitLines = doc.splitTextToSize(cellText, colW - (cellPadding * 2));
+          if (splitLines.length > maxLines) maxLines = splitLines.length;
+        });
+        return Math.max(baseRowHeight, maxLines * lineHeight + 2);
+      };
 
       const drawTableHeader = (currentY: number) => {
         doc.setFillColor(...primaryColor);
-        doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+        doc.rect(marginX, currentY, usableWidth, baseRowHeight, 'F');
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(7.5);
         doc.setFont('helvetica', 'bold');
@@ -1231,7 +1263,7 @@ async function generateBackgroundExport(
           doc.text(text, x + cellPadding, currentY + 5);
           x += colW;
         });
-        return currentY + rowHeight;
+        return currentY + baseRowHeight;
       };
 
       let currentY = drawTableHeader(startY);
@@ -1241,7 +1273,9 @@ async function generateBackgroundExport(
       doc.setFont('helvetica', 'normal');
 
       pdfBody.forEach((row, rowIndex) => {
-        if (currentY + rowHeight > pageHeight - 15) {
+        const dynamicRowHeight = calcRowHeight(row);
+
+        if (currentY + dynamicRowHeight > pageHeight - 15) {
           doc.addPage();
           drawHeaderBanner(doc, `${titleBannerText} (Contd.)`);
           currentY = drawTableHeader(22);
@@ -1249,29 +1283,31 @@ async function generateBackgroundExport(
 
         if (rowIndex % 2 === 1) {
           doc.setFillColor(...altRowColor);
-          doc.rect(marginX, currentY, usableWidth, rowHeight, 'F');
+          doc.rect(marginX, currentY, usableWidth, dynamicRowHeight, 'F');
         }
 
         doc.setDrawColor(...borderLineColor);
         doc.setLineWidth(0.1);
-        doc.line(marginX, currentY + rowHeight, marginX + usableWidth, currentY + rowHeight);
+        doc.line(marginX, currentY + dynamicRowHeight, marginX + usableWidth, currentY + dynamicRowHeight);
 
         doc.setTextColor(...textColor);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
         let x = marginX;
         row.forEach((val, i) => {
           const colW = finalColWidths[i];
-          let cellText = String(val || '-');
-          while (cellText.length > 1 && doc.getTextWidth(cellText) > colW - (cellPadding * 2)) {
-            cellText = cellText.slice(0, -1);
-          }
-          if (cellText !== String(val || '-')) {
-            cellText = cellText.slice(0, -2) + '..';
-          }
-          doc.text(cellText, x + cellPadding, currentY + 4.8);
+          const cellText = String(val || '-');
+          const splitLines: string[] = doc.splitTextToSize(cellText, colW - (cellPadding * 2));
+          // Vertically center the text block within the dynamic row height
+          const textBlockHeight = splitLines.length * lineHeight;
+          const textStartY = currentY + (dynamicRowHeight - textBlockHeight) / 2 + lineHeight * 0.75;
+          splitLines.forEach((line: string, lineIdx: number) => {
+            doc.text(line, x + cellPadding, textStartY + lineIdx * lineHeight);
+          });
           x += colW;
         });
 
-        currentY += rowHeight;
+        currentY += dynamicRowHeight;
       });
 
       const totalPages = (doc.internal as any).getNumberOfPages ? (doc.internal as any).getNumberOfPages() : 1;
@@ -1377,6 +1413,35 @@ async function getExportDownloadLink(supabase: any, jobId: string, adminDbId: st
 
   await logAudit(supabase, adminDbId, 'export_download_accessed', null, `Accessed download link for export job ${jobId}`);
   return { download_url: data.signedUrl };
+}
+
+async function deleteExportJob(supabase: any, jobId: string, adminDbId: string) {
+  if (!jobId) throw new Error('job_id is required');
+
+  const { data: job } = await supabase.from('export_jobs').select('*').eq('id', jobId).single();
+  if (!job) throw new Error('Export job not found');
+
+  // 1. Delete physical file from storage if it exists
+  if (job.file_url) {
+    const { error: storageErr } = await supabase.storage
+      .from('secure-exports')
+      .remove([job.file_url]);
+
+    if (storageErr) {
+      console.warn(`Failed to delete storage file ${job.file_url}:`, storageErr.message);
+    }
+  }
+
+  // 2. Delete the export job record from the database
+  const { error: deleteErr } = await supabase
+    .from('export_jobs')
+    .delete()
+    .eq('id', jobId);
+
+  if (deleteErr) throw deleteErr;
+
+  await logAudit(supabase, adminDbId, 'export_manually_deleted', null, `Manually deleted export job ${jobId} (${job.export_type} ${job.format})`);
+  return { message: 'Export deleted successfully' };
 }
 
 // =========================================================================

@@ -81,7 +81,10 @@ export default function RegisterScreen() {
       setError(err);
       setLoading(false);
     } else {
-      router.replace('/(dashboard)');
+      // Do NOT navigate imperatively. On Android (async AsyncStorage), the auth state
+      // isn't settled yet when signUp() returns. The AuthLayout declarative guard at
+      // (auth)/_layout.tsx will redirect to /(dashboard) once session + profileReady
+      // are resolved. Keep loading=true so the UI shows "Creating Account..." state.
     }
   };
 

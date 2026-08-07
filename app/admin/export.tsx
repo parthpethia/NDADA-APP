@@ -57,6 +57,7 @@ export default function ExportCenterScreen() {
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [triggerLoading, setTriggerLoading] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
   const fetchExportData = useCallback(async () => {
@@ -536,6 +537,25 @@ export default function ExportCenterScreen() {
     }
   };
 
+  const handleDeleteExport = async (job: ExportJob) => {
+    const confirmed = await confirm(
+      'Delete Export',
+      `Are you sure you want to permanently delete this ${job.export_type.replace(/_/g, ' ')} export (${job.format})? This will remove the file from storage and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingJobId(job.id);
+    try {
+      await callAdminAction('delete-export', { job_id: job.id });
+      Alert.alert('Deleted', 'Export file has been permanently deleted.');
+      await fetchExportData();
+    } catch (err: any) {
+      Alert.alert('Delete Error', err.message);
+    } finally {
+      setDeletingJobId(null);
+    }
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
@@ -683,7 +703,20 @@ export default function ExportCenterScreen() {
                       Job ID: {job.id.slice(0, 18)}...
                     </Text>
                   </View>
-                  <StatusBadge status={job.status} />
+                  <View className="flex-row items-center gap-2">
+                    <StatusBadge status={job.status} />
+                    {deletingJobId === job.id ? (
+                      <ActivityIndicator size="small" color="#ef4444" />
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteExport(job)}
+                        className="p-1.5 rounded-lg bg-red-50 border border-red-100"
+                        activeOpacity={0.6}
+                      >
+                        <Trash2 size={14} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 {/* Filters details */}

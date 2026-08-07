@@ -58,7 +58,10 @@ export default function LoginScreen() {
     adminUser: !!adminUser,
   });
 
-  // Fallback reactive navigation guard: replaces route once session is active and profile is ready
+  // PRIMARY navigation guard: replaces route once session is active and profile is ready.
+  // This is the SOLE navigation mechanism after login — we no longer navigate imperatively
+  // in handleLogin() because on Android (async AsyncStorage), the profile/adminUser state
+  // isn't resolved yet when signIn() returns, causing the dashboard to show a loading screen.
   const navigatedRef = useRef(false);
   useEffect(() => {
     if (session && profileReady && !navigatedRef.current) {
@@ -68,6 +71,14 @@ export default function LoginScreen() {
       router.replace(target);
     }
   }, [session, profileReady, adminUser]);
+
+  // Reset navigatedRef when session is cleared (e.g. after logout) so re-login works
+  // without requiring the component to unmount and remount.
+  useEffect(() => {
+    if (!session) {
+      navigatedRef.current = false;
+    }
+  }, [session]);
 
   // Animation value for dropdown
   const dropdownAnim = useRef(new Animated.Value(1)).current;
@@ -152,18 +163,26 @@ export default function LoginScreen() {
         setError(err);
         setLoading(false);
       } else {
-        navLog('LoginScreen', 'signIn() SUCCESS → navigating immediately');
-        navigatedRef.current = true;
-        const target = adminUser ? '/admin' : '/(dashboard)';
-        router.replace(target);
+        navLog('LoginScreen', 'signIn() SUCCESS → waiting for auth state to settle before navigating');
+        // Do NOT navigate imperatively here. On Android, the profile/adminUser state
+        // isn't resolved yet because AsyncStorage is async. The reactive useEffect guard
+        // above (and the AuthLayout declarative guard) will handle navigation once
+        // session + profileReady + adminUser are all resolved.
+        // Keep loading=true so the UI shows "Signing in..." until navigation occurs.
       }
     } catch (e: any) {
       navLog('LoginScreen', 'Login submit exception', e);
       setError(e?.message || 'An unexpected error occurred during login. Please try again.');
       setLoading(false);
     } finally {
-      // Safety timeout: ensure loading spinner is reset if screen remains mounted
-      setTimeout(() => setLoading(false), 3000);
+      // Safety timeout: reset loading spinner only if navigation hasn't happened yet.
+      // This prevents the spinner from staying forever if auth state settling takes long,
+      // while avoiding a React state-update-on-unmounted-component warning after navigation.
+      setTimeout(() => {
+        if (!navigatedRef.current) {
+          setLoading(false);
+        }
+      }, 5000);
     }
   };
 
