@@ -171,19 +171,43 @@ export default function ResetPasswordScreen() {
     setError('');
 
     try {
-      // Standard recovery session mode (requires verified link authentication)
-      const { data, error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-      if (updateError) {
-        console.error('updateUser error:', updateError);
-        setError(updateError.message || 'Failed to update password');
+      let updateErrorMsg: string | null = null;
+
+      if (accessToken && supabaseUrl && supabaseAnonKey) {
+        // Direct zero-lock REST request to Supabase Auth endpoint
+        const res = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ password }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          updateErrorMsg = errData.msg || errData.message || errData.error_description || `Failed to update password (${res.status})`;
+        }
+      } else {
+        // Fallback to standard client updateUser
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) updateErrorMsg = updateError.message;
+      }
+
+      if (updateErrorMsg) {
+        console.error('updateUser error:', updateErrorMsg);
+        setError(updateErrorMsg);
         setLoading(false);
         return;
       }
 
-      console.log('Password successfully updated for user:', data?.user?.id);
+      console.log('Password successfully updated!');
 
       // Sign out the temporary recovery session so the user can sign in cleanly
       try {
