@@ -17,7 +17,6 @@ export default function AuthLayout() {
     session: !!session,
     loading,
     profileReady,
-    isRecoverySession: !!isRecoverySession,
     adminUser: !!adminUser,
   });
 
