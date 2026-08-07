@@ -166,20 +166,30 @@ export default function ResetPasswordScreen() {
 
     try {
       // Standard recovery session mode (requires verified link authentication)
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { data, error: updateError } = await supabase.auth.updateUser({
         password,
       });
 
       if (updateError) {
-        setError(updateError.message);
+        console.error('updateUser error:', updateError);
+        setError(updateError.message || 'Failed to update password');
+        setLoading(false);
         return;
       }
 
+      console.log('Password successfully updated for user:', data?.user?.id);
+
       // Sign out the temporary recovery session so the user can sign in cleanly
-      await supabase.auth.signOut({ scope: 'local' });
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (soErr) {
+        console.warn('Sign out after reset warning:', soErr);
+      }
+
       setSuccess(true);
-    } catch (e) {
-      setError('An unexpected error occurred. Please try again.');
+    } catch (e: any) {
+      console.error('handleUpdatePassword exception:', e);
+      setError(e?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
