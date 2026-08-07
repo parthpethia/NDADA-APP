@@ -472,7 +472,7 @@ export default function AdminMembersScreen() {
                 • Search: {search.trim() ? `"${search}"` : 'None'}{'\n'}
                 • Approval: {filterApproval}{'\n'}
                 • Payment: {filterPayment}{'\n'}
-                • District: {filterDistrict}
+                • Taluka: {filterDistrict}
               </Text>
             </View>
 

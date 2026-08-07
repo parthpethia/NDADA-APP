@@ -80,7 +80,7 @@ export default function DistrictAnalyticsScreen() {
           <Filter size={18} color="#9ca3af" />
           <TextInput
             className="ml-2 flex-1 py-1.5 text-base text-gray-900"
-            placeholder="Search districts..."
+            placeholder="Search talukas..."
             placeholderTextColor="#9ca3af"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -92,7 +92,7 @@ export default function DistrictAnalyticsScreen() {
         contentContainerClassName="p-4 pb-12"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text className="mb-4 text-xl font-bold text-gray-900">Regional District Analytics</Text>
+        <Text className="mb-4 text-xl font-bold text-gray-900">Regional Taluka Analytics</Text>
 
         {filteredData.map((d) => {
           const districtName = d.district || 'Unspecified';
@@ -161,7 +161,7 @@ export default function DistrictAnalyticsScreen() {
         })}
 
         {filteredData.length === 0 && (
-          <Text className="text-center text-gray-400 py-12">No district data records found.</Text>
+          <Text className="text-center text-gray-400 py-12">No taluka data records found.</Text>
         )}
       </ScrollView>
     </View>

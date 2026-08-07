@@ -503,7 +503,7 @@ export default function Member360Screen() {
                   <Text className="text-xs font-semibold text-gray-900 max-w-[200] text-right">{member.address || 'N/A'}</Text>
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-xs text-gray-500 font-medium">District Zone</Text>
+                  <Text className="text-xs text-gray-500 font-medium">Taluka Zone</Text>
                   <Text className="text-xs font-semibold text-gray-900">{member.district || 'Unassigned'}</Text>
                 </View>
                 <View className="flex-row justify-between">

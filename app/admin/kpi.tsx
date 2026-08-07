@@ -166,7 +166,7 @@ export default function ExecutiveKPIDashboardScreen() {
         <Card className="mb-4">
           <View className="flex-row items-center gap-2 border-b border-gray-100 pb-2 mb-3">
             <Map size={16} color="#15803d" />
-            <Text className="text-xs font-bold text-primary-900 uppercase">District rankings by density</Text>
+            <Text className="text-xs font-bold text-primary-900 uppercase">Taluka rankings by density</Text>
           </View>
 
           <View className="gap-2.5">

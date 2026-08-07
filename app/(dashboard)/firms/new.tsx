@@ -732,11 +732,11 @@ export default function NewFirmScreen() {
           </View>
 
           <Select
-            label="District *"
+            label="Taluka *"
             options={DISTRICT_OPTIONS}
             value={form.district}
             onValueChange={(v) => update('district', v)}
-            placeholder="Select your district"
+            placeholder="Select your taluka"
             error={getFieldError('district')}
           />
 

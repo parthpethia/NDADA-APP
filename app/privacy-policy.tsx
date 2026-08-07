@@ -44,7 +44,7 @@ export default function PrivacyPolicyScreen() {
           <View className="bg-gray-50 rounded-xl p-4 gap-3 border border-gray-100">
             <View>
               <Text className="text-sm font-semibold text-gray-800">• Personal Information</Text>
-              <Text className="text-xs text-gray-600 mt-0.5">Your name, email address, phone number, physical address, and district.</Text>
+              <Text className="text-xs text-gray-600 mt-0.5">Your name, email address, phone number, physical address, and taluka.</Text>
             </View>
             <View>
               <Text className="text-sm font-semibold text-gray-800">• Firm Information</Text>

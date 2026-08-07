@@ -134,7 +134,7 @@ export default function ExportCenterScreen() {
         r.created_at ? formatPureDate(r.created_at, 'DD/MM/YYYY') : ''
       ]);
     } else if (type === 'certificates') {
-      headers = ['Certificate ID', 'Membership ID', 'Member Name', 'Firm Name', 'Email', 'Phone', 'District', 'Status', 'Issued Date'];
+      headers = ['Certificate ID', 'Membership ID', 'Member Name', 'Firm Name', 'Email', 'Phone', 'Taluka', 'Status', 'Issued Date'];
       let query = supabase
         .from('certificates')
         .select('id, certificate_id, status, issued_at, member_id, accounts:member_id(full_name, firm_name, email, phone, district, membership_id)')
@@ -179,7 +179,7 @@ export default function ExportCenterScreen() {
         r.details || ''
       ]);
     } else {
-      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'District', 'Address', 'Payment Status', 'Approval Status'];
+      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'Taluka', 'Address', 'Payment Status', 'Approval Status'];
       let query = supabase
         .from('accounts')
         .select('id, membership_id, firm_name, partner_proprietor_name, full_name, contact_email, email, contact_phone, phone, district, firm_address, residence_address, address, payment_status, approval_status, account_status');
@@ -267,7 +267,7 @@ export default function ExportCenterScreen() {
       doc.text(`Generated On: ${formatPureDate(new Date().toISOString(), 'readable')}   |   Total Records: ${rows.length}`, marginX, 22);
 
       const filterSummary: string[] = [];
-      if (filters.district && filters.district !== 'all') filterSummary.push(`District: ${filters.district}`);
+      if (filters.district && filters.district !== 'all') filterSummary.push(`Taluka: ${filters.district}`);
       if (filters.payment_status && filters.payment_status !== 'all') filterSummary.push(`Payment: ${filters.payment_status}`);
       if (filters.approval_status && filters.approval_status !== 'all') filterSummary.push(`Approval: ${filters.approval_status}`);
       if (filters.status && filters.status !== 'all') filterSummary.push(`Status: ${filters.status}`);
@@ -609,10 +609,10 @@ export default function ExportCenterScreen() {
                 {exportType === 'payments'
                   ? '1. Payment ID  •  2. Membership ID  •  3. Firm / Member Name  •  4. Email  •  5. Phone  •  6. Amount (₹)  •  7. Status  •  8. Provider  •  9. Razorpay ID  •  10. Date'
                   : exportType === 'certificates'
-                  ? '1. Certificate ID  •  2. Membership ID  •  3. Member Name  •  4. Firm Name  •  5. Email  •  6. Phone  •  7. District  •  8. Status  •  9. Issued Date'
+                  ? '1. Certificate ID  •  2. Membership ID  •  3. Member Name  •  4. Firm Name  •  5. Email  •  6. Phone  •  7. Taluka  •  8. Status  •  9. Issued Date'
                   : exportType === 'audit_logs'
                   ? '1. Log ID  •  2. Timestamp  •  3. Admin Email  •  4. Admin Role  •  5. Action  •  6. Target User ID  •  7. Details'
-                  : '1. Membership ID  •  2. Name of Firm  •  3. Partner Name  •  4. Email ID  •  5. Phone No  •  6. District  •  7. Address  •  8. Payment Status  •  9. Approval Status'
+                  : '1. Membership ID  •  2. Name of Firm  •  3. Partner Name  •  4. Email ID  •  5. Phone No  •  6. Taluka  •  7. Address  •  8. Payment Status  •  9. Approval Status'
                 }
               </Text>
             </View>
@@ -647,7 +647,7 @@ export default function ExportCenterScreen() {
 
             <View className="flex-col sm:flex-row gap-2">
               <View className="flex-1">
-                <Text className="text-xs font-bold text-gray-500 mb-1.5">District Filter</Text>
+                <Text className="text-xs font-bold text-gray-500 mb-1.5">Taluka Filter</Text>
                 <Select
                   value={filterDistrict}
                   options={DISTRICT_FILTER_OPTIONS as any}

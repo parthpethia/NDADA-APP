@@ -214,7 +214,7 @@ export default function AdminDashboard() {
             <View className="p-3 bg-purple-50 rounded-full">
               <Map size={22} color="#7c3aed" />
             </View>
-            <Text className="font-bold text-gray-900 text-sm">District yield</Text>
+            <Text className="font-bold text-gray-900 text-sm">Taluka yield</Text>
             <Text className="text-[10px] text-gray-400 text-center">Regional densities</Text>
           </TouchableOpacity>
         </View>

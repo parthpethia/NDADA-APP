@@ -436,16 +436,16 @@ export default function AdminFirmsScreen() {
           ))}
         </ScrollView>
 
-        {/* District Filter */}
+        {/* Taluka Filter */}
         <View className="mb-3 flex-row items-center justify-between gap-2">
-          <Text className="text-xs font-semibold text-gray-700">Filter by District:</Text>
+          <Text className="text-xs font-semibold text-gray-700">Filter by Taluka:</Text>
           <View className="flex-1">
             <Select
               size="sm"
               options={DISTRICT_FILTER_OPTIONS as any}
               value={filterDistrict}
               onValueChange={setFilterDistrict}
-              placeholder="All Districts"
+              placeholder="All Talukas"
               className="mb-0"
             />
           </View>
@@ -572,7 +572,7 @@ export default function AdminFirmsScreen() {
                           <Text className="text-xs text-gray-700">{account.license_number || 'N/A'}</Text>
                         </View>
                         <View className="flex-row justify-between">
-                          <Text className="text-xs text-gray-500">District</Text>
+                          <Text className="text-xs text-gray-500">Taluka</Text>
                           <Text className="text-xs text-gray-700">{account.district || 'N/A'}</Text>
                         </View>
                         <View className="flex-row justify-between">
@@ -658,7 +658,7 @@ export default function AdminFirmsScreen() {
                         <EditableField label="Aadhaar" value={account.aadhaar_card_number || ''} displayValue={maskAadhaar(account.aadhaar_card_number)} fieldKey="aadhaar_card_number" editMode={editing} editData={editData} onEditChange={handleEditChange} />
                         {editing ? (
                           <View className="flex-row justify-between items-center py-0.5">
-                            <Text className="text-xs text-gray-500 w-2/5 pr-1">District</Text>
+                            <Text className="text-xs text-gray-500 w-2/5 pr-1">Taluka</Text>
                             <View className="flex-1">
                               <Select
                                 size="sm"
@@ -672,7 +672,7 @@ export default function AdminFirmsScreen() {
                             </View>
                           </View>
                         ) : (
-                          <EditableField label="District" value={account.district || ''} fieldKey="district" editMode={false} editData={editData} onEditChange={handleEditChange} />
+                          <EditableField label="Taluka" value={account.district || ''} fieldKey="district" editMode={false} editData={editData} onEditChange={handleEditChange} />
                         )}
                       </View>
                     </View>

@@ -1019,7 +1019,7 @@ async function generateBackgroundExport(
       ].map(val => String(val === null || val === undefined ? '' : val).replace(/[\r\n\t]+/g, ' ').trim()));
 
     } else if (exportType === 'certificates') {
-      headers = ['Certificate ID', 'Membership ID', 'Member Name', 'Firm Name', 'Email', 'Phone', 'District', 'Status', 'Issued Date'];
+      headers = ['Certificate ID', 'Membership ID', 'Member Name', 'Firm Name', 'Email', 'Phone', 'Taluka', 'Status', 'Issued Date'];
       let query = supabase
         .from('certificates')
         .select('id, certificate_id, status, issued_at, member_id, accounts:member_id(full_name, firm_name, email, phone, district, membership_id)')
@@ -1067,7 +1067,7 @@ async function generateBackgroundExport(
 
     } else {
       // Default: 'members' | 'firms'
-      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'District', 'Address', 'Payment Status'];
+      headers = ['Membership ID', 'Name of Firm', 'Partner / Owner Name', 'Email ID', 'Phone No', 'Taluka', 'Address', 'Payment Status'];
 
       let query = supabase
         .from('accounts')
@@ -1196,7 +1196,7 @@ async function generateBackgroundExport(
       doc.text(`Generated On: ${new Date().toLocaleString()}   |   Total Records: ${cleanRows.length}`, marginX, 22);
 
       const filterSummary: string[] = [];
-      if (filters.district && filters.district !== 'all') filterSummary.push(`District: ${filters.district}`);
+      if (filters.district && filters.district !== 'all') filterSummary.push(`Taluka: ${filters.district}`);
       if (filters.payment_status && filters.payment_status !== 'all') filterSummary.push(`Payment: ${filters.payment_status}`);
       if (filters.approval_status && filters.approval_status !== 'all') filterSummary.push(`Approval: ${filters.approval_status}`);
       if (filters.status && filters.status !== 'all') filterSummary.push(`Status: ${filters.status}`);

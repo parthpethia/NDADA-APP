@@ -178,7 +178,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="district"
         options={{
-          title: 'District Analytics',
+          title: 'Taluka Analytics',
           href: null,
         }}
       />
