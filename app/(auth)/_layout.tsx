@@ -7,7 +7,7 @@ import { navLog, renderLog } from '@/lib/utils';
 import { useRef } from 'react';
 
 export default function AuthLayout() {
-  const { session, adminUser, loading, profileReady } = useAuth();
+  const { session, adminUser, loading, profileReady, isRecoverySession } = useAuth();
   const pathname = usePathname();
   const renderCountRef = useRef(0);
   renderCountRef.current++;
@@ -17,6 +17,7 @@ export default function AuthLayout() {
     session: !!session,
     loading,
     profileReady,
+    isRecoverySession: !!isRecoverySession,
     adminUser: !!adminUser,
   });
 
@@ -43,8 +44,8 @@ export default function AuthLayout() {
     return <Redirect href="/(auth)/reset-password" />;
   }
 
-  // Declarative Auth Guard: If session exists and user is not resetting password, redirect to dashboard/admin
-  if (session && !isResetPassword) {
+  // Declarative Auth Guard: ONLY redirect to dashboard/admin if normal authenticated session exists AND user is NOT in password recovery
+  if (session && !isRecoverySession && !isResetPassword) {
     if (!profileReady) {
       navLog('AuthLayout', 'Session active, profileReady=false → LoadingScreen');
       return <LoadingScreen message="Loading user profile..." />;
@@ -54,7 +55,7 @@ export default function AuthLayout() {
     return <Redirect href={target} />;
   }
 
-  navLog('AuthLayout', 'No session → rendering auth Slot');
+  navLog('AuthLayout', 'No session or recovery session active → rendering auth Slot');
   return (
     <View className="flex-1 bg-white">
       <Slot />

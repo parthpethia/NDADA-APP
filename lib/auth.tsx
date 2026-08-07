@@ -27,6 +27,7 @@ interface AuthContextType {
   adminUser: AdminUser | null;
   loading: boolean;
   profileReady: boolean;
+  isRecoverySession: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, profile: {
     full_name: string;
@@ -68,6 +69,7 @@ const ACCOUNT_SELECT_COLUMNS = [
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
   const [user, _setUser] = useState<User | null>(null);
   const userRef = useRef<User | null>(null);
   const setUser = useCallback((u: User | null) => {
@@ -540,14 +542,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLog(`onAuthStateChange: ${event}`, {
           isSameUser,
           hasSession: !!newSession,
-          prevUser: previousUserId?.slice(0, 8),
+        prevUser: previousUserId?.slice(0, 8),
           newUser: newUserId?.slice(0, 8),
           profileReady: profileReadyRef.current,
           sessionAccessToken: newSession?.access_token?.slice(0, 12),
           sessionExpiresAt: newSession?.expires_at,
         });
 
-
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecoverySession(true);
+        } else if (event === 'SIGNED_OUT') {
+          setIsRecoverySession(false);
+        }
 
         // Skip profile fetch for INITIAL_SESSION if initializeAuth already loaded it.
         // This prevents the double-fetch that fires 4 queries instead of 2.
@@ -890,7 +896,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, member, adminUser, loading, profileReady, signIn, signUp, signOut, refreshMember, resetPassword }}
+      value={{ session, user, member, adminUser, loading, profileReady, isRecoverySession, signIn, signUp, signOut, refreshMember, resetPassword }}
     >
       {children}
     </AuthContext.Provider>
