@@ -469,20 +469,11 @@ serve(async (req) => {
         );
       }
 
-      let actionLink = linkData.properties.action_link;
-      if (actionLink) {
-        try {
-          const parsedUrl = new URL(actionLink);
-          parsedUrl.searchParams.set('redirect_to', redirectUrl);
-          actionLink = parsedUrl.toString();
-        } catch {
-          if (!actionLink.includes('/reset-password')) {
-            actionLink = actionLink.replace(
-              /redirect_to=[^&]*/,
-              `redirect_to=${encodeURIComponent(redirectUrl)}`
-            );
-          }
-        }
+      let resetUrl = linkData.properties.action_link;
+      const tokenHash = linkData.properties?.hashed_token;
+      if (tokenHash) {
+        const delimiter = redirectUrl.includes('?') ? '&' : '?';
+        resetUrl = `${redirectUrl}${delimiter}token_hash=${encodeURIComponent(tokenHash)}&type=recovery`;
       }
 
       // 2. Fetch full name from accounts table for personalized greeting
@@ -501,7 +492,7 @@ serve(async (req) => {
         {
           name: memberName,
           email,
-          reset_url: actionLink,
+          reset_url: resetUrl,
         },
         attachments,
         customFrom

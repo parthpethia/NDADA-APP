@@ -104,8 +104,14 @@ export default function ResetPasswordScreen() {
             type: 'recovery',
           });
           if (!verifyErr) {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.history.replaceState(null, '', window.location.pathname);
+            }
             setSessionReady(true);
             return true;
+          } else {
+            setError(`Failed to verify reset link: ${verifyErr.message}`);
+            return false;
           }
         }
       } catch (err: any) {
