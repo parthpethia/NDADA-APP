@@ -7,6 +7,7 @@ import { Account, AdminUser } from '@/types';
 import { fetchUserProfile, UserProfileResponse } from './queries';
 import { cacheClear } from './queryCache';
 import { warmStaticDataCache } from './staticDataCache';
+import { getFunctionsErrorMessage } from './utils';
 
 // ── Forensic Diagnostic Logging ───────────────────────────────────────────────
 // Prefix: [AUTH-FORENSIC HH:MM:SS.mmm] — filter with `adb logcat | grep AUTH-FORENSIC`
@@ -74,7 +75,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     _setUser(u);
   }, []);
 
-  const [member, setMember] = useState<Account | null>(null);
+  const [member, _setMember] = useState<Account | null>(null);
+  const memberRef = useRef<Account | null>(null);
+  const setMember = useCallback((m: Account | null | ((prev: Account | null) => Account | null)) => {
+    if (typeof m === 'function') {
+      _setMember((prev) => {
+        const next = m(prev);
+        memberRef.current = next;
+        return next;
+      });
+    } else {
+      memberRef.current = m;
+      _setMember(m);
+    }
+  }, []);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   // profileReady: false while profile (member + admin) is being fetched after
@@ -86,6 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profileReadyRef.current = val;
     _setProfileReady(val);
   }, []);
+
+  // Track active sign-out in progress to prevent auth state listener race conditions
+  const isSigningOutRef = useRef(false);
 
   // In-flight request deduplication
   const profileRequestRef = useRef<Promise<void> | null>(null);
@@ -127,6 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const clearInvalidSession = async () => {
+    setSession(null);
+    setUser(null);
+    setMember(null);
+    setAdminUser(null);
+    setProfileReady(true);
+    adminCacheRef.current.clear();
+    profileRequestRef.current = null;
+    cacheClear();
+
     // Clear the invalid session from Supabase client.
     // Wrap in a timeout so we don't hang if signOut itself deadlocks.
     try {
@@ -160,12 +186,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       // Silently fail
     }
-
-    setSession(null);
-    setUser(null);
-    setMember(null);
-    setAdminUser(null);
-    setProfileReady(true);
   };
 
   /**
@@ -339,11 +359,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Deduplicated wrapper: prevents concurrent profile load calls
+  // Deduplicated wrapper: prevents concurrent profile load calls.
+  // FIX: Track which userId the in-flight request belongs to.
+  //      If a new request comes in for a DIFFERENT user, discard the stale promise.
+  const profileRequestUserRef = useRef<string | null>(null);
   const loadUserProfile = useCallback(async (userId: string, currentUser?: User | null) => {
-    if (profileRequestRef.current) return profileRequestRef.current;
+    // If there's an in-flight request for the SAME user, deduplicate
+    if (profileRequestRef.current && profileRequestUserRef.current === userId) {
+      return profileRequestRef.current;
+    }
+    // Different user or no in-flight request — start fresh
+    profileRequestUserRef.current = userId;
     const promise = loadUserProfileCore(userId, currentUser).finally(() => {
       profileRequestRef.current = null;
+      profileRequestUserRef.current = null;
     });
     profileRequestRef.current = promise;
     return promise;
@@ -501,6 +530,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
+        if (isSigningOutRef.current && event !== 'SIGNED_OUT') {
+          authLog(`onAuthStateChange: ignoring ${event} (signOut in progress)`);
+          return;
+        }
         const previousUserId = userRef.current?.id;
         const newUserId = newSession?.user?.id;
         const isSameUser = !!(previousUserId && newUserId && previousUserId === newUserId);
@@ -580,14 +613,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
-        // Load profile directly with a 4s fail-safe timeout to prevent hanging UI
+        // Load profile directly with a 6s fail-safe timeout to prevent hanging UI
         if (newSession?.user) {
           try {
             if (!isSameUser || !profileReadyRef.current) {
               await Promise.race([
                 loadUserProfile(newSession.user.id, newSession.user),
-                new Promise((resolve) => setTimeout(resolve, 4000)),
+                new Promise((resolve) => setTimeout(resolve, 6000)),
               ]);
+
+              // FIX: On SIGNED_IN, the RPC may have returned null because the JWT
+              // wasn't fully propagated to PostgREST yet (RLS timing issue).
+              // If member is still null after the first attempt, wait briefly
+              // and retry once — the JWT should be settled by now.
+              if (event === 'SIGNED_IN' && !memberRef.current) {
+                authLog('onAuthStateChange: SIGNED_IN but member is null — retrying profile load after 800ms');
+                await new Promise((resolve) => setTimeout(resolve, 800));
+                // Clear the deduplication ref so the retry actually fires
+                profileRequestRef.current = null;
+                await Promise.race([
+                  loadUserProfile(newSession.user.id, newSession.user),
+                  new Promise((resolve) => setTimeout(resolve, 4000)),
+                ]);
+              }
             }
           } catch (err: any) {
             console.warn('Auth: onAuthStateChange profile fetch failed:', err);
@@ -734,8 +782,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     authLog('signOut() START');
+    isSigningOutRef.current = true;
+    // Clear local state immediately so UI & navigation guards update synchronously
+    setSession(null);
+    setUser(null);
+    setMember(null);
+    setAdminUser(null);
+    setProfileReady(true);
+    adminCacheRef.current.clear();
+    profileRequestRef.current = null;
+    cacheClear();
+
     try {
       await supabase.auth.signOut();
     } catch (error) {
@@ -744,31 +803,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut({ scope: 'local' });
       } catch {}
     } finally {
-      setSession(null);
-      setUser(null);
-      setMember(null);
-      setAdminUser(null);
-      setProfileReady(true);
-      // Clear admin cache on sign-out so a different user gets a fresh lookup
-      adminCacheRef.current.clear();
-      // Clear in-flight profile request to prevent stale promise on re-login
-      profileRequestRef.current = null;
-      // Clear query cache to prevent stale data for the next user
-      cacheClear();
+      isSigningOutRef.current = false;
       authLog('signOut() COMPLETE — all state cleared');
     }
-  };
+  }, []);
 
   const resetPassword = async (email: string) => {
     try {
-      const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081';
+      const appUrl = (process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081').replace(/\/$/, '');
+      const redirectUrl = `${appUrl}/reset-password`;
+      authLog(`resetPassword() START for ${email} with redirectTo: ${redirectUrl}`);
+
+      // 1. Try sending via Resend Edge Function (< 1s delivery, bypasses Supabase default mailer 504 timeouts)
+      try {
+        const { data: edgeRes, error: edgeErr } = await supabase.functions.invoke('send-email', {
+          body: {
+            action: 'password_reset',
+            to: email,
+            redirect_url: redirectUrl,
+          },
+        });
+
+        if (!edgeErr && edgeRes?.success) {
+          authLog(`resetPassword() SUCCESS via Resend Edge Function for ${email}`);
+          return { error: null };
+        }
+        if (edgeErr) {
+          const errMsg = await getFunctionsErrorMessage(edgeErr);
+          authLog(`resetPassword() Edge Function error: ${errMsg}`);
+          const msgLower = errMsg.toLowerCase();
+          // If Resend testing domain restriction (403), fall through to standard mailer
+          const isResendTestModeLimit =
+            msgLower.includes('testing domain') ||
+            msgLower.includes('testing emails') ||
+            msgLower.includes('only send') ||
+            msgLower.includes('resend.dev') ||
+            msgLower.includes('forbidden') ||
+            msgLower.includes('403');
+
+          if (isResendTestModeLimit) {
+            authLog('Resend in testing mode (resend.dev domain restriction). Falling back to standard Auth mailer...');
+          } else {
+            return { error: errMsg };
+          }
+        }
+        if (edgeRes?.error) {
+          authLog(`resetPassword() Edge Function message: ${edgeRes.error}`);
+          const msgLower = String(edgeRes.error).toLowerCase();
+          const isResendTestModeLimit =
+            msgLower.includes('testing domain') ||
+            msgLower.includes('testing emails') ||
+            msgLower.includes('only send') ||
+            msgLower.includes('resend.dev') ||
+            msgLower.includes('forbidden') ||
+            msgLower.includes('403');
+
+          if (isResendTestModeLimit) {
+            authLog('Resend in testing mode (resend.dev domain restriction). Falling back to standard Auth mailer...');
+          } else {
+            return { error: edgeRes.error };
+          }
+        }
+      } catch (fnErr: any) {
+        console.warn('send-email Edge Function reset exception:', fnErr);
+        const errMsg = await getFunctionsErrorMessage(fnErr);
+        if (errMsg) return { error: errMsg };
+      }
+
+      // 2. Fallback to standard Supabase Auth mailer
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl}/(auth)/reset-password`,
+        redirectTo: redirectUrl,
       });
-      return { error: error?.message ?? null };
-    } catch (e) {
+      if (error) {
+        authLog(`resetPassword() ERROR: ${error.message}`);
+        return { error: error.message };
+      }
+      authLog(`resetPassword() SUCCESS for ${email}`);
+      return { error: null };
+    } catch (e: any) {
+      console.warn('resetPassword exception:', e);
       return {
-        error: 'Network error while sending reset email. Please check your internet connection.',
+        error: e?.message || 'Network error while sending reset email. Please check your internet connection.',
       };
     }
   };

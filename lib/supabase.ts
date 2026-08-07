@@ -190,16 +190,20 @@ const fetchWithRetry: typeof fetch = async (url, options) => {
     sbLog(`fetch START: ${(options as any)?.method || 'GET'} ${urlStr.split('?')[0]}`);
   }
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  const isRecoverRequest = urlStr.includes('/auth/v1/recover');
+  const timeoutDuration = isRecoverRequest ? 45000 : 25000;
+  const effectiveMaxRetries = isRecoverRequest ? 2 : maxRetries;
+
+  for (let attempt = 0; attempt < effectiveMaxRetries; attempt++) {
     let controller: AbortController | null = null;
     let timeoutId: NodeJS.Timeout | null = null;
 
-    // Create per-attempt 15-second timeout if signal is not already aborted
+    // Create per-attempt timeout if signal is not already aborted
     if (!options?.signal?.aborted && typeof AbortController !== 'undefined') {
       controller = new AbortController();
       timeoutId = setTimeout(() => {
         try { controller?.abort(); } catch {}
-      }, 15000);
+      }, timeoutDuration);
     }
 
     const effectiveOptions: RequestInit = {
@@ -218,7 +222,7 @@ const fetchWithRetry: typeof fetch = async (url, options) => {
         response.status === 503 ||
         response.status === 504;
 
-      if (isRetryableStatus && attempt < maxRetries - 1) {
+      if (isRetryableStatus && attempt < effectiveMaxRetries - 1) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay *= 2.5;
         continue;
@@ -257,9 +261,9 @@ const fetchWithRetry: typeof fetch = async (url, options) => {
         errMsg.includes('net::') ||
         errMsg.includes('socket');
 
-      if (isNetworkError && attempt < maxRetries - 1) {
+      if (isNetworkError && attempt < effectiveMaxRetries - 1) {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn(`[Supabase Fetch] Retrying network attempt ${attempt + 1}/${maxRetries} after ${delay}ms:`, errMsg);
+          console.warn(`[Supabase Fetch] Retrying network attempt ${attempt + 1}/${effectiveMaxRetries} after ${delay}ms:`, errMsg);
         }
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay *= 2.5;

@@ -34,60 +34,61 @@ if (fs.existsSync(tempMetroCache)) {
   }
 }
 
-console.log('=== [1/2] Stopping lingering daemons and setting build environment ===');
+const cleanMode = process.argv.includes('--clean');
+const debugMode = process.argv.includes('--debug');
 
-if (process.platform === 'win32') {
-  try { spawnSync('taskkill', ['/F', '/IM', 'java.exe'], { stdio: 'ignore' }); } catch (e) {}
-  try { spawnSync('powershell', ['-Command', 'Start-Sleep -Seconds 2'], { stdio: 'ignore' }); } catch (e) {}
+if (cleanMode) {
+  console.log('=== [1/2] Clean mode requested: Stopping lingering daemons and purging caches ===');
+  if (process.platform === 'win32') {
+    try { spawnSync('taskkill', ['/F', '/IM', 'java.exe'], { stdio: 'ignore' }); } catch (e) {}
+    try { spawnSync('powershell', ['-Command', 'Start-Sleep -Seconds 2'], { stdio: 'ignore' }); } catch (e) {}
+  }
+
+  const lockFilesToClean = [
+    path.join(projectRoot, '.gradle-user-home', 'caches', 'journal-1', 'journal-1.lock'),
+    path.join(androidDir, '.gradle', 'noVersion', 'userFolderStat', 'userFolderStat.lock')
+  ];
+
+  lockFilesToClean.forEach((f) => {
+    if (fs.existsSync(f)) {
+      try { fs.rmSync(f, { force: true }); } catch (e) {}
+    }
+  });
+
+  function deleteCxxDirs(dir) {
+    if (!fs.existsSync(dir)) return;
+    try {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        try {
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            if (file === '.cxx') {
+              console.log(`Deleting C++ build cache: ${fullPath}`);
+              try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
+            } else if (file !== '.git') {
+              deleteCxxDirs(fullPath);
+            }
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  deleteCxxDirs(androidDir);
+  deleteCxxDirs(path.join(projectRoot, 'node_modules'));
+} else {
+  console.log('=== [1/2] Incremental build enabled (preserving C++ caches for speed) ===');
 }
 
-const lockFilesToClean = [
-  path.join(projectRoot, '.gradle-user-home', 'caches', 'journal-1', 'journal-1.lock'),
-  path.join(androidDir, '.gradle', 'noVersion', 'userFolderStat', 'userFolderStat.lock')
-];
-
-lockFilesToClean.forEach((f) => {
-  if (fs.existsSync(f)) {
-    try { fs.rmSync(f, { force: true }); } catch (e) {}
-  }
-});
-
-
-process.env.GRADLE_USER_HOME = 'D:\\.gh';
+if (!process.env.GRADLE_USER_HOME) {
+  process.env.GRADLE_USER_HOME = path.join(projectRoot, '.gradle-user-home');
+}
 process.env.METRO_CACHE_DIR = path.join(projectRoot, '.metro-cache');
 process.env.NODE_ENV = 'production';
-process.env.NODE_OPTIONS = '--max-old-space-size=2048';
-process.env.CMAKE_BUILD_PARALLEL_LEVEL = '1';
-process.env.MAKEFLAGS = '-j1';
+process.env.NODE_OPTIONS = '--max-old-space-size=4096';
 
-console.log('=== [1/2] Purging stale .cxx Ninja build caches across all native modules ===');
-
-function deleteCxxDirs(dir) {
-  if (!fs.existsSync(dir)) return;
-  try {
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-      const fullPath = path.join(dir, file);
-      try {
-        const stat = fs.statSync(fullPath);
-        if (stat.isDirectory()) {
-          if (file === '.cxx') {
-            console.log(`Deleting C++ build cache: ${fullPath}`);
-            try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
-          } else if (file !== '.git') {
-            deleteCxxDirs(fullPath);
-          }
-        }
-      } catch (e) {}
-    }
-  } catch (e) {}
-}
-
-deleteCxxDirs(androidDir);
-deleteCxxDirs(path.join(projectRoot, 'node_modules'));
-
-
-const debugMode = process.argv.includes('--debug');
 const buildType = debugMode ? 'Debug' : 'Release';
 console.log(`=== [2/2] Building ${buildType} Android APK ===`);
 
@@ -97,14 +98,11 @@ fs.mkdirSync(sourcemapDir, { recursive: true });
 fs.mkdirSync(assetsDir, { recursive: true });
 
 const gradleTask = debugMode ? 'assembleDebug' : 'assembleRelease';
+const gradleArgs = [gradleTask];
 
 const res = spawnSync(
   process.platform === 'win32' ? 'gradlew.bat' : './gradlew',
-  [
-    gradleTask,
-    '--no-daemon',
-    '--max-workers=2'
-  ],
+  gradleArgs,
   {
     cwd: androidDir,
     stdio: 'inherit',

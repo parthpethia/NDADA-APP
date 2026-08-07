@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useDashboardData } from '@/lib/useDashboardData';
 import { Card, CardHeader, StatusBadge, Button, LoadingScreen, EmptyState } from '@/components/ui';
-import { TimelineDisplay } from './timeline';
+import { TimelineDisplay } from '@/components/TimelineDisplay';
 import {
   APP_NAME,
   MEMBERSHIP_AMOUNT,

@@ -255,11 +255,29 @@ serve(async (req) => {
           }
           
           if (finalStatus === 'paid') {
-            // Update user accounts to paid
-            await supabase
+            // Update user accounts to paid and fetch details for email
+            const { data: memberAcc } = await supabase
               .from('accounts')
               .update({ payment_status: 'paid' })
-              .eq('id', payment.member_id);
+              .eq('id', payment.member_id)
+              .select('full_name, email, membership_id')
+              .single();
+
+            if (memberAcc?.email) {
+              supabase.functions.invoke('send-email', {
+                body: {
+                  to: memberAcc.email,
+                  template_name: 'payment_received',
+                  data: {
+                    name: memberAcc.full_name || 'Member',
+                    amount: String(payment.amount || '300'),
+                    membership_id: memberAcc.membership_id || 'NDADA-MEM',
+                  },
+                },
+              }).catch((e) => {
+                console.error('Failed to send payment_received email in reconciliation:', e.message);
+              });
+            }
             
             // Queue certificate generation job
             await supabase.from('certificate_generation_queue').upsert(

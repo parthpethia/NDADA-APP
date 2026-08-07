@@ -30,6 +30,7 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  AlertCircle,
 } from 'lucide-react-native';
 
 import { ACTIVE_NAVIGATION_STRATEGY } from '@/lib/navigationStrategy';
@@ -168,6 +169,31 @@ export default function LoginScreen() {
         // above (and the AuthLayout declarative guard) will handle navigation once
         // session + profileReady + adminUser are all resolved.
         // Keep loading=true so the UI shows "Signing in..." until navigation occurs.
+
+        // FIX: Failsafe navigation — if the reactive guard hasn't navigated within 8s
+        // (e.g., onAuthStateChange never fired, profileReady stuck, RPC timeout, etc.),
+        // directly check the session and force-navigate. This prevents the user from
+        // being stuck on the login page forever after a successful signIn().
+        setTimeout(async () => {
+          if (!navigatedRef.current) {
+            navLog('LoginScreen', 'Failsafe: 8s elapsed without navigation — checking session directly');
+            try {
+              const { data: { session: currentSession } } = await supabase.auth.getSession();
+              if (currentSession?.user && !navigatedRef.current) {
+                navigatedRef.current = true;
+                navLog('LoginScreen', 'Failsafe: session exists, forcing navigation to dashboard');
+                router.replace('/(dashboard)');
+              } else if (!currentSession) {
+                navLog('LoginScreen', 'Failsafe: no session found — signIn may have failed silently');
+                setError('Login appeared to succeed but session was not established. Please try again.');
+                setLoading(false);
+              }
+            } catch (failsafeErr) {
+              navLog('LoginScreen', 'Failsafe: getSession() failed', failsafeErr);
+              setLoading(false);
+            }
+          }
+        }, 8000);
       }
     } catch (e: any) {
       navLog('LoginScreen', 'Login submit exception', e);
@@ -175,13 +201,13 @@ export default function LoginScreen() {
       setLoading(false);
     } finally {
       // Safety timeout: reset loading spinner only if navigation hasn't happened yet.
-      // This prevents the spinner from staying forever if auth state settling takes long,
-      // while avoiding a React state-update-on-unmounted-component warning after navigation.
+      // Increased to 10s (from 5s) to give the auth state more time to settle before
+      // resetting the spinner, coordinating with the 8s failsafe navigation above.
       setTimeout(() => {
         if (!navigatedRef.current) {
           setLoading(false);
         }
-      }, 5000);
+      }, 10000);
     }
   };
 

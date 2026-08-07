@@ -346,7 +346,7 @@ export const EMAIL_TEMPLATES = {
 export class EmailService {
   private provider: 'resend' | 'sendgrid' | 'mailgun' | 'smtp' = 'resend';
   private apiKey: string | null = null;
-  private fromEmail: string = 'NDADA <onboarding@resend.dev>';
+  private fromEmail: string = 'NDADA <noreply@ndada.in>';
 
   constructor(provider: 'resend' | 'sendgrid' | 'mailgun' | 'smtp' = 'resend', apiKey?: string) {
     this.provider = provider;

@@ -5,7 +5,7 @@ import { getCorsHeaders } from '../_shared/cors.ts';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'NDADA <onboarding@resend.dev>';
+const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'NDADA <noreply@ndada.in>';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -332,6 +332,37 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
     }),
     text: `Congratulations!\n\nDear ${data.name},\nYour official NDADA certificate has been generated.\n\nMembership ID: ${data.membership_id}\nDownload Link: ${data.download_url}`,
   }),
+
+  password_reset: (data) => ({
+    subject: '🔐 Reset Your NDADA Account Password',
+    html: renderEmailLayout({
+      title: 'Reset Password - NDADA',
+      headerTitle: 'Password Reset Request',
+      headerSubtitle: 'Follow the link below to set your new password',
+      badgeText: 'SECURITY VERIFICATION',
+      badgeBg: 'rgba(234, 179, 8, 0.2)',
+      badgeColor: '#fef08a',
+      contentHtml: `
+        <p style="margin: 0 0 16px 0; color: #374151; font-size: 15px; line-height: 1.6;">Hello <strong>${data.name || 'NDADA Member'}</strong>,</p>
+        <p style="margin: 0 0 20px 0; color: #4b5563; font-size: 14px; line-height: 1.6;">We received a request to reset the password for your NDADA account registered under <strong>${data.email}</strong>.</p>
+
+        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
+          <p style="margin: 0 0 16px 0; color: #166534; font-size: 14px; font-weight: 600;">Tap the button below to choose a new password:</p>
+          <a href="${data.reset_url}" class="action-button" style="display: inline-block; background-color: #166534; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px; box-shadow: 0 2px 6px rgba(22, 101, 52, 0.25);">Reset Password →</a>
+        </div>
+
+        <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 12px; line-height: 1.5; text-align: center;">
+          If the button above does not work, copy and paste this link into your browser:<br>
+          <a href="${data.reset_url}" style="color: #166534; word-break: break-all; text-decoration: underline;">${data.reset_url}</a>
+        </p>
+
+        <p style="margin: 16px 0 0 0; color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center;">
+          If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.
+        </p>
+      `,
+    }),
+    text: `Password Reset Request\n\nDear Member,\nReset your password here: ${data.reset_url}\n\nIf you did not request this, ignore this email.`,
+  }),
 };
 
 async function sendEmail(
@@ -365,9 +396,14 @@ async function sendEmail(
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Resend error:', error);
-      return { success: false, error: `Resend API error: ${response.statusText}` };
+      const errorText = await response.text();
+      console.error('Resend error:', errorText);
+      try {
+        const parsed = JSON.parse(errorText);
+        return { success: false, error: parsed.message || `Resend API error: ${response.statusText}` };
+      } catch {
+        return { success: false, error: errorText || `Resend API error: ${response.statusText}` };
+      }
     }
 
     const result = await response.json() as any;
@@ -400,7 +436,85 @@ serve(async (req) => {
 
   try {
     const payload = await req.json() as any;
-    const { to, template_name: templateName, data, attachments, from: customFrom } = payload;
+    const { to, template_name: templateName, data, attachments, from: customFrom, action } = payload;
+
+    // Direct password reset request handling
+    if (action === 'password_reset' || templateName === 'password_reset') {
+      const email = (to || payload.email || '').toLowerCase().trim();
+      let redirectUrl = payload.redirect_url || 'https://ndada.in/reset-password';
+      if (redirectUrl.startsWith('http://ndada.in') || redirectUrl.startsWith('http://ndada.vercel.app')) {
+        redirectUrl = redirectUrl.replace('http://', 'https://');
+      }
+
+      if (!email) {
+        return new Response(
+          JSON.stringify({ error: 'Missing target email address for password reset' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 1. Generate recovery link instantly via Supabase Admin Auth API
+      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+      if (linkErr || !linkData?.properties?.action_link) {
+        console.error('generateLink error:', linkErr);
+        return new Response(
+          JSON.stringify({ error: linkErr?.message || 'Failed to generate password reset token. Please ensure the email address is registered.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      let actionLink = linkData.properties.action_link;
+      if (actionLink) {
+        try {
+          const parsedUrl = new URL(actionLink);
+          parsedUrl.searchParams.set('redirect_to', redirectUrl);
+          actionLink = parsedUrl.toString();
+        } catch {
+          if (!actionLink.includes('/reset-password')) {
+            actionLink = actionLink.replace(
+              /redirect_to=[^&]*/,
+              `redirect_to=${encodeURIComponent(redirectUrl)}`
+            );
+          }
+        }
+      }
+
+      // 2. Fetch full name from accounts table for personalized greeting
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('full_name')
+        .eq('email', email)
+        .maybeSingle();
+
+      const memberName = acc?.full_name || 'Member';
+
+      // 3. Send email via Resend instantly
+      const result = await sendEmail(
+        email,
+        'password_reset',
+        {
+          name: memberName,
+          email,
+          reset_url: actionLink,
+        },
+        attachments,
+        customFrom
+      );
+
+      return new Response(
+        JSON.stringify(result),
+        {
+          status: result.success ? 200 : 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     if (!to || !templateName || !data) {
       return new Response(

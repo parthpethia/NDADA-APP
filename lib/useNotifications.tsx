@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { AppState, Platform } from 'react-native';
 import { Notification } from '@/types';
 import { useAuth } from '@/lib/auth';
@@ -296,7 +296,7 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     };
   }, [userId, fetchCountOnly]);
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     try {
       const { error } = await markNotificationAsRead(id);
       if (error) throw new Error(error.message);
@@ -311,9 +311,9 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
       console.error('markAsRead error:', message);
       throw err;
     }
-  };
+  }, []);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!userId) return;
 
     try {
@@ -328,7 +328,7 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
       console.error('markAllAsRead error:', message);
       throw err;
     }
-  };
+  }, [userId]);
 
   /**
    * Seed the unread count from an external source (dashboard RPC).
@@ -338,19 +338,34 @@ function useNotificationsSource(userId: string | undefined): UseNotificationsRet
     setUnreadCount(count);
   }, []);
 
-  return {
-    notifications,
-    unreadCount,
-    loading,
-    error,
-    markAsRead,
-    markAllAsRead,
-    refresh: fetchFullData,
-    loadMore,
-    hasMore,
-    loadingMore,
-    seedUnreadCount,
-  };
+  return useMemo(
+    () => ({
+      notifications,
+      unreadCount,
+      loading,
+      error,
+      markAsRead,
+      markAllAsRead,
+      refresh: fetchFullData,
+      loadMore,
+      hasMore,
+      loadingMore,
+      seedUnreadCount,
+    }),
+    [
+      notifications,
+      unreadCount,
+      loading,
+      error,
+      markAsRead,
+      markAllAsRead,
+      fetchFullData,
+      loadMore,
+      hasMore,
+      loadingMore,
+      seedUnreadCount,
+    ]
+  );
 }
 
 /**

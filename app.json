@@ -34,8 +34,6 @@
     },
     "plugins": [
       "expo-router",
-      "expo-web-browser",
-      "expo-sharing",
       "expo-secure-store"
     ],
     "extra": {

@@ -1,3 +1,4 @@
+import '@/lib/polyfills';
 import '../global.css';
 import { useState, useCallback } from 'react';
 import { Stack } from 'expo-router';

@@ -1,7 +1,7 @@
 import { Slot, Redirect, usePathname } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/ui';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import { ACTIVE_NAVIGATION_STRATEGY } from '@/lib/navigationStrategy';
 import { navLog, renderLog } from '@/lib/utils';
 import { useRef } from 'react';
@@ -26,6 +26,16 @@ export default function AuthLayout() {
   }
 
   const isResetPassword = pathname?.includes('reset-password');
+
+  // Intercept recovery links landing on non-reset routes (e.g. / or /login) and route to /reset-password
+  const hasRecoveryToken = Platform.OS === 'web' && typeof window !== 'undefined'
+    ? (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery') || window.location.hash.includes('access_token'))
+    : false;
+
+  if (hasRecoveryToken && !isResetPassword) {
+    navLog('AuthLayout', 'Recovery token detected in URL → REDIRECT to reset-password');
+    return <Redirect href="/(auth)/reset-password" />;
+  }
 
   // Declarative Auth Guard: If session exists and user is not resetting password, redirect to dashboard/admin
   if (session && !isResetPassword) {

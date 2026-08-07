@@ -7,9 +7,6 @@ import { Button, Input } from '@/components/ui';
 import { APP_NAME } from '@/constants';
 
 export default function ResetPasswordScreen() {
-  const { email } = useLocalSearchParams<{ email?: string }>();
-  const isBypassMode = Boolean(email);
-
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,7 +18,7 @@ export default function ResetPasswordScreen() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Helper to check if a session already exists
+    // Helper to check if an active recovery session exists
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -31,20 +28,45 @@ export default function ResetPasswordScreen() {
       return false;
     };
 
-    // Parse recovery tokens from URL (supporting query params and hash fragments)
+    // Parse recovery tokens from URL (supporting query params, hash fragments, PKCE code exchange, and token hashes)
     const handleRecoveryUrl = async (urlString: string) => {
       try {
-        const delimiterIndex = urlString.indexOf('#') !== -1 ? urlString.indexOf('#') : urlString.indexOf('?');
-        if (delimiterIndex === -1) return false;
+        const params = new URLSearchParams();
 
-        const queryString = urlString.substring(delimiterIndex + 1);
-        const params = new URLSearchParams(queryString);
+        // Extract params from query string (?)
+        const queryIndex = urlString.indexOf('?');
+        if (queryIndex !== -1) {
+          const hashInQuery = urlString.indexOf('#', queryIndex);
+          const rawQuery = hashInQuery !== -1 
+            ? urlString.substring(queryIndex + 1, hashInQuery) 
+            : urlString.substring(queryIndex + 1);
+          new URLSearchParams(rawQuery).forEach((v, k) => params.set(k, v));
+        }
+
+        // Extract params from hash fragment (#)
+        const hashIndex = urlString.indexOf('#');
+        if (hashIndex !== -1) {
+          const rawHash = urlString.substring(hashIndex + 1);
+          new URLSearchParams(rawHash).forEach((v, k) => params.set(k, v));
+        }
+
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
+        const code = params.get('code');
+        const tokenHash = params.get('token_hash') || params.get('token');
         const type = params.get('type');
 
-        if (accessToken && refreshToken && type === 'recovery') {
-          // Clear any stale session first to avoid lock contention
+        if (code) {
+          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (codeError) {
+            setError(`Failed to verify reset code: ${codeError.message}`);
+            return false;
+          }
+          setSessionReady(true);
+          return true;
+        }
+
+        if (accessToken && refreshToken) {
           try {
             await supabase.auth.signOut({ scope: 'local' });
           } catch {}
@@ -64,6 +86,17 @@ export default function ResetPasswordScreen() {
           }
           setSessionReady(true);
           return true;
+        }
+
+        if (tokenHash && (type === 'recovery' || !type)) {
+          const { error: verifyErr } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'recovery',
+          });
+          if (!verifyErr) {
+            setSessionReady(true);
+            return true;
+          }
         }
       } catch (err: any) {
         console.warn('Error parsing recovery URL:', err);
@@ -122,40 +155,19 @@ export default function ResetPasswordScreen() {
     setError('');
 
     try {
-      if (isBypassMode) {
-        // Direct bypass mode: Call the secure database RPC function
-        const { data: successResult, error: rpcError } = await supabase.rpc('reset_password_bypass', {
-          p_email: email,
-          p_new_password: password,
-        });
+      // Standard recovery session mode (requires verified link authentication)
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
 
-        if (rpcError) {
-          setError(rpcError.message);
-          return;
-        }
-        if (!successResult) {
-          setError('User not found. Please enter the correct email.');
-          return;
-        }
-
-        setSuccess(true);
-      } else {
-        // Standard recovery session mode
-        const { error: updateError } = await supabase.auth.updateUser({
-          password,
-        });
-
-        if (updateError) {
-          setError(updateError.message);
-          return;
-        }
-
-        // Sign out the recovery session so the user can sign in cleanly
-        // with their new password. Without this, the _layout.tsx auth guard
-        // would redirect them away from the login page immediately.
-        await supabase.auth.signOut({ scope: 'local' });
-        setSuccess(true);
+      if (updateError) {
+        setError(updateError.message);
+        return;
       }
+
+      // Sign out the temporary recovery session so the user can sign in cleanly
+      await supabase.auth.signOut({ scope: 'local' });
+      setSuccess(true);
     } catch (e) {
       setError('An unexpected error occurred. Please try again.');
     } finally {
@@ -229,7 +241,7 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View className="rounded-2xl bg-white p-6 shadow-sm">
-            {!sessionReady && !isBypassMode ? (
+            {!sessionReady ? (
               <View className="mb-4 rounded-lg bg-yellow-50 p-3">
                 <Text className="text-sm text-yellow-700">
                   Verifying your reset link… If this takes too long, try clicking the link in your email again.
@@ -262,7 +274,7 @@ export default function ResetPasswordScreen() {
               title="Reset Password"
               onPress={handleUpdatePassword}
               loading={loading}
-              disabled={(!sessionReady && !isBypassMode) || loading}
+              disabled={!sessionReady || loading}
               className="mt-2"
             />
           </View>

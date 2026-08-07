@@ -34,48 +34,55 @@ if (fs.existsSync(tempMetroCache)) {
   }
 }
 
-console.log('=== [1/2] Cleaning stale C++ CMake build caches (.cxx) ===');
-function deleteCxxDirs(dir) {
-  if (!fs.existsSync(dir)) return;
-  try {
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-      const fullPath = path.join(dir, file);
-      try {
-        const stat = fs.statSync(fullPath);
-        if (stat.isDirectory()) {
-          if (file === '.cxx') {
-            console.log(`Deleting C++ build cache: ${fullPath}`);
-            try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
-          } else if (file !== 'node_modules' && file !== '.git') {
-            deleteCxxDirs(fullPath);
-          }
-        }
-      } catch (e) {}
-    }
-  } catch (e) {}
-}
+const cleanMode = process.argv.includes('--clean');
 
-deleteCxxDirs(androidDir);
-deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-reanimated'));
-deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-worklets'));
-deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-screens'));
-deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-gesture-handler'));
+if (cleanMode) {
+  console.log('=== [1/2] Clean mode requested: Cleaning stale C++ CMake build caches (.cxx) ===');
+  function deleteCxxDirs(dir) {
+    if (!fs.existsSync(dir)) return;
+    try {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        try {
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            if (file === '.cxx') {
+              console.log(`Deleting C++ build cache: ${fullPath}`);
+              try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
+            } else if (file !== 'node_modules' && file !== '.git') {
+              deleteCxxDirs(fullPath);
+            }
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  deleteCxxDirs(androidDir);
+  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-reanimated'));
+  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-worklets'));
+  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-screens'));
+  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-gesture-handler'));
+} else {
+  console.log('=== [1/2] Incremental release build enabled (preserving C++ caches for speed) ===');
+}
 
 console.log('=== [2/2] Building Signed Release Android App Bundle (AAB) ===');
 
-process.env.GRADLE_USER_HOME = path.join(projectRoot, '.gradle-user-home');
+if (!process.env.GRADLE_USER_HOME) {
+  process.env.GRADLE_USER_HOME = path.join(projectRoot, '.gradle-user-home');
+}
 process.env.METRO_CACHE_DIR = path.join(projectRoot, '.metro-cache');
 process.env.NODE_ENV = 'production';
 process.env.NODE_OPTIONS = '--max-old-space-size=4096';
-process.env.CMAKE_BUILD_PARALLEL_LEVEL = '1';
 
 const sourcemapDir = path.join(androidDir, 'app', 'build', 'intermediates', 'sourcemaps', 'react', 'release');
 const assetsDir = path.join(androidDir, 'app', 'build', 'generated', 'assets', 'react', 'release');
 fs.mkdirSync(sourcemapDir, { recursive: true });
 fs.mkdirSync(assetsDir, { recursive: true });
 
-const res = spawnSync(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['bundleRelease', '--no-daemon'], {
+const res = spawnSync(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['bundleRelease'], {
   cwd: androidDir,
   stdio: 'inherit',
   shell: true,

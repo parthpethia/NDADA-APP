@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/ui';
@@ -10,6 +11,12 @@ export default function DashboardLayout() {
   const { session, loading, adminUser, profileReady, member, signOut } = useAuth();
   const insets = useSafeAreaInsets();
 
+  useEffect(() => {
+    if (member?.account_status === 'deleted') {
+      signOut();
+    }
+  }, [member?.account_status, signOut]);
+
   if (loading || !profileReady) {
     return <LoadingScreen />;
   }
@@ -19,9 +26,11 @@ export default function DashboardLayout() {
   if (adminUser) {
     return <Redirect href="/admin" />;
   }
+  // Don't redirect deleted accounts during render — let the useEffect's signOut()
+  // clear the session first. The `if (!session)` guard above will then redirect
+  // on the next render cycle, preventing the AuthLayout ping-pong loop.
   if (member?.account_status === 'deleted') {
-    signOut();
-    return <Redirect href="/(auth)/login" />;
+    return <LoadingScreen message="Signing out..." />;
   }
 
   return (
@@ -106,13 +115,6 @@ export default function DashboardLayout() {
         name="notifications"
         options={{
           title: 'Notifications',
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="timeline"
-        options={{
-          title: 'Timeline',
           href: null,
         }}
       />
