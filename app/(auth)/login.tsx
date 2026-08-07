@@ -22,7 +22,6 @@ import {
   UserPlus,
   ChevronDown,
   ChevronUp,
-  AlertCircle,
   Shield,
   BookOpen,
   Megaphone,
@@ -429,19 +428,8 @@ export default function LoginScreen() {
           <StatItem value="Nagpur" label="District-wide reach" />
         </View>
 
-        {/* ===== NOTICE BAR ===== */}
-        <View className="mx-4 mt-5 rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3 flex-row items-start gap-3">
-          <View className="mt-0.5 rounded-full bg-yellow-200 p-1">
-            <AlertCircle size={14} color="#ca8a04" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-xs text-yellow-800 leading-5">
-              <Text className="font-semibold">Latest notice: </Text>
-              Annual general meeting scheduled for next month. All registered members are requested to attend.{' '}
-              <Text className="font-semibold text-yellow-900 underline">Read more</Text>
-            </Text>
-          </View>
-        </View>
+
+
 
         {/* ===== SERVICES SECTION ===== */}
         <View className="px-4 mt-7 mb-2">

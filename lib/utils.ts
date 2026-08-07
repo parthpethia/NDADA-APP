@@ -143,7 +143,9 @@ export async function getFunctionsErrorMessage(error: any): Promise<string> {
 }
 
 // ── Navigation & Render Forensic Loggers ─────────────────────────────────────
+// No-ops in production to avoid console spam and leaking internal state
 export function navLog(requester: string, action: string, details?: unknown) {
+  if (!__DEV__) return;
   const ts = new Date().toISOString().slice(11, 23);
   if (details !== undefined) {
     console.log(`[NAV-FORENSIC ${ts}] [${requester}] ${action}`, typeof details === 'object' ? JSON.stringify(details) : details);
@@ -153,6 +155,8 @@ export function navLog(requester: string, action: string, details?: unknown) {
 }
 
 export function renderLog(component: string, renderCount: number, state: { pathname?: string; session?: boolean; loading?: boolean; profileReady?: boolean; adminUser?: boolean; member?: boolean }) {
+  if (!__DEV__) return;
   const ts = new Date().toISOString().slice(11, 23);
   console.log(`[RENDER-FORENSIC ${ts}] [${component} #${renderCount}]`, JSON.stringify(state));
 }
+

@@ -816,6 +816,7 @@ export default function NewFirmScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             className="mb-0"
+            error={getFieldError('email_id')}
           />
 
           <Divider />

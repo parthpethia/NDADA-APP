@@ -75,7 +75,17 @@ export default function RootLayout() {
                 presentation: 'card',
               }}
             />
-            <Stack.Screen name="verify" />
+            <Stack.Screen
+              name="verify"
+              options={{
+                headerShown: true,
+                title: 'Verify Certificate',
+                headerStyle: { backgroundColor: '#166534' },
+                headerTintColor: '#fff',
+                headerTitleStyle: { fontWeight: '600' },
+                presentation: 'card',
+              }}
+            />
             <Stack.Screen name="admin" />
           </Stack>
         </NotificationProvider>

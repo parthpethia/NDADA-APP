@@ -158,8 +158,8 @@ export default function PaymentScreen() {
           <CardHeader title="After Payment" subtitle="What happens next" />
           <View className="gap-2">
             <Text className="text-sm text-primary-800">1. Your payment is confirmed securely via Razorpay.</Text>
-            <Text className="text-sm text-primary-800">2. Your firm application moves into review.</Text>
-            <Text className="text-sm text-primary-800">3. Your certificate becomes available after approval.</Text>
+            <Text className="text-sm text-primary-800">2. Your membership certificate is generated automatically.</Text>
+            <Text className="text-sm text-primary-800">3. Download your certificate from the Certificate tab.</Text>
             <Text className="pt-1 text-xs text-primary-700">
               Need help? Contact {MEMBERSHIP_SUPPORT_EMAIL}.
             </Text>

@@ -34,10 +34,10 @@ export default function AdminPaymentsScreen() {
       .limit(50);
 
     if (onlineError) {
-      console.error('❌ Online payments fetch error:', onlineError);
+      if (__DEV__) console.error('❌ Online payments fetch error:', onlineError);
       showMessage('Fetch Error', 'Failed to load online payments: ' + onlineError.message);
     } else {
-      console.log(`💳 Online payments fetched: ${(onlinePayments || []).length} records`);
+      if (__DEV__) console.log(`💳 Online payments fetched: ${(onlinePayments || []).length} records`);
     }
 
     setPayments(

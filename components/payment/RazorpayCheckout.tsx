@@ -77,7 +77,7 @@ export function RazorpayCheckout() {
   // STEP 1: Create Order
   // ============================================================
   const handleCreateOrder = async () => {
-    console.log('1️⃣ Creating Razorpay order...');
+    if (__DEV__) console.log('1️⃣ Creating Razorpay order...');
     setLoading(true);
 
     try {
@@ -86,25 +86,27 @@ export function RazorpayCheckout() {
       });
 
       if (error) {
-        console.error('❌ Order creation failed:', error);
+        if (__DEV__) console.error('❌ Order creation failed:', error);
         const errMsg = await getFunctionsErrorMessage(error);
         Alert.alert('Error', errMsg);
         return;
       }
 
       if (!data || !data.id) {
-        console.error('❌ Invalid response from order creation');
+        if (__DEV__) console.error('❌ Invalid response from order creation');
         Alert.alert('Error', 'Invalid order response');
         return;
       }
 
-      console.log('✅ Order created:', data.id);
-      console.log('   Amount:', data.amount, 'paise');
+      if (__DEV__) {
+        console.log('✅ Order created:', data.id);
+        console.log('   Amount:', data.amount, 'paise');
+      }
 
       // Proceed to checkout
       await handleCheckout(data);
     } catch (err: any) {
-      console.error('❌ Order creation error:', err.message);
+      if (__DEV__) console.error('❌ Order creation error:', err.message);
       Alert.alert('Error', err?.message || 'Failed to create order');
     } finally {
       setLoading(false);
@@ -115,7 +117,7 @@ export function RazorpayCheckout() {
   // STEP 2: Open Checkout
   // ============================================================
   const handleCheckout = async (order: RazorpayOrderResponse) => {
-    console.log('2️⃣ Opening Razorpay checkout...');
+    if (__DEV__) console.log('2️⃣ Opening Razorpay checkout...');
 
     const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
     if (!keyId) {
@@ -159,7 +161,7 @@ export function RazorpayCheckout() {
           handlePaymentSuccess(response),
         modal: {
           ondismiss: () => {
-            console.log('ℹ️ User closed Razorpay modal');
+            if (__DEV__) console.log('ℹ️ User closed Razorpay modal');
             setLoading(false);
           },
         },
@@ -178,7 +180,7 @@ export function RazorpayCheckout() {
           )
           .catch((error: any) => handlePaymentFailure(error));
       } catch (err: any) {
-        console.error('❌ Razorpay module not available:', err.message);
+        if (__DEV__) console.error('❌ Razorpay module not available:', err.message);
         // Fallback: Open in WebBrowser
         await WebBrowser.openBrowserAsync(
           `https://checkout.razorpay.com/?key_id=${keyId}&order_id=${order.id}`
@@ -191,9 +193,11 @@ export function RazorpayCheckout() {
   // STEP 3: Payment Success
   // ============================================================
   const handlePaymentSuccess = async (response: RazorpaySuccessResponse) => {
-    console.log('3️⃣ Payment successful, verifying signature...');
-    console.log('   Order ID:', response.razorpay_order_id);
-    console.log('   Payment ID:', response.razorpay_payment_id);
+    if (__DEV__) {
+      console.log('3️⃣ Payment successful, verifying signature...');
+      console.log('   Order ID:', response.razorpay_order_id);
+      console.log('   Payment ID:', response.razorpay_payment_id);
+    }
 
     setVerifying(true);
 
@@ -202,7 +206,7 @@ export function RazorpayCheckout() {
       const verifyResponse = await verifyPaymentSignature(response);
 
       if (!verifyResponse.verified) {
-        console.error('❌ Signature verification failed');
+        if (__DEV__) console.error('❌ Signature verification failed');
         Alert.alert(
           'Security Alert',
           'Payment signature verification failed. This payment has not been processed for security reasons.'
@@ -210,7 +214,7 @@ export function RazorpayCheckout() {
         return;
       }
 
-      console.log('✅ Signature verified successfully');
+      if (__DEV__) console.log('✅ Signature verified successfully');
 
       // Show success message
       Alert.alert(
@@ -227,7 +231,7 @@ export function RazorpayCheckout() {
       // Refresh member status
       setTimeout(() => refreshMember(), 2000);
     } catch (err: any) {
-      console.error('❌ Verification error:', err.message);
+      if (__DEV__) console.error('❌ Verification error:', err.message);
       Alert.alert(
         'Verification Error',
         err?.message || 'Failed to verify payment'
@@ -243,7 +247,7 @@ export function RazorpayCheckout() {
   const verifyPaymentSignature = async (
     response: RazorpaySuccessResponse
   ): Promise<VerifySignatureResponse> => {
-    console.log('📝 Verifying payment signature (HMAC-SHA256)...');
+    if (__DEV__) console.log('📝 Verifying payment signature (HMAC-SHA256)...');
 
     try {
       const { data, error } = await supabase.functions.invoke(
@@ -258,7 +262,7 @@ export function RazorpayCheckout() {
       );
 
       if (error) {
-        console.error('❌ Verification failed:', error);
+        if (__DEV__) console.error('❌ Verification failed:', error);
         const errMsg = await getFunctionsErrorMessage(error);
         throw new Error(errMsg);
       }
@@ -267,15 +271,17 @@ export function RazorpayCheckout() {
         throw new Error('No response from verification');
       }
 
-      console.log('✅ Verification response:', {
-        verified: data.verified,
-        order_id: data.order_id,
-        payment_id: data.payment_id,
-      });
+      if (__DEV__) {
+        console.log('✅ Verification response:', {
+          verified: data.verified,
+          order_id: data.order_id,
+          payment_id: data.payment_id,
+        });
+      }
 
       return data;
     } catch (err: any) {
-      console.error('❌ Verification error:', err.message);
+      if (__DEV__) console.error('❌ Verification error:', err.message);
       throw err;
     }
   };
@@ -284,7 +290,7 @@ export function RazorpayCheckout() {
   // STEP 5: Payment Failure
   // ============================================================
   const handlePaymentFailure = (error: any) => {
-    console.error('❌ Payment failed:', error);
+    if (__DEV__) console.error('❌ Payment failed:', error);
 
     const errorMessage = error?.description || error?.message || 'Payment failed';
     Alert.alert(

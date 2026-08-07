@@ -1,14 +1,16 @@
 import { View, Text } from 'react-native';
 import { StatusTimeline, TimelineEvent } from '@/types';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import { CheckCircle2, Clock, AlertCircle, XCircle } from 'lucide-react-native';
+import { CheckCircle2, AlertCircle } from 'lucide-react-native';
 
 export function TimelineDisplay({ timeline }: { timeline: StatusTimeline | null | undefined }) {
   if (!timeline || Object.keys(timeline).length === 0) {
     return null;
   }
 
-  // Define timeline stages in order
+  // User-facing timeline stages only: Submitted → Payment Verified
+  // (Certificate issuance is shown separately on the certificate page)
+  // Admin-internal stages (under_review, approved, rejected) are intentionally excluded
   const stages: Array<{
     key: keyof StatusTimeline;
     label: string;
@@ -39,47 +41,11 @@ export function TimelineDisplay({ timeline }: { timeline: StatusTimeline | null 
         return `Verified ${date}`;
       },
     },
-    {
-      key: 'under_review',
-      label: 'Under Review',
-      icon: <Clock size={24} color="#f59e0b" />,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-100',
-      getMetadata: (event) => {
-        const assignedTo = event.assigned_to_admin && event.assigned_to_admin !== 'unassigned' ? `by ${event.assigned_to_admin}` : '';
-        const date = event.timestamp ? formatDistanceToNow(parseISO(event.timestamp), { addSuffix: true }) : 'Unknown';
-        return `Under review ${assignedTo} ${date}`;
-      },
-    },
-    {
-      key: 'approved',
-      label: 'Approved',
-      icon: <CheckCircle2 size={24} color="#059669" />,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-100',
-      getMetadata: (event) => {
-        const approvedBy = event.approved_by || 'System';
-        const date = event.timestamp ? formatDistanceToNow(parseISO(event.timestamp), { addSuffix: true }) : 'Unknown';
-        return `Approved by ${approvedBy} ${date}`;
-      },
-    },
-    {
-      key: 'rejected',
-      label: 'Rejected',
-      icon: <XCircle size={24} color="#dc2626" />,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
-      getMetadata: (event) => {
-        const reason = event.reason || 'No reason provided';
-        const date = event.timestamp ? formatDistanceToNow(parseISO(event.timestamp), { addSuffix: true }) : 'Unknown';
-        return `${reason} ${date}`;
-      },
-    },
   ];
 
   return (
     <View className="space-y-4">
-      <Text className="text-lg font-semibold text-gray-900">Application Progress</Text>
+      <Text className="text-lg font-semibold text-gray-900">Your Progress</Text>
 
       <View className="relative space-y-0">
         {stages.map((stage, index) => {

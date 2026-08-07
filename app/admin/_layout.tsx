@@ -15,20 +15,13 @@ export default function AdminLayout() {
   const [signingOut, setSigningOut] = useState(false);
   const insets = useSafeAreaInsets();
 
-  // Diagnostic: trace every render of the admin layout with full state
-  const ts = new Date().toISOString().slice(11, 23);
-  console.log(`[AUTH-FORENSIC ${ts}] AdminLayout render: session=${!!session} loading=${loading} profileReady=${profileReady} adminUser=${!!adminUser}`);
-
   if (loading || !profileReady) {
-    console.log(`[AUTH-FORENSIC ${ts}] AdminLayout: loading/!profileReady → LoadingScreen`);
     return <LoadingScreen />;
   }
   if (!session) {
-    console.log(`[AUTH-FORENSIC ${ts}] AdminLayout: no session → Redirect to login`);
     return <Redirect href="/(auth)/login" />;
   }
   if (!adminUser) {
-    console.log(`[AUTH-FORENSIC ${ts}] AdminLayout: not admin → Redirect to dashboard`);
     return <Redirect href="/(dashboard)" />;
   }
 
