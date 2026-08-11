@@ -186,7 +186,7 @@ export function useRazorpayCheckout(): UseRazorpayCheckoutReturn {
         throw new Error('Invalid order response');
       }
 
-      const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
+      const keyId = orderData.key_id || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
       if (!keyId) {
         throw new Error('Razorpay configuration missing (EXPO_PUBLIC_RAZORPAY_KEY_ID)');
       }

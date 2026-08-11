@@ -21,6 +21,7 @@ interface RazorpayOrderResponse {
   attempts: number;
   notes: Record<string, unknown>;
   created_at: number;
+  key_id?: string;
 }
 
 interface RazorpaySuccessResponse {
@@ -119,7 +120,7 @@ export function RazorpayCheckout() {
   const handleCheckout = async (order: RazorpayOrderResponse) => {
     if (__DEV__) console.log('2️⃣ Opening Razorpay checkout...');
 
-    const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
+    const keyId = order.key_id || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
     if (!keyId) {
       Alert.alert('Error', 'Razorpay configuration missing');
       return;

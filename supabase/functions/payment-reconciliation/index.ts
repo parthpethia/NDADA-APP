@@ -270,7 +270,7 @@ serve(async (req) => {
                   template_name: 'payment_received',
                   data: {
                     name: memberAcc.full_name || 'Member',
-                    amount: String(payment.amount || '300'),
+                    amount: String(payment.amount ? Math.round(Number(payment.amount) > 1000 ? Number(payment.amount) / 100 : Number(payment.amount)) : '300'),
                     membership_id: memberAcc.membership_id || 'NDADA-MEM',
                   },
                 },

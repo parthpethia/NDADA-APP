@@ -17,6 +17,7 @@ type CreateOrderResponse = {
   attempts: number;
   notes: Record<string, unknown>;
   created_at: number;
+  key_id?: string;
 };
 
 serve(async (req) => {
@@ -288,6 +289,7 @@ serve(async (req) => {
       attempts: 0,
       notes: payload.notes,
       created_at: Math.floor(Date.now() / 1000),
+      key_id: razorpayKeyId,
     };
 
     return new Response(JSON.stringify(response), {
