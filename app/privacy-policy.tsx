@@ -137,7 +137,7 @@ export default function PrivacyPolicyScreen() {
           <Text className="text-lg font-bold text-gray-900 mb-2">8. Contact Us</Text>
           <Text className="text-sm text-gray-600 leading-5">
             If you have questions about this Privacy Policy, wish to exercise your data rights, or want to request account deletion, please contact Nagpur District Agro Dealers Association (NDADA) at:
-            {'\n'}Email: support@ndada.org
+            {'\n'}Email: parth@ndada.in
           </Text>
         </View>
       </ScrollView>
