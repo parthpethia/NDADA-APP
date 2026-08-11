@@ -32,6 +32,8 @@ export default function AuthLayout() {
     ? (
         window.location.hash.includes('type=recovery') ||
         window.location.search.includes('type=recovery') ||
+        window.location.search.includes('token_hash') ||
+        window.location.search.includes('code=') ||
         window.location.hash.includes('access_token') ||
         window.location.hash.includes('error=') ||
         window.location.search.includes('error=')

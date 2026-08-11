@@ -310,10 +310,21 @@ export const supabase = (globalScope.__ndadaSupabase__ ??= createSupabaseClient(
 // When landing on a password-recovery URL, clear any stale session from
 // localStorage BEFORE the AuthProvider calls getSession(). This prevents
 // Supabase's internal auto-refresh from firing a 400 "Invalid Refresh Token"
-// error against an expired token that was left over from a previous login.
+// error against an expired token that was left over from a previous login,
+// and guarantees the reset session is bound exclusively to the recovery recipient.
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  const hash = window.location.hash;
-  if (hash && hash.includes('type=recovery')) {
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  const pathname = window.location.pathname || '';
+  const isRecoveryUrl =
+    hash.includes('type=recovery') ||
+    hash.includes('access_token') ||
+    search.includes('type=recovery') ||
+    search.includes('token_hash') ||
+    search.includes('code=') ||
+    pathname.includes('reset-password');
+
+  if (isRecoveryUrl) {
     try {
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('sb-') && key.includes('auth-token')) {

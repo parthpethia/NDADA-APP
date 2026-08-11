@@ -7,12 +7,25 @@ import { Button, Input } from '@/components/ui';
 import { APP_NAME } from '@/constants';
 
 export default function ResetPasswordScreen() {
+  const localParams = useLocalSearchParams<{
+    token_hash?: string;
+    token?: string;
+    type?: string;
+    code?: string;
+    access_token?: string;
+    refresh_token?: string;
+    error?: string;
+    error_code?: string;
+    error_description?: string;
+  }>();
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [targetEmail, setTargetEmail] = useState('');
   const url = Linking.useURL();
   const processedUrlRef = useRef<string | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -20,10 +33,17 @@ export default function ResetPasswordScreen() {
   useEffect(() => {
     // Helper to check if an active recovery session exists
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setSessionReady(true);
-        return true;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          if (session.user.email) {
+            setTargetEmail(session.user.email);
+          }
+          setSessionReady(true);
+          return true;
+        }
+      } catch (err) {
+        console.warn('checkSession error:', err);
       }
       return false;
     };
@@ -50,6 +70,16 @@ export default function ResetPasswordScreen() {
           new URLSearchParams(rawHash).forEach((v, k) => params.set(k, v));
         }
 
+        // Merge local expo-router params as fallback
+        if (localParams.token_hash && !params.has('token_hash')) params.set('token_hash', String(localParams.token_hash));
+        if (localParams.token && !params.has('token')) params.set('token', String(localParams.token));
+        if (localParams.code && !params.has('code')) params.set('code', String(localParams.code));
+        if (localParams.type && !params.has('type')) params.set('type', String(localParams.type));
+        if (localParams.access_token && !params.has('access_token')) params.set('access_token', String(localParams.access_token));
+        if (localParams.refresh_token && !params.has('refresh_token')) params.set('refresh_token', String(localParams.refresh_token));
+        if (localParams.error && !params.has('error')) params.set('error', String(localParams.error));
+        if (localParams.error_description && !params.has('error_description')) params.set('error_description', String(localParams.error_description));
+
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         const code = params.get('code');
@@ -66,22 +96,34 @@ export default function ResetPasswordScreen() {
           return false;
         }
 
+        // 1. PKCE Code Exchange
         if (code) {
-          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch {}
+
+          const { data: codeData, error: codeError } = await supabase.auth.exchangeCodeForSession(code);
           if (codeError) {
             setError(`Failed to verify reset code: ${codeError.message}`);
             return false;
+          }
+          if (codeData?.user?.email) {
+            setTargetEmail(codeData.user.email);
+          }
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.history.replaceState(null, '', window.location.pathname);
           }
           setSessionReady(true);
           return true;
         }
 
+        // 2. Access Token + Refresh Token (Implicit grant)
         if (accessToken && refreshToken) {
           try {
             await supabase.auth.signOut({ scope: 'local' });
           } catch {}
 
-          const { error: sessionError } = await supabase.auth.setSession({
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
@@ -91,6 +133,9 @@ export default function ResetPasswordScreen() {
             return false;
           }
 
+          if (sessionData?.user?.email) {
+            setTargetEmail(sessionData.user.email);
+          }
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             window.history.replaceState(null, '', window.location.pathname);
           }
@@ -98,12 +143,20 @@ export default function ResetPasswordScreen() {
           return true;
         }
 
+        // 3. Token Hash OTP Verification
         if (tokenHash && (type === 'recovery' || !type)) {
-          const { error: verifyErr } = await supabase.auth.verifyOtp({
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch {}
+
+          const { data: otpData, error: verifyErr } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: 'recovery',
           });
           if (!verifyErr) {
+            if (otpData?.user?.email) {
+              setTargetEmail(otpData.user.email);
+            }
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
               window.history.replaceState(null, '', window.location.pathname);
             }
@@ -121,9 +174,12 @@ export default function ResetPasswordScreen() {
     };
 
     const processUrlOrSession = async () => {
-      if (url && processedUrlRef.current !== url) {
-        processedUrlRef.current = url;
-        const handled = await handleRecoveryUrl(url);
+      // Prioritize synchronous web URL for 0ms instantaneous extraction
+      const effectiveUrl = (Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : null) || url;
+
+      if (effectiveUrl && processedUrlRef.current !== effectiveUrl) {
+        processedUrlRef.current = effectiveUrl;
+        const handled = await handleRecoveryUrl(effectiveUrl);
         if (handled) return;
       }
 
@@ -148,7 +204,7 @@ export default function ResetPasswordScreen() {
         clearTimeout(retryTimerRef.current);
       }
     };
-  }, [url]);
+  }, [url, localParams]);
 
   const handleUpdatePassword = async () => {
     // Prevent double-submission
@@ -207,9 +263,11 @@ export default function ResetPasswordScreen() {
         return;
       }
 
-      console.log('Password successfully updated!');
+      console.log('Password successfully updated in database!');
+      setPassword('');
+      setConfirmPassword('');
 
-      // Sign out the temporary recovery session so the user can sign in cleanly
+      // Sign out the temporary recovery session so the user can sign in cleanly with their new password
       try {
         await supabase.auth.signOut({ scope: 'local' });
       } catch (soErr) {
@@ -254,7 +312,7 @@ export default function ResetPasswordScreen() {
               </View>
 
               <Text className="text-center text-gray-600 mb-6">
-                Your password has been successfully reset. You can now sign in with your new password.
+                Your password has been successfully updated in the system. You can now sign in with your new password.
               </Text>
 
               <Button
@@ -291,6 +349,17 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View className="rounded-2xl bg-white p-6 shadow-sm">
+            {targetEmail ? (
+              <View className="mb-4 rounded-xl bg-primary-50 border border-primary-100 p-3 items-center">
+                <Text className="text-xs font-semibold text-primary-700 uppercase tracking-wider">
+                  Verified Account
+                </Text>
+                <Text className="text-sm font-bold text-primary-900 mt-0.5">
+                  {targetEmail}
+                </Text>
+              </View>
+            ) : null}
+
             {!sessionReady ? (
               <View className="mb-4 rounded-lg bg-yellow-50 p-3">
                 <Text className="text-sm text-yellow-700">
@@ -315,7 +384,7 @@ export default function ResetPasswordScreen() {
 
             <Input
               label="New Password"
-              placeholder="Enter new password"
+              placeholder="Enter new password (min. 6 chars)"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -347,3 +416,4 @@ export default function ResetPasswordScreen() {
     </KeyboardAvoidingView>
   );
 }
+
