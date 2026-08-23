@@ -816,7 +816,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (email: string) => {
     try {
-      const appUrl = (process.env.EXPO_PUBLIC_APP_URL || 'http://localhost:8081').replace(/\/$/, '');
+      const appUrl = (process.env.EXPO_PUBLIC_APP_URL || 'https://ndada.in').replace(/\/$/, '');
       const redirectUrl = `${appUrl}/reset-password`;
       authLog(`resetPassword() START for ${email} with redirectTo: ${redirectUrl}`);
 

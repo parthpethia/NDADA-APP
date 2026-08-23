@@ -1,6 +1,6 @@
 {
   "name": "ndada-app",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -13,6 +13,7 @@
     "build:android": "node scripts/build-android.js",
     "build:apk": "node scripts/build-apk.js",
     "build:apk-debug": "node scripts/build-apk.js --debug",
+    "build:aab": "node scripts/make-release.js",
     "install:android": "node scripts/install-aab.js",
     "vercel-build": "npm run build:web",
     "lint": "tsc --noEmit"

@@ -1,6 +1,7 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { verifyApk } = require('./verify-apk');
 
 const projectRoot = path.resolve(__dirname, '..');
 const androidDir = path.join(projectRoot, 'android');
@@ -34,11 +35,35 @@ if (fs.existsSync(tempMetroCache)) {
   }
 }
 
+function deleteCxxDirs(dir) {
+  if (!fs.existsSync(dir)) return;
+  try {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          if (file === '.cxx') {
+            console.log(`Deleting C++ build cache: ${fullPath}`);
+            try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
+          } else if (file !== '.git') {
+            deleteCxxDirs(fullPath);
+          }
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+
 const cleanMode = process.argv.includes('--clean');
 const debugMode = process.argv.includes('--debug');
 
+console.log('=== [1/2] Purging stale C++ CMake build caches (.cxx) to ensure fresh native builds ===');
+deleteCxxDirs(androidDir);
+deleteCxxDirs(path.join(projectRoot, 'node_modules'));
+
 if (cleanMode) {
-  console.log('=== [1/2] Clean mode requested: Stopping lingering daemons and purging caches ===');
   if (process.platform === 'win32') {
     try { spawnSync('taskkill', ['/F', '/IM', 'java.exe'], { stdio: 'ignore' }); } catch (e) {}
     try { spawnSync('powershell', ['-Command', 'Start-Sleep -Seconds 2'], { stdio: 'ignore' }); } catch (e) {}
@@ -54,43 +79,22 @@ if (cleanMode) {
       try { fs.rmSync(f, { force: true }); } catch (e) {}
     }
   });
-
-  function deleteCxxDirs(dir) {
-    if (!fs.existsSync(dir)) return;
-    try {
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        const fullPath = path.join(dir, file);
-        try {
-          const stat = fs.statSync(fullPath);
-          if (stat.isDirectory()) {
-            if (file === '.cxx') {
-              console.log(`Deleting C++ build cache: ${fullPath}`);
-              try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
-            } else if (file !== '.git') {
-              deleteCxxDirs(fullPath);
-            }
-          }
-        } catch (e) {}
-      }
-    } catch (e) {}
-  }
-
-  deleteCxxDirs(androidDir);
-  deleteCxxDirs(path.join(projectRoot, 'node_modules'));
-} else {
-  console.log('=== [1/2] Incremental build enabled (preserving C++ caches for speed) ===');
 }
 
 if (!process.env.GRADLE_USER_HOME) {
   process.env.GRADLE_USER_HOME = path.join(projectRoot, '.gradle-user-home');
 }
-process.env.METRO_CACHE_DIR = path.join(projectRoot, '.metro-cache');
 process.env.NODE_ENV = 'production';
 process.env.NODE_OPTIONS = '--max-old-space-size=4096';
 
 const buildType = debugMode ? 'Debug' : 'Release';
 console.log(`=== [2/2] Building ${buildType} Android APK ===`);
+if (debugMode) {
+  console.warn(
+    'WARNING: Debug APK requires Metro (`npx expo start`) on your PC. ' +
+      'For standalone phone installs use: npm run build:apk'
+  );
+}
 
 const sourcemapDir = path.join(androidDir, 'app', 'build', 'intermediates', 'sourcemaps', 'react', debugMode ? 'debug' : 'release');
 const assetsDir = path.join(androidDir, 'app', 'build', 'generated', 'assets', 'react', debugMode ? 'debug' : 'release');
@@ -136,6 +140,16 @@ const rootApk = path.join(projectRoot, apkFileName);
 const downloadsApk = path.join(userHome, 'Downloads', apkFileName);
 
 if (res.status === 0 && fs.existsSync(apkPath)) {
+  const verification = verifyApk(apkPath, { expectRelease: !debugMode });
+  verification.warnings.forEach((w) => console.warn(`APK verify: ${w}`));
+  if (!verification.ok) {
+    console.error('===============================================');
+    console.error(' ERROR: APK built but failed standalone release verification.');
+    verification.errors.forEach((e) => console.error(`  - ${e}`));
+    console.error('===============================================');
+    process.exit(1);
+  }
+
   try {
     fs.copyFileSync(apkPath, rootApk);
     console.log(`Copied APK to Project Root: ${rootApk}`);
@@ -157,6 +171,9 @@ if (res.status === 0 && fs.existsSync(apkPath)) {
   console.log(` Output File 1 (Project Root): ${rootApk}`);
   console.log(` Output File 2 (Downloads): ${downloadsApk}`);
   console.log(` Size: ${size} MB`);
+  if (!debugMode) {
+    console.log(' Standalone: embedded JS bundle verified (no Metro required).');
+  }
   console.log('===============================================');
   process.exit(0);
 } else {

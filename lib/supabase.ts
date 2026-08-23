@@ -4,8 +4,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const DEFAULT_SUPABASE_URL = 'https://mtnbscscwijowozhchfi.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bmJzY3Njd2lqb3dvemhjaGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNDM2NTQsImV4cCI6MjA5MDkxOTY1NH0.LaeJTM_jiY7FXEjo9fslXzAYzBwGZzqk0hKXQ4vqq9w';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 // ── Forensic Diagnostic Logging ───────────────────────────────────────────────
 // Traces storage adapter latency, HTTP requests/responses, and Supabase client state.
@@ -18,14 +22,14 @@ const sbLog = (msg: string, data?: unknown) => {
   }
 };
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+  supabaseAnonKey &&
+  !supabaseUrl.includes('placeholder')
+);
 
-if (!isSupabaseConfigured) {
-  console.warn(
-    'Missing Supabase env vars. Create a .env file from .env.example:\n' +
-    '  cp .env.example .env\n' +
-    'Then fill in EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY'
-  );
+if (!process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
+  sbLog('[Supabase] EXPO_PUBLIC env vars missing at bundle time; using project fallback credentials.');
 }
 
 const CHUNK_SIZE = 1800;
@@ -277,8 +281,8 @@ const fetchWithRetry: typeof fetch = async (url, options) => {
 
 const createSupabaseClient = () =>
   createClient(
-    supabaseUrl || 'https://placeholder.supabase.co',
-    supabaseAnonKey || 'placeholder-key',
+    supabaseUrl,
+    supabaseAnonKey,
     {
       global: {
         fetch: fetchWithRetry,

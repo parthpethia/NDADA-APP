@@ -22,6 +22,8 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+.metro-cache/
+.export-test-android/
 
 # debug
 npm-debug.*

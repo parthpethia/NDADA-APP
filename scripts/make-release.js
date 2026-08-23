@@ -6,6 +6,13 @@ const projectRoot = path.resolve(__dirname, '..');
 const androidDir = path.join(projectRoot, 'android');
 const userHome = process.env.USERPROFILE || 'C:\\Users\\Atul';
 
+// Ensure Gradle and CLI use Android Studio's bundled JDK 21
+const jbrHome = 'C:\\Program Files\\Android\\Android Studio\\jbr';
+if (fs.existsSync(jbrHome)) {
+  process.env.JAVA_HOME = jbrHome;
+  process.env.PATH = `${path.join(jbrHome, 'bin')}${path.delimiter}${process.env.PATH}`;
+}
+
 // Load .env into process.env if available
 const envPath = path.join(projectRoot, '.env');
 if (fs.existsSync(envPath)) {
@@ -77,12 +84,16 @@ process.env.METRO_CACHE_DIR = path.join(projectRoot, '.metro-cache');
 process.env.NODE_ENV = 'production';
 process.env.NODE_OPTIONS = '--max-old-space-size=4096';
 
+if (process.platform === 'win32') {
+  try { spawnSync('taskkill', ['/F', '/IM', 'java.exe'], { stdio: 'ignore' }); } catch (e) {}
+}
+
 const sourcemapDir = path.join(androidDir, 'app', 'build', 'intermediates', 'sourcemaps', 'react', 'release');
 const assetsDir = path.join(androidDir, 'app', 'build', 'generated', 'assets', 'react', 'release');
 fs.mkdirSync(sourcemapDir, { recursive: true });
 fs.mkdirSync(assetsDir, { recursive: true });
 
-const res = spawnSync(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['bundleRelease'], {
+const res = spawnSync(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['bundleRelease', '--stacktrace'], {
   cwd: androidDir,
   stdio: 'inherit',
   shell: true,
