@@ -4,6 +4,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 type CreateOrderResponse = {
   id: string;
@@ -83,14 +85,18 @@ serve(async (req) => {
       });
     }
 
-    // Get member_id from request body or fetch from auth
-    let memberId = '';
-    try {
-      const body = await req.json();
-      memberId = String(body?.member_id || '').trim();
-    } catch (e) {
-      console.warn('⚠️ Could not parse request body');
+    // Rate limit check: Max 10 order creation attempts per 5 mins
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'create_order', 10, 300, user.id);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
     }
+
+    // Validate request payload size (Max 512KB) & parse JSON
+    const { data: body, errorResponse } = await validateAndParseJson(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
+
+    // Get member_id from request body or fetch from auth
+    let memberId = String(body?.member_id || '').trim();
 
     // If no member_id, fetch from account
     if (!memberId) {

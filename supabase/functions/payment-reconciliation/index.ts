@@ -3,6 +3,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 serve(async (req) => {
   const corsHeaders = {
@@ -33,10 +35,21 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Rate limit check: Max 20 reconciliation triggers per 5 mins
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'reconciliation', 20, 300);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
+    }
+
+    // Validate payload size (Max 512KB) & parse JSON safely
+    const { data: bodyData, errorResponse } = await validateAndParseJson(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
+
     const authHeader = 'Basic ' + btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
 
     // Parse request body for optional member_id parameter
-    const body = await req.json().catch(() => ({}));
+    const body = bodyData || {};
     const targetMemberId = body?.member_id;
     const force = !!body?.force;
 

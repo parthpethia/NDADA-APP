@@ -1,6 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -434,8 +436,18 @@ serve(async (req) => {
     });
   }
 
+  // Rate limit check: Max 10 email dispatches per 10 mins per caller
+  const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'send_email', 10, 600);
+  if (!rateLimitResult.allowed && rateLimitResult.response) {
+    return rateLimitResult.response;
+  }
+
+  // Validate payload size (Max 1MB) & parse JSON safely
+  const { data: payloadData, errorResponse } = await validateAndParseJson(req, 1024 * 1024);
+  if (errorResponse) return errorResponse;
+
   try {
-    const payload = await req.json() as any;
+    const payload = (payloadData || {}) as any;
     const { to, template_name: templateName, data, attachments, from: customFrom, action } = payload;
 
     // Direct password reset request handling

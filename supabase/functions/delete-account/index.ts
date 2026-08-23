@@ -1,6 +1,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -66,6 +68,16 @@ serve(async (req) => {
 
     const userId = user.id;
     console.log(`👤 Authenticated user for deletion: ${userId}`);
+
+    // Rate limit check: Max 3 account deletion requests per hour
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'delete_account', 3, 3600, userId);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
+    }
+
+    // Validate request payload size (Max 512KB) & parse JSON
+    const { errorResponse } = await validateAndParseJson(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
 
     // Fetch the account to verify it exists and get its internal ID
     const { data: account, error: accountError } = await supabase

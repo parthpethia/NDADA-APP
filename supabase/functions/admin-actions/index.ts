@@ -3,6 +3,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 import { jsPDF } from 'https://esm.sh/jspdf@2.5.1';
 import autoTable from 'https://esm.sh/jspdf-autotable@3.8.2';
@@ -38,6 +40,16 @@ serve(async (req) => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
     if (authErr || !user) throw new Error('Unauthorized');
 
+    // Rate limit check: Max 60 admin operations per minute
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'admin_action', 60, 60, user.id);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
+    }
+
+    // Validate payload size (Max 2MB) & parse JSON safely
+    const { data: bodyData, errorResponse } = await validateAndParseJson(req, 2 * 1024 * 1024);
+    if (errorResponse) return errorResponse;
+
     // 2. Fetch target Admin User profile inside admin_users
     const { data: adminUser } = await supabase
       .from('admin_users')
@@ -47,7 +59,7 @@ serve(async (req) => {
 
     if (!adminUser) throw new Error('Not an admin');
 
-    const body = await req.json();
+    const body = (bodyData || {}) as any;
     const { action, ...params } = body;
 
     // Helper to enforce permissions check

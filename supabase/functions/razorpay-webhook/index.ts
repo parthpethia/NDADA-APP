@@ -2,6 +2,7 @@
 // Verifies Razorpay webhook signature and marks payments/members as paid.
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
 
 // ============================================================
 // Crypto helpers (Web Crypto API available in Deno)
@@ -52,10 +53,25 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Rate limit check: Max 120 webhook triggers per min per IP
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'webhook_event', 120, 60);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
+    }
+
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > 512 * 1024) {
+      return new Response(JSON.stringify({ error: 'Payload Too Large' }), { status: 413 });
+    }
+
     const signatureHeader = req.headers.get('x-razorpay-signature') || req.headers.get('X-Razorpay-Signature');
     if (!signatureHeader) throw new Error('Missing signature');
 
     const bodyText = await req.text();
+    if (bodyText.length > 512 * 1024) {
+      return new Response(JSON.stringify({ error: 'Payload Too Large' }), { status: 413 });
+    }
     const computed = await hmacSha256Hex(webhookSecret, bodyText);
     if (!timingSafeEqualHex(computed, signatureHeader)) {
       return new Response(JSON.stringify({ error: 'Invalid signature' }), {

@@ -1,10 +1,19 @@
 const { withNativeWind } = require('nativewind/metro');
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
-const { FileStore } = require('metro-cache');
 
 const config = getDefaultConfig(__dirname);
 
+// Limit max workers to avoid Windows child process spawning issues (jest-worker spawn UNKNOWN)
+config.maxWorkers = 2;
+
+// Exclude build & cache directories from file watching
+config.resolver.blockList = [
+  /.*[\/\\]\.gradle-user-home[\/\\].*/,
+  /.*[\/\\]\.android-home[\/\\].*/,
+  /.*[\/\\]\.export-test-android[\/\\].*/,
+  /.*[\/\\]android[\/\\]app[\/\\]build[\/\\].*/,
+  /.*[\/\\]android[\/\\]build[\/\\].*/,
+];
 
 // Force Metro to resolve tslib to ES6 version ONLY on web to prevent __extends errors while maintaining native Android compatibility
 const defaultResolveRequest = config.resolver.resolveRequest;

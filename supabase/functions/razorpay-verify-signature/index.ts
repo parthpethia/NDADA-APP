@@ -4,6 +4,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 // ============================================================
 // HMAC-SHA256 Signature Verification
@@ -101,9 +103,17 @@ serve(async (req) => {
       });
     }
 
-    // Parse request body
-    const body = await req.json() as VerifySignatureRequest;
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
+    // Rate limit check: Max 15 signature verification attempts per 5 mins
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'verify_signature', 15, 300, user.id);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
+    }
+
+    // Validate request payload size (Max 512KB) & parse JSON
+    const { data: body, errorResponse } = await validateAndParseJson<VerifySignatureRequest>(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body || {};
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return new Response(JSON.stringify({

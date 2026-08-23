@@ -1,0 +1,27 @@
+[build]
+  command = "npm run build:web && node scripts/copy-public.js"
+  publish = "dist"
+
+[build.environment]
+  SECRETS_SCAN_ENABLED = "false"
+  SECRETS_SCAN_OMIT_KEYS = "EXPO_PUBLIC_APP_URL,EXPO_PUBLIC_SUPABASE_ANON_KEY,EXPO_PUBLIC_SUPABASE_URL,RESEND_FROM_EMAIL,EXPO_PUBLIC_RESEND_API_KEY,EXPO_PUBLIC_RAZORPAY_KEY_ID,EXPO_PUBLIC_MEMBERSHIP_AMOUNT,EXPO_PUBLIC_MEMBERSHIP_CURRENCY"
+
+[[redirects]]
+  from = "/privacy-policy.html"
+  to = "/privacy-policy.html"
+  status = 200
+
+[[redirects]]
+  from = "/terms-of-service.html"
+  to = "/terms-of-service.html"
+  status = 200
+
+[[redirects]]
+  from = "/data-deletion.html"
+  to = "/data-deletion.html"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -8,6 +8,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -31,6 +33,16 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Rate limit check: Max 60 queue runner invocations per minute
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'process_cert_queue', 60, 60);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
+    }
+
+    // Validate request payload size (Max 512KB)
+    const { errorResponse } = await validateAndParseJson(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
 
     // Fetch the next pending job using FOR UPDATE SKIP LOCKED
     const { data: jobs, error: jobErr } = await supabase

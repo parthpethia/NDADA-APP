@@ -6,6 +6,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import QRCode from 'https://esm.sh/qrcode@1.5.3';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 // ============================================================
 // MODULE-LEVEL CACHE — persists across invocations within the
@@ -68,9 +70,11 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Validate request payload size (Max 512KB) & parse JSON
+    const { data: bodyData, errorResponse } = await validateAndParseJson(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
 
-    const { member_id } = await req.json();
+    const { member_id } = (bodyData || {}) as any;
 
     if (!member_id) {
       return new Response(JSON.stringify({ error: 'member_id required' }), {
@@ -126,33 +130,10 @@ serve(async (req) => {
       }
     }
 
-    if (!isServiceRole && userId) {
-      const { data: rateLimitResult, error: rpcErr } = await supabase.rpc('check_rate_limit', {
-        p_user_id: userId,
-        p_action_type: 'certificate',
-        p_max_requests: 3,
-        p_window_seconds: 60
-      });
-
-      if (rpcErr) {
-        console.error('Rate limit check failed:', rpcErr.message);
-      } else if (rateLimitResult && typeof rateLimitResult === 'object') {
-        const { allowed, retry_after } = rateLimitResult as { allowed: boolean; retry_after: number };
-        if (!allowed) {
-          console.log(`Rate limit exceeded for user ${userId} on certificate generation. Retry after ${retry_after}s`);
-          return new Response(JSON.stringify({
-            error: `Rate limit exceeded: You can only generate 3 certificates per minute. Please try again in ${retry_after} seconds.`,
-            retry_after,
-            status: 'rate_limited',
-          }), {
-            status: 429,
-            headers: { 
-              ...corsHeaders, 
-              'Content-Type': 'application/json',
-              'Retry-After': String(retry_after)
-            },
-          });
-        }
+    if (!isServiceRole) {
+      const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'certificate', 3, 60, userId);
+      if (!rateLimitResult.allowed && rateLimitResult.response) {
+        return rateLimitResult.response;
       }
     }
 

@@ -26,8 +26,8 @@ export const getCorsHeaders = (req: Request): Record<string, string> => {
     ) {
       allowedOrigin = origin;
     } else {
-      // Fallback to requesting origin so custom domains or webviews never break
-      allowedOrigin = origin;
+      // Fallback strictly to canonical domain for untrusted origins
+      allowedOrigin = 'https://ndada.in';
     }
   }
   

@@ -3,6 +3,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { checkEdgeRateLimit } from '../_shared/rate-limiter.ts';
+import { validateAndParseJson } from '../_shared/request-validator.ts';
 
 type CreateLinkResponse = {
   payment_link_id: string;
@@ -89,14 +91,18 @@ serve(async (req) => {
       });
     }
 
-    // Try to get member_id from request body
-    let memberId = '';
-    try {
-      const body = await req.json();
-      memberId = String(body?.member_id || '').trim();
-    } catch (e) {
-      // Body might be empty
+    // Rate limit check: Max 5 payment link creations per 5 mins
+    const rateLimitResult = await checkEdgeRateLimit(req, supabase, 'create_payment_link', 5, 300, user.id);
+    if (!rateLimitResult.allowed && rateLimitResult.response) {
+      return rateLimitResult.response;
     }
+
+    // Validate request payload size (Max 512KB) & parse JSON
+    const { data: body, errorResponse } = await validateAndParseJson(req, 512 * 1024);
+    if (errorResponse) return errorResponse;
+
+    // Try to get member_id from request body
+    let memberId = String(body?.member_id || '').trim();
 
     // If no member_id in body but user is authenticated, fetch from database
     if (!memberId) {
