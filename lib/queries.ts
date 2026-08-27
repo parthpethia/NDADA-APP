@@ -34,14 +34,20 @@ function toPostgrestError(err: any, fallbackMessage: string): PostgrestError {
     errMsg.includes('econnreset') ||
     errMsg.includes('etimedout');
 
+  const message = isNetworkError
+    ? `Network error (unable to reach server): ${err?.message || fallbackMessage}`
+    : err?.message || fallbackMessage;
+  const details = err?.details || '';
+  const hint = err?.hint || '';
+  const code = isNetworkError ? 'NETWORK_ERROR' : err?.code || 'UNKNOWN';
+
   return {
     name: 'PostgrestError',
-    message: isNetworkError
-      ? `Network error (unable to reach server): ${err?.message || fallbackMessage}`
-      : err?.message || fallbackMessage,
-    details: err?.details || '',
-    hint: err?.hint || '',
-    code: isNetworkError ? 'NETWORK_ERROR' : err?.code || 'UNKNOWN',
+    message,
+    details,
+    hint,
+    code,
+    toJSON: () => ({ name: 'PostgrestError', message, details, hint, code }),
   };
 }
 

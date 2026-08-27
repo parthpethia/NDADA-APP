@@ -24,7 +24,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "babel-preset-expo": "~54.0.10",
     "date-fns": "^4.1.0",
-    "expo": "~54.0.0",
+    "expo": "~54.0.37",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",
     "expo-document-picker": "~14.0.8",
@@ -51,12 +51,12 @@
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "^0.21.0",
     "react-native-worklets": "0.5.1",
-    "supabase": "^2.98.1",
     "tailwindcss": "^3.4.17",
     "zod": "3.24.2"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "supabase": "^2.98.1",
     "typescript": "~5.9.2"
   },
   "private": true

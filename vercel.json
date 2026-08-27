@@ -1,6 +1,38 @@
 {
   "buildCommand": "npm run vercel-build && node scripts/copy-public.js",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/index.php/(.*)",
+      "statusCode": 410,
+      "destination": "/"
+    },
+    {
+      "source": "/index.php",
+      "statusCode": 410,
+      "destination": "/"
+    },
+    {
+      "source": "/(.*)\\.php(.*)",
+      "statusCode": 410,
+      "destination": "/"
+    },
+    {
+      "source": "/wp-(.*)",
+      "statusCode": 410,
+      "destination": "/"
+    },
+    {
+      "source": "/\\.env(.*)",
+      "statusCode": 410,
+      "destination": "/"
+    },
+    {
+      "source": "/\\.git(.*)",
+      "statusCode": 410,
+      "destination": "/"
+    }
+  ],
   "rewrites": [
     {
       "source": "/privacy-policy.html",
@@ -18,5 +50,39 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "headers": [
+    {
+      "source": "/_expo/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
   ]
 }
+

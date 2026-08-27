@@ -20,6 +20,7 @@ CREATE OR REPLACE FUNCTION public.get_user_profile(p_user_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
+
 SET search_path = public
 AS $$
 DECLARE

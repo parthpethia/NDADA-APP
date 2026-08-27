@@ -2,6 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -15,6 +16,12 @@
     "nativewind-env.d.ts"
   ],
   "exclude": [
+    "node_modules",
+    "dist",
+    ".expo",
+    ".export-test-android",
+    "android",
     "supabase/functions"
   ]
 }
+

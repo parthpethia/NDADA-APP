@@ -41,39 +41,30 @@ if (fs.existsSync(tempMetroCache)) {
   }
 }
 
-const cleanMode = process.argv.includes('--clean');
-
-if (cleanMode) {
-  console.log('=== [1/2] Clean mode requested: Cleaning stale C++ CMake build caches (.cxx) ===');
-  function deleteCxxDirs(dir) {
-    if (!fs.existsSync(dir)) return;
-    try {
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        const fullPath = path.join(dir, file);
-        try {
-          const stat = fs.statSync(fullPath);
-          if (stat.isDirectory()) {
-            if (file === '.cxx') {
-              console.log(`Deleting C++ build cache: ${fullPath}`);
-              try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
-            } else if (file !== 'node_modules' && file !== '.git') {
-              deleteCxxDirs(fullPath);
-            }
+console.log('=== [1/2] Purging stale C++ CMake build caches (.cxx) to ensure clean native compilation ===');
+function deleteCxxDirs(dir) {
+  if (!fs.existsSync(dir)) return;
+  try {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          if (file === '.cxx') {
+            console.log(`Deleting C++ build cache: ${fullPath}`);
+            try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) {}
+          } else if (file !== '.git') {
+            deleteCxxDirs(fullPath);
           }
-        } catch (e) {}
-      }
-    } catch (e) {}
-  }
-
-  deleteCxxDirs(androidDir);
-  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-reanimated'));
-  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-worklets'));
-  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-screens'));
-  deleteCxxDirs(path.join(projectRoot, 'node_modules', 'react-native-gesture-handler'));
-} else {
-  console.log('=== [1/2] Incremental release build enabled (preserving C++ caches for speed) ===');
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
 }
+
+deleteCxxDirs(androidDir);
+deleteCxxDirs(path.join(projectRoot, 'node_modules'));
 
 console.log('=== [2/2] Building Signed Release Android App Bundle (AAB) ===');
 
@@ -93,7 +84,7 @@ const assetsDir = path.join(androidDir, 'app', 'build', 'generated', 'assets', '
 fs.mkdirSync(sourcemapDir, { recursive: true });
 fs.mkdirSync(assetsDir, { recursive: true });
 
-const res = spawnSync(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['bundleRelease', '--stacktrace'], {
+const res = spawnSync(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['clean', 'bundleRelease', '--stacktrace'], {
   cwd: androidDir,
   stdio: 'inherit',
   shell: true,
@@ -128,13 +119,12 @@ const defaultAab = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'r
 const foundAab = fs.existsSync(defaultAab) ? defaultAab : findAabFile(path.join(androidDir, 'app', 'build'));
 
 const pkgJsonPath = path.join(projectRoot, 'package.json');
-let pkgVersion = '1.3';
+let pkgVersion = '1.5.0';
 if (fs.existsSync(pkgJsonPath)) {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
     if (pkg.version) {
-      const parts = pkg.version.split('.');
-      pkgVersion = parts.slice(0, 2).join('.');
+      pkgVersion = pkg.version;
     }
   } catch (e) {}
 }
