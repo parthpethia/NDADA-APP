@@ -141,7 +141,7 @@ Recommended 3–5 minute demo:
 4. Show the administrator review workflow, if reviewer access is available.
 5. Show certificate access/verification and briefly explain the architecture.
 
-**Demo video:** Add the shareable demo-video URL here before submitting the project form.
+**Demo video:** [Watch the NDADA project demo](https://drive.google.com/drive/folders/1DxTLZDj4Lf74pCaXMaxv-DbJfqk7vjNv?usp=sharing)
 
 ## Project submission details
 
