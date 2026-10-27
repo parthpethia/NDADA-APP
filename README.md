@@ -1,146 +1,155 @@
-# NDADA — Membership App (User Guide)
+# NDADA — Digital Membership Management System
 
-Welcome to NDADA — the Nagpur District Agro Dealers Association membership app. This guide explains, in simple user-focused steps, what the app does and how to use it (registering, applying for membership, paying fees, downloading your certificate, and verifying certificates). This is for end users — not for developers or administrators.
+**Live application:** https://ndada.in  
+**GitHub repository:** https://github.com/parthpethia/NDADA-APP
 
-Website: https://ndada.in
-App: NDADA mobile/web (use the app to manage your membership and certificates)
+NDADA is a membership management application for the Nagpur District Agro Dealers Association. It digitizes the process of applying for membership, submitting business details and documents, paying the registration fee, tracking application decisions, and accessing membership certificates.
 
----
+This repository is also the source code and technical documentation for the End-Term Software Project submission.
 
-## What is NDADA and why join?
+## Problem statement
 
-NDADA helps licensed agro dealers in Nagpur District register as members of the association and receive an official, QR-verified membership certificate. Membership provides:
-- An official NDADA membership certificate (QR verified)
-- District-wide representation and compliance support
-- Eligibility support for government schemes and programs
+Membership administration can involve collecting applications and documents, confirming fee payments, reviewing eligibility, communicating decisions, and issuing certificates. NDADA brings these steps into a single digital workflow for members and association administrators.
 
-Membership requires a one-time registration fee (₹300) and verification of your business/licence documents.
+## Target users
 
----
+- **Agro-dealer members/applicants:** create an account, submit firm and licence information, complete the membership process, and access membership information.
+- **Association administrators:** review applications and documents, manage application status, and handle membership approvals and certificates.
 
-## Quick overview — What you can do in the app
+## Solution and key features
 
-- Create an account and sign in
-- Submit a membership application with your firm details and documents
-- Pay the registration fee (online via payment link or submit manual proof if supported)
-- Track application status: Pending → Approved / Rejected / Revision Required
-- Download and share your official, QR-verified membership certificate after approval
-- Verify any certificate by ID (in-app verify screen or public verification)
-- Manage your profile, privacy settings, and request account deletion if needed
-- Receive email notifications for application updates
+- Account registration and sign-in.
+- Membership application with firm and business/licence details.
+- Document upload for application review.
+- Online membership-fee payment through Razorpay.
+- Application status tracking, including pending, approved, rejected, and revision-required states.
+- Administrative review and membership decision workflow.
+- Membership certificate access and certificate verification by ID/QR, where enabled by the deployed application.
+- Profile and privacy options, including an account-deletion request flow.
+- Email updates for relevant application and membership events, where configured.
 
----
+Feature availability can depend on the deployed configuration and the user's role. The demo should show the workflows that are currently working in the live application.
 
-## Step-by-step: Using NDADA
+## Main workflows
 
-1. Create an account
-   - Open the NDADA app and register with your mobile number or email.
-   - Verify your account using the code or link sent to you.
+### 1. Apply for membership
+A user signs in, enters the required firm and applicant details, and submits the application documents.
 
-2. Start a membership application
-   - From the Dashboard, tap "Apply for Membership" or "Add Firm".
-   - Fill in your firm and personal details (business name, address, district, license details).
-   - Upload required documents (business license, identity proof, any other requested documents).
-   - Note: The app masks sensitive fields like Aadhaar when shown in the UI for privacy.
+### 2. Complete the fee payment
+The applicant follows the Razorpay payment flow. Payment status must be confirmed by the application's payment integration before the application is treated as paid.
 
-3. Pay the registration fee
-   - The app will provide a secure payment link (Razorpay) to complete the ₹300 registration fee.
-   - If manual payment is allowed, follow the instructions to upload payment proof and wait for admin verification.
-   - You’ll receive email updates confirming payment and next steps.
+### 3. Review the application
+An authorized administrator reviews the application and its supporting information, then records an appropriate decision or requests a revision.
 
-4. Wait for verification
-   - Your submitted documents will be reviewed by NDADA staff.
-   - Status updates are shown in the app:
-     - Pending — your application is under review.
-     - Revision Required — you must re-submit or correct documents (email/notification will include reason).
-     - Rejected — application not approved (email will include reason).
-     - Approved — your membership is accepted and certificate is issued.
+### 4. Access and verify a certificate
+After approval and certificate issuance, a member can access the certificate. A verifier can use the certificate verification flow to check its status.
 
-5. Download your certificate
-   - Once approved, go to Dashboard → Certificate (or use the "Download Certificate" button).
-   - You will receive an official certificate with a QR code. You can download or share (PDF).
-   - Certificates are QR-verified so others can confirm authenticity.
+## Engineering and architecture
 
-6. Verify a certificate (public check)
-   - If you need to check a certificate’s authenticity, use the app’s "Verify Certificate" screen and enter the Certificate ID.
-   - The verification screen will show: Member Name, Membership ID, Certificate ID, Issued date, and Status (valid/revoked/suspended).
-   - You can also verify certificates using NDADA’s website verification page (visit https://ndada.in/verify or use the app).
+NDADA is a mobile/web application built with Expo and React Native, using Expo Router for navigation. Supabase provides the backend services used by the app, including authentication, PostgreSQL data storage, and file storage. Razorpay is used for online membership payments, with Supabase Edge Functions supporting privileged actions and payment-related operations.
 
-7. Manage your profile & privacy
-   - Update contact info, address, or business details from Profile.
-   - You may request account deletion from the Profile → Legal / Danger Zone area. Account deletion will anonymize personal data and remove uploaded media per the app’s policy.
+High-level flow:
 
----
+```text
+Member / Administrator
+        |
+        v
+Expo + React Native application
+        |
+        +---- Supabase Auth
+        +---- Supabase database and Storage
+        +---- Supabase Edge Functions
+                         |
+                         +---- Razorpay payment integration
+```
 
-## Common situations & what to do
+### Technology stack
 
-- Application shows "Revision Required"
-  - Check the reason in the notification/email.
-  - Re-upload corrected documents or update the fields requested and re-submit.
-- Application rejected
-  - The rejection email explains why. If eligible, correct the issues and re-apply.
-- Payment failed or not recorded
-  - Check payment confirmation message or email. If charged but not recorded, contact support with your payment reference.
-- Can't find or open your certificate
-  - Ensure your application is in "Approved" status. If approved but certificate missing, contact support.
-- Forgot password / email link not received
-  - Use the Forgot Password flow in the app. If emails don’t arrive, check spam or contact support (see contact section).
+- **Application:** React Native, Expo, Expo Router, TypeScript
+- **Backend services:** Supabase
+- **Database:** PostgreSQL through Supabase
+- **Authentication and file storage:** Supabase Auth and Storage
+- **Payment integration:** Razorpay
+- **Certificate/PDF utilities:** PDF-related JavaScript libraries included in the project
 
----
+## Run locally
 
-## Fees & refund policy (user-facing summary)
+### Prerequisites
 
-- Registration fee: ₹300 (one-time).
-- Fee is non-refundable after the certificate has been approved and issued.
-- If your application is rejected during verification and a refund is applicable, the app or administrators will handle it per NDADA policies.
+- Node.js compatible with the project's Expo SDK
+- npm
+- A Supabase project with the required schema, policies, storage configuration, and Edge Functions
 
----
+### Installation
 
-## Security & private data handling
+```bash
+git clone https://github.com/parthpethia/NDADA-APP.git
+cd NDADA-APP
+npm install
+```
 
-- Sensitive identifiers (like Aadhaar) are masked in the app UI and handled securely.
-- The app supports account deletion and data anonymization if you request it through Profile → Delete account.
-- Email and notifications are sent from NDADA support addresses (e.g., noreply@ndada.in or NDADA Support).
+Create a local `.env.local` file using `.env.local.example` as a reference, and configure the required public application settings for your own Supabase project. Never commit real credentials.
 
----
+Common client configuration variables include:
 
-## Notifications & emails
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- Other `EXPO_PUBLIC_*` variables referenced by the application configuration
 
-You will receive emails for:
-- Application submission confirmation
-- Payment confirmation
-- Application status updates (approved, rejected, revision required)
-- Certificate availability and download links
+Use the repository's [SETUP.md](./SETUP.md) and the Supabase migration/function files for the database and backend setup. Configure server-side secrets, including Supabase service-role and Razorpay secrets, only in the appropriate server-side secret manager or Supabase Edge Function secrets. **Never expose a service-role key or Razorpay secret in client-side code or a public repository.**
 
-If you do not receive emails, check spam/junk folders or contact NDADA support.
+Start the development server:
 
----
+```bash
+npm run start
+```
 
-## Support & contact
+Useful project scripts:
 
-- Website: https://ndada.in
-- In-app support: Open the app and use the Help or Support option in the Profile or Settings screen.
-- Email: Use the support link or contact form on the website for help with payments, certificates, or account issues.
+```bash
+npm run web
+npm run android
+npm run ios
+npm run lint
+npm run build:web
+```
 
----
+Commands requiring native tooling or credentials may need additional local setup. The production website is already deployed; local setup is for development and review.
 
-## Frequently Asked Questions (FAQ)
+## Deployment
 
-Q: How long does verification take?
-A: Verification times vary. You’ll see status updates in the app; typical turnaround depends on document clarity and admin workload.
+- **Live application:** https://ndada.in
+- **Source code:** https://github.com/parthpethia/NDADA-APP
+- **Web build:** `npm run build:web` (exports the web application to `dist/` according to the project scripts)
 
-Q: Can I get a printed certificate?
-A: Yes — download the PDF from the app and print it. The QR code on the certificate verifies authenticity.
+The live site is the primary way to explore the deployed product. Access to member or administrator functionality may require an account with the appropriate permissions.
 
-Q: What if my certificate is revoked later?
-A: The certificate status will show as "revoked" in the verification screen. If you believe this is in error, contact NDADA support.
+## Security notes
 
-Q: Where do I find my Membership ID?
-A: Your Membership ID appears in the Dashboard and on the certificate once approved.
+- Keep service-role keys, payment secrets, webhook secrets, and other privileged credentials out of Git and client bundles.
+- Use database Row Level Security and server-side authorization for protected records and administrative operations.
+- Validate payment state using the trusted payment integration/webhook flow rather than relying only on client-side status.
+- Use test accounts and non-sensitive sample data for demonstrations. Do not include real members' identity documents or personal information in screenshots or demo recordings.
 
----
+## End-Term project demonstration
 
-Thank you for being part of NDADA. Use the app to manage your membership, stay updated, and access your official certificate anytime.
+Recommended 3–5 minute demo:
 
-Note for repository reviewers: I used repository files (app UI, docs, email templates) to build this user guide. My code search may be incomplete — view more search results here:
-https://github.com/parthpethia/NDADA-APP/search?q=ndada
+1. Explain the membership administration problem and intended users.
+2. Demonstrate the applicant workflow using a test account.
+3. Show the payment and application-status flow, using a safe test/demo scenario.
+4. Show the administrator review workflow, if reviewer access is available.
+5. Show certificate access/verification and briefly explain the architecture.
+
+**Demo video:** Add the shareable demo-video URL here before submitting the project form.
+
+## Project submission details
+
+- **Project name:** NDADA — Digital Membership Management System
+- **Problem:** Digitize membership applications, document review, fee collection, status tracking, and certificate management for the Nagpur District Agro Dealers Association.
+- **Repository:** https://github.com/parthpethia/NDADA-APP
+- **Live application:** https://ndada.in
+- **Tech stack:** Expo, React Native, TypeScript, Supabase, PostgreSQL, Razorpay
+- **Major features:** Authentication, membership application, document handling, online payment, role-based administrative review, status tracking, and certificate access/verification.
+
+Before submission, add the demo video link, confirm the repository and live site open for evaluators, and ensure the demonstrated features match the current deployed version.
